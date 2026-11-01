@@ -10,6 +10,17 @@ import {createVault} from '../vault.mjs';
 
 const runFile=promisify(execFile);
 
+test('Windows privacy repair changes only DACL, not file ownership',{skip:process.platform!=='win32'},async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'pocket-dacl-only-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+  const file=join(directory,'private.txt');await writeFile(file,'SYNTHETIC DATA');
+  // Deny WRITE_OWNER while retaining WRITE_DAC: replacing the DACL must work
+  // without attempting to set even the already-correct owner again.
+  await runFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',
+    '$f=Get-Item -LiteralPath $env:POCKET_TEST_FILE; $a=$f.GetAccessControl(); $u=[Security.Principal.WindowsIdentity]::GetCurrent().User; $r=New-Object Security.AccessControl.FileSystemAccessRule($u,[Security.AccessControl.FileSystemRights]::TakeOwnership,[Security.AccessControl.AccessControlType]::Deny); $a.AddAccessRule($r); $f.SetAccessControl($a)'],
+    {env:{...process.env,POCKET_TEST_FILE:file},windowsHide:true});
+  await protectPrivatePath(file);await assertPrivatePath(file);
+});
+
 test('private files reject widened access and support Unicode paths with spaces',async t=>{
   const directory=await mkdtemp(join(tmpdir(),'pocket private café '));
   t.after(()=>rm(directory,{recursive:true,force:true}));

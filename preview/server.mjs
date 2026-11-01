@@ -9,13 +9,19 @@ import { buildProviderRuntime } from './build.mjs';
 await buildProviderRuntime();
 const {createProviderService,ProviderFailure}=await import('./provider-service.mjs');
 const providers=await createProviderService({directory:process.env.POCKET_PREVIEW_STATE_DIR||join(homedir(),'.local/state/pocket-agent/live-ui')});
+let shopping;
+if(process.env.POCKET_BRIDGE_TOKEN&&process.env.POCKET_SHOPPING_BACKEND){
+  const {createShoppingService}=await import('./shopping-service.mjs');
+  shopping=await createShoppingService({directory:join(process.env.POCKET_PREVIEW_STATE_DIR||join(homedir(),'.local/state/pocket-agent/live-ui'),'shopping'),backend:process.env.POCKET_SHOPPING_BACKEND,bridgeToken:process.env.POCKET_BRIDGE_TOKEN,providers,localAccount:process.env.POCKET_USE_LOCAL_CODEX_AUTH==='1'});
+  console.log(`Pocket Android pairing code (valid10 minutes): ${shopping.pairingCode}`);
+}
 const previewPort=Number(process.env.POCKET_PREVIEW_PORT||3000);
 if(!Number.isInteger(previewPort)||previewPort<0||previewPort>65535)throw new Error('Invalid preview port');
 
 const root = dirname(fileURLToPath(import.meta.url));
 const clients = new Set();
 const types = { '.html': 'text/html', '.css': 'text/css', '.mjs':'text/javascript', '.js': 'text/javascript', '.svg': 'image/svg+xml' };
-const allowed = new Set(['index.html', 'style.css', 'app.js', 'settings.js', 'connection.js', 'voice.js', 'activity.js', 'mark.svg', 'drawer-swipe.js', 'chat-titles.js', 'short-title.mjs', 'chat-view.js', 'refresh-scheduler.js', 'model-picker.js']);
+const allowed = new Set(['index.html', 'style.css', 'app.js', 'settings.js', 'connection.js', 'voice.js', 'activity.js', 'mark.svg', 'drawer-swipe.js', 'chat-titles.js', 'short-title.mjs', 'chat-view.js', 'refresh-scheduler.js', 'model-picker.js','shopping.html','shopping.js','shopping.css']);
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
 async function readJson(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>262144)throw new ProviderFailure('Request exceeds 256 KB.',413);chunks.push(chunk);}try{const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));if(!input||typeof input!=='object'||Array.isArray(input))throw Error();return input;}catch{throw new ProviderFailure('Send a valid JSON object.');}}
 const server = http.createServer(async (req, res) => {
@@ -35,6 +41,13 @@ const server = http.createServer(async (req, res) => {
         json(res,200,await providers.transcribe(Buffer.concat(chunks),req.headers['content-type']||'',req.headers['x-pocket-speech-engine']||'deepgram'));return;
       }
       const input=await readJson(req);
+      if(pathname.startsWith('/api/shop/')){
+        if(!shopping)throw new ProviderFailure('Start the shopping demo service first. See Windows setup.',503);
+        const {ShoppingFailure}=await import('./shopping-service.mjs');
+        try{json(res,200,await shopping.handle(pathname.slice('/api/shop/'.length),input,req,res));}
+        catch(e){json(res,e instanceof ShoppingFailure?e.status:503,{error:e instanceof ShoppingFailure?e.message:'Shopping action is uncertain or unavailable. Restore state before retrying.'});}
+        return;
+      }
       let result;
       switch(pathname){
         case '/api/auth/codex/start':result=await providers.start();break;
@@ -86,5 +99,5 @@ setInterval(async () => {
   } catch { /* The standalone preview still works without the Android source. */ }
 }, 1500).unref();
 server.listen(previewPort, '127.0.0.1', () => console.log(`Pocket Agent preview: http://localhost:${server.address().port}`));
-server.on('close',()=>providers.close());
+server.on('close',()=>{providers.close();shopping?.close();});
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{providers.close();server.closeAllConnections();server.close(()=>process.exit(0));});

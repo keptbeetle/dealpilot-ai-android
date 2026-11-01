@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {createShoppingService} from '../shopping-service.mjs';
+
+async function setup(t,provider){
+ const directory=await mkdtemp(join(tmpdir(),'pocket-shop-service-')),sessions=new Map(),calls=[];
+ const fetcher=async(url,options)=>{
+  assert.equal(new URL(url).origin,'http://127.0.0.1:8790');assert.equal(options.headers['x-pocket-bridge'],'a'.repeat(64));
+  const input=JSON.parse(options.body),role=options.headers['x-pocket-role'];calls.push({input,role});let state;
+  if(String(url).endsWith('/create')){state={id:crypto.randomUUID(),revision:0,mode:'real',consent:{sources:false,channel3:false},needs:null,offers:[],quote:null,payment:null,events:[]};sessions.set(state.id,state);}
+  else{state=sessions.get(input.id);if(!state)return Response.json({error:'unknown owner'},{status:404});if(role==='agent'&&!['state','research','select'].includes(input.action))return Response.json({error:'Buyer only'},{status:403});if(input.action!=='state'){state.revision++;if(input.mode)state.mode=input.mode;}}
+  return Response.json({state,sandboxReady:false});
+ };
+ const service=await createShoppingService({directory,backend:'http://127.0.0.1:8790/',bridgeToken:'a'.repeat(64),providers:{shopping:provider??(async()=>({text:'source-aware reply'})),status:()=>({providers:{'codex-account':{configured:true}}})},fetcher});
+ t.after(async()=>{service.close();await rm(directory,{recursive:true,force:true});});
+ async function connect(native=false){let cookie='';const result=await service.handle('connect',native?{native:true,code:service.pairingCode}:{},{headers:{}},{setHeader:(_name,value)=>{cookie=value.split(';')[0];}});return {result,req:{headers:native?{authorization:'Bearer '+result.bearer}:{cookie}},res:{setHeader(){}}};}
+ return {service,calls,connect,sessions};
+}
+test('browser connection uses HttpOnly cookie and never returns bearer/bridge secrets',async t=>{const x=await setup(t),c=await x.connect();assert.ok(c.req.headers.cookie.startsWith('pocket_shopper='));assert.equal(c.result.bearer,undefined);assert.ok(!JSON.stringify(c.result).includes('a'.repeat(64)));assert.equal((await x.service.handle('state',{},c.req,c.res)).state.id,c.result.state.id);});
+test('native pairing requires exact short-lived code and scopes a separate buyer bearer',async t=>{const x=await setup(t);await assert.rejects(x.service.handle('connect',{native:true,code:'wrong'},{headers:{}},{setHeader(){}}),/pairing code/);const c=await x.connect(true);assert.match(c.result.bearer,/^[A-Za-z0-9_-]{43}$/);assert.equal((await x.service.handle('state',{},c.req,c.res)).state.id,c.result.state.id);});
+test('client-supplied session ID cannot switch buyer ownership',async t=>{const x=await setup(t),a=await x.connect(),b=await x.connect();const result=await x.service.handle('action',{id:b.result.state.id,action:'configure',mode:'sample',expectedRevision:0,operationId:crypto.randomUUID()},a.req,a.res);assert.equal(result.state.id,a.result.state.id);assert.equal(result.state.mode,'sample');assert.equal(x.sessions.get(b.result.state.id).mode,'real');});
+test('forged or missing session credential is rejected',async t=>{const x=await setup(t);for(const headers of [{},{cookie:'pocket_shopper='+'x'.repeat(43)}])await assert.rejects(x.service.handle('state',{}, {headers},{setHeader(){}}),/session/);});
+test('model tool attempts retain agent role even for payment-shaped arguments',async t=>{const x=await setup(t,async(_input,tools)=>{const result=await tools[0].execute('attack',{action:'pay',quoteHash:'b'.repeat(64)});assert.equal(result.isError,true);return {text:'Payment must be approved by the buyer.'};}),c=await x.connect();await x.service.handle('chat',{message:'Please compare'},c.req,c.res);assert.ok(x.calls.some(c=>c.input.action==='pay'&&c.role==='agent'));assert.equal(x.calls.some(c=>c.input.action==='pay'&&c.role==='buyer'),false);});
+test('changing source mode clears prior sample chat and prevents misleading cross-mode history',async t=>{const x=await setup(t),c=await x.connect();await x.service.handle('chat',{message:'Compare samples'},c.req,c.res);const result=await x.service.handle('action',{action:'configure',mode:'sample',expectedRevision:0,operationId:crypto.randomUUID()},c.req,c.res);assert.deepEqual(result.messages,[]);assert.deepEqual((await x.service.handle('state',{},c.req,c.res)).messages,[]);});
+test('reconnecting an existing browser restores its conversation',async t=>{const x=await setup(t),c=await x.connect();await x.service.handle('chat',{message:'keep this conversation'},c.req,c.res);const restored=await x.service.handle('connect',{},c.req,c.res);assert.equal(restored.state.id,c.result.state.id);assert.equal(restored.messages[0].text,'keep this conversation');});
+test('duplicate concurrent chat for the same owner is held before a second model call',async t=>{let release,started;const ready=new Promise(r=>started=r),x=await setup(t,async()=>{started();await new Promise(r=>release=r);return {text:'done'};}),c=await x.connect();const first=x.service.handle('chat',{message:'research'},c.req,c.res);await ready;await assert.rejects(x.service.handle('chat',{message:'duplicate'},c.req,c.res),/busy/);release();await first;});
+test('arbitrary remote backend configuration is rejected',async t=>{const directory=await mkdtemp(join(tmpdir(),'pocket-shop-invalid-'));try{await assert.rejects(createShoppingService({directory,backend:'https://attacker.invalid/',bridgeToken:'a'.repeat(64),providers:{}}),/loopback/);}finally{await rm(directory,{recursive:true,force:true});}});
+test('new purchase retains old receipts and cannot erase an uncertain payment',async t=>{const x=await setup(t),c=await x.connect(),old=c.result.state.id;x.sessions.get(old).payment={status:'unknown'};await assert.rejects(x.service.handle('new',{},c.req,c.res),/Resolve/);x.sessions.get(old).payment={status:'completed',receiptId:'DEMO-OLD'};const fresh=await x.service.handle('new',{},c.req,c.res);assert.notEqual(fresh.state.id,old);const history=await x.service.handle('history',{},c.req,c.res);assert.ok(history.purchases.some(p=>p.id===old&&p.payment.receiptId==='DEMO-OLD'));});

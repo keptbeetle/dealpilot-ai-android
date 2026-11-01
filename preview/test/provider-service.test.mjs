@@ -7,6 +7,21 @@ import {join} from 'node:path';
 import {createProviderService,parseAccount} from '../provider-service.mjs';
 import {shortTitle} from '../chat-titles.js';
 
+test('shopping provider session exposes only supplied bounded tools and uses its injected transport',async t=>{
+ let requested;
+ const {service}=await setup(t,{fetcher:async(_url,init)=>{requested=JSON.parse(init.body);const chunks=[{id:'shopping',object:'chat.completion.chunk',created:1,model:'fixture-model',choices:[{index:0,delta:{role:'assistant',content:'Review the source-backed results.'},finish_reason:null}]},{id:'shopping',object:'chat.completion.chunk',created:1,model:'fixture-model',choices:[{index:0,delta:{},finish_reason:'stop'}]}];return new Response(chunks.map(c=>'data: '+JSON.stringify(c)+'\n\n').join('')+'data: [DONE]\n\n',{headers:{'Content-Type':'text/event-stream'}});}});
+ await service.saveKey({provider:'nebius',apiKey:'fixture-shopping-key'});
+ const tools=[{name:'shopping',description:'bounded shopping',parameters:{type:'object',properties:{},additionalProperties:false},execute:async()=>({content:[{type:'text',text:'fixture'}]})}];
+ const reply=await service.shopping({provider:'nebius',model:'fixture-model',message:'Compare headphones'},tools,'Shopping role',[]);
+ assert.equal(reply.text,'Review the source-backed results.');assert.deepEqual(requested.tools.map(t=>t.function.name),['shopping']);
+});
+test('shopping provider errors remain errors and release the active request lock',async t=>{
+ const {service}=await setup(t,{fetcher:async()=>Response.json({error:{message:'synthetic refusal'}},{status:401})});
+ await service.saveKey({provider:'nebius',apiKey:'fixture-shopping-key'});
+ await assert.rejects(service.shopping({provider:'nebius',model:'fixture-model',message:'Compare'},[],'Shopping role',[]),/interrupted/);
+ await service.disconnect('nebius');assert.equal(service.status().providers.nebius.configured,false);
+});
+
 test('sidebar titles are short and model naming sends no phone tools',async t=>{
   assert.ok(Array.from(shortTitle('Can you help me plan a very very very very long complex week for my whole family')).length<=42);
   let requested;

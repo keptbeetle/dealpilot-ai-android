@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Setup','Check','Preview','BuildAndroid','Doctor')]
+    [ValidateSet('Setup','Check','Preview','BuildAndroid','Doctor','ShopDemo')]
     [string]$Action = 'Check',
     [string]$SdkPath
 )
@@ -61,6 +61,10 @@ try {
     }
     if ($Action -eq 'Preview') {
         Invoke-Checked 'node' @('preview/server.mjs')
+        return
+    }
+    if ($Action -eq 'ShopDemo') {
+        Invoke-Checked 'node' @('scripts/start-shopping-demo.mjs')
         return
     }
     if (-not (Test-Path -LiteralPath $python)) { throw 'Run -Action Setup first.' }

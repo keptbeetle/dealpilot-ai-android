@@ -1,0 +1,15 @@
+# Pocket shopping sandbox demo — implementation contract
+
+Owner now authorizes implementation of a testable shopping/PayPal sandbox demo. This supersedes leaving integration at planning only. Preserve source permissions, free quotas, buyer approval, no real payment/order, no push/publication and paused Phase3.
+
+Freeze before implementation: Pocket remains the model conversation/tool layer. A private Windows backend reuses the permitted DealPilot research engine and fixed PayPal sandbox transport; it owns durable source/cart/quote/payment evidence. The full old Gemini chat is not substituted for Pocket. Native Android and Windows/browser get the same shopping interface. Android can use a deliberately paired host-assisted development service; this must not be called an entirely on-device shopping backend.
+
+- Real-source mode uses actual permitted source discovery and links/holds. Missing access or source data is a blocker, never an automatic synthetic fallback.
+- An explicitly selected sample-data mode supports repeatable varied requests. Its products/stock/shipping/cart/merchant fulfilment are simulated and visibly labelled. The payment remains genuine PayPal sandbox in either mode; no fake-success payment route is exposed.
+- The agent may research, compare, explain and prepare a simulation. The agent cannot approve/pay/capture, change data mode, enable source consents or give itself new authority. Buyer routes require a separate trusted UI channel. Shopping demo sessions expose no raw shell, arbitrary MCP or native mutation capability.
+- Exact offer/variant/pack/quantity/currency/price are server-owned. Refresh before quote/payment/capture; a changed price/stock/configuration invalidates approval. Unknown real seller shipping/tax are not zero or a delivered-price guarantee. USD-only payment; INR stays INR with an explicit hold.
+- Exact quote review and explicit Pay start create. The actual sandbox page performs buyer approval. A return/token alone is not paid. Capture verifies provider identity/custom ID/amount/currency and matching completed capture. At most one create/capture attempt per cart; ambiguous outcomes lock further payments and reconcile read-only.
+- Cancellation, no-match, unsupported currency, no consent, source blockers, stock/price drift, wrong owner/token/quote, stale revisions, duplicate/concurrent clicks, restart, expired quotes, missing keys, provider decline/unknown and no-payer-approval have automated coverage. Injected provider tests remain labelled; actual sandbox create/approval/capture evidence is reported separately.
+- Produce native Windows test commands, a working local link, ordered flow screenshots and concise documentation explaining functional versus simulated steps. Build the Android debug APK and record device-transfer limits honestly.
+
+No real merchant payment, checkout submission or fulfilment. A sandbox receipt can confirm test payment and a simulated order only. Historical bars remain50/50+40/40+3/10=93/100 (+0 each) unless a separately defined phase gate is actually met.

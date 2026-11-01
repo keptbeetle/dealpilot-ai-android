@@ -1,7 +1,7 @@
 import {setTimeout as delay} from 'node:timers/promises';
 import {createVault} from './vault.mjs';
 import {titlePrompt,shortTitle} from './chat-titles.js';
-import {CODEX_CLIENT_ID,codexAccessClaims,registerCodexCredentialUpdater,ensureCodexCredentials,makeStream,modelFor,discoverProviderModels,normalizeContext,validateConnection} from './.generated/provider-runtime.mjs';
+import {MobileSession,CODEX_CLIENT_ID,codexAccessClaims,registerCodexCredentialUpdater,ensureCodexCredentials,makeStream,modelFor,discoverProviderModels,normalizeContext,validateConnection} from './.generated/provider-runtime.mjs';
 
 const AUTH='https://auth.openai.com';
 const VERIFY=AUTH+'/codex/device';
@@ -158,6 +158,16 @@ export async function createProviderService({directory,fetcher=fetch,wait=delay,
       const {selected,credential}=config(input);if(typeof input.text!=='string'||!input.text.trim()||input.text.length>4000)fail('Invalid conversation title input.');
       titleController?.abort();const controller=new AbortController();titleController=controller;
       try{const context=normalizeContext({systemPrompt:titlePrompt,messages:[{role:'user',content:input.text,timestamp:Date.now()}]});const stream=await makeStream(selected,credential,'chat-title')(modelFor(selected,credential),context,{signal:AbortSignal.any([controller.signal,signal||new AbortController().signal,AbortSignal.timeout(20000)]),fetch:fetcher,maxTokens:40});const response=await stream.result();if(controller.signal.aborted||response.stopReason==='error'||response.stopReason==='aborted')fail('Could not name this conversation.',502);const text=response.content.filter(block=>block.type==='text').map(block=>block.text).join(' ');if(!text.trim())fail('The model returned no title.',502);return {title:shortTitle(text)};}finally{if(titleController===controller)titleController=undefined;}
+    },
+    async shopping(input,tools,systemPrompt,history,signal){
+      if(activeRequests)fail('Another provider request is running.',409);
+      const {selected,credential}=config(input);
+      const session=new MobileSession('shopping-demo',selected,credential,tools,history,systemPrompt);
+      const stream=makeStream(selected,credential,'shopping-demo');let generations=0;
+      session.agent.streamFunction=(model,context,options)=>{if(++generations>12)throw Error('Shopping model generation budget reached.');return stream(model,context,{...options,fetch:fetcher});};
+      const abort=()=>void session.abort();signal?.addEventListener('abort',abort,{once:true});activeRequests++;
+      try{const before=session.messages.length;await session.prompt(input.message);const replies=session.messages.slice(before).filter(m=>m.role==='assistant');if(replies.some(m=>['error','aborted'].includes(m.stopReason)))fail('The shopping model response was interrupted. Restore durable shopping state before retrying.',502);const reply=replies.flatMap(m=>m.content??[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');return {text:reply,messages:session.messages};}
+      finally{signal?.removeEventListener('abort',abort);session.dispose();activeRequests--;}
     },
     async chat(input,signal){
       titleController?.abort();

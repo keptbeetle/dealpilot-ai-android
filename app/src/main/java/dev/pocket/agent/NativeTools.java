@@ -270,6 +270,7 @@ final class NativeTools implements AutoCloseable {
         }
     }
     JSONObject execute(String name,JSONObject args,String owner) {
+        if(context.getSharedPreferences("shopping-host",0).getBoolean("active",false))return Json.failure("PERMISSION_DENIED","Native phone/shell actions are paused in the host-assisted shopping demo. Use its bounded shopping tools and buyer review interface.");
         if (owner==null || owner.trim().isEmpty() || owner.length()>160) return Json.failure("INVALID_ARGUMENT","Valid conversation owner required");
         if (name.equals("phone_batch")) return batch(args,owner);
         if (name.equals("phone_screen")) return screenLease(args,owner);

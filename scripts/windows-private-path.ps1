@@ -10,16 +10,20 @@ try {
     }
     $owner = [Security.Principal.WindowsIdentity]::GetCurrent().User
     $system = New-Object Security.Principal.SecurityIdentifier('S-1-5-18')
+    $acl = $item.GetAccessControl()
+    if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $owner.Value) {
+        throw 'Private storage has another owner.'
+    }
     if ($Action -eq 'Protect') {
         if ($item.PSIsContainer) {
-            $acl = New-Object Security.AccessControl.DirectorySecurity
             $inheritance = [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
         } else {
-            $acl = New-Object Security.AccessControl.FileSecurity
             $inheritance = [Security.AccessControl.InheritanceFlags]::None
         }
-        $acl.SetOwner($owner)
         $acl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in $acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier])) {
+            $acl.RemoveAccessRuleSpecific($rule)
+        }
         foreach ($identity in @($owner, $system)) {
             $rule = New-Object Security.AccessControl.FileSystemAccessRule(
                 $identity, [Security.AccessControl.FileSystemRights]::FullControl,
