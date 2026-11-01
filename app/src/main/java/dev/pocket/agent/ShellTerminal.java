@@ -30,10 +30,16 @@ final class ShellTerminal {
         File cwd=new File(request.optString("cwd",info.getString("working_directory")));
         if(!cwd.isDirectory())throw new IllegalArgumentException("cwd is not an existing directory");
         String id=UUID.randomUUID().toString();File job=new File(home,"sessions/"+id);Files.createDirectories(job.toPath());
-        File script=new File(job,"command.sh"),output=new File(job,"output"),exit=new File(job,"exit");
-        Files.write(script.toPath(),command.getBytes(StandardCharsets.UTF_8));
+        boolean windowsShell=new File(shell).getName().equalsIgnoreCase("powershell.exe");
+        File script=new File(job,windowsShell?"command.ps1":"command.sh"),output=new File(job,"output"),exit=new File(job,"exit");
+        String scriptText=windowsShell
+            ?"\uFEFF[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)\r\n"+command
+            :command;
+        Files.write(script.toPath(),scriptText.getBytes(StandardCharsets.UTF_8));
         // Track the command shell itself so stop cannot leave a wrapper's script running.
-        ProcessBuilder builder=new ProcessBuilder(shell,script.getAbsolutePath());
+        ProcessBuilder builder=windowsShell
+            ?new ProcessBuilder(shell,"-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",script.getAbsolutePath())
+            :new ProcessBuilder(shell,script.getAbsolutePath());
         builder.directory(cwd).redirectErrorStream(true).redirectOutput(output);
         builder.environment().put("POCKET_SHELL_HOME",info.getString("shell_home"));
         builder.environment().put("POCKET_SCRIPTS_DIR",info.getString("scripts_directory"));

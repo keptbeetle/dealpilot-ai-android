@@ -1,5 +1,7 @@
 # Pocket Agent foundation review
 
+**Subsequent owner-requested Windows port:** See [native Windows setup and checks](WINDOWS-PORT-2026-11-01.md). The WSL setup and CI-only build notes below describe the original baseline, not the current native Windows workflow.
+
 Prepared on 1 November 2026 for the owner-requested mobile shopping application. Source baseline is upstream `3790d7650aaf73d906d0f21739dc9dbdce010fb6`. The fork is [keptbeetle/pocket-agent](https://github.com/keptbeetle/pocket-agent), with parent [ru-aish/pocket-agent](https://github.com/ru-aish/pocket-agent).
 
 Windows checkout is `D:\Projects\pocket-agent`. Local development branch is `codex/shopping-agent-foundation`. `origin` points to the fork and `upstream` points to ru-aish. The initial fork preserves upstream code and history. This review records setup and inspection before shopping integration.

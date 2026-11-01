@@ -1,6 +1,8 @@
+import {assertPrivatePath} from '../private-files.mjs';
+import {tmpdir} from 'node:os';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,readFile,stat} from 'node:fs/promises';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createProviderService,parseAccount} from '../provider-service.mjs';
 import {shortTitle} from '../chat-titles.js';
@@ -18,7 +20,7 @@ function fixtureAccount(id='fixture-account',expiry=Date.now()+3600000){
   const access=[Buffer.from(JSON.stringify({alg:'RS256'})).toString('base64url'),Buffer.from(JSON.stringify({exp:Math.floor(expiry/1000),'https://api.openai.com/auth':{chatgpt_account_id:id}})).toString('base64url'),'fixture-signature'].join('.');
   return {access_token:access,refresh_token:'fixture-refresh-'+id,expires_in:3600};
 }
-async function setup(t,options={}){const directory=await mkdtemp('/tmp/pocket-provider-test-');const service=await createProviderService({directory,fetcher:async()=>{throw Error('Unexpected network request');},validateDraft:async()=>({}),...options});t.after(async()=>{service.close();await rm(directory,{recursive:true,force:true});});return {service,directory};}
+async function setup(t,options={}){const directory=await mkdtemp(join(tmpdir(),'pocket-provider-test-'));const service=await createProviderService({directory,fetcher:async()=>{throw Error('Unexpected network request');},validateDraft:async()=>({}),...options});t.after(async()=>{service.close();await rm(directory,{recursive:true,force:true});});return {service,directory};}
 
 test('failed draft validation preserves the saved key without exposing rejected credentials',async t=>{
   let reject=false;
@@ -44,7 +46,7 @@ test('Codex device sign-in exchanges authorization and persists an encrypted usa
   assert.equal(service.status().providers['codex-account'].configured,true);assert.equal(calls,3);
   const publicState=JSON.stringify(service.status());assert.ok(!publicState.includes(account.access_token)&&!publicState.includes(account.refresh_token));
   const ciphertext=await readFile(join(directory,'credentials.enc'));assert.ok(!ciphertext.includes(Buffer.from(account.refresh_token)));assert.ok(!ciphertext.includes(Buffer.from(account.access_token)));
-  assert.equal((await stat(join(directory,'credentials.enc'))).mode&0o777,0o600);assert.equal((await stat(join(directory,'vault.key'))).mode&0o777,0o600);
+  await assertPrivatePath(join(directory,'credentials.enc'));await assertPrivatePath(join(directory,'vault.key'));
   const reopened=await createProviderService({directory});t.after(()=>reopened.close());assert.equal(reopened.status().providers['codex-account'].configured,true);
 });
 

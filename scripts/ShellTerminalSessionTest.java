@@ -22,8 +22,12 @@ public final class ShellTerminalSessionTest {
         File cwd=new File(terminal.context("test").getString("working_directory"));
         File proceed=new File(cwd,"continue"),marker=new File(cwd,"continued");
         check(!proceed.exists()&&!marker.exists(),"Use a fresh test directory");
+        boolean windowsShell=new File(shell).getName().equalsIgnoreCase("powershell.exe");
+        String waitingCommand=windowsShell
+            ?"[Console]::Write('ready'); while (!(Test-Path -LiteralPath 'continue')) {Start-Sleep -Milliseconds 20}; Set-Content -LiteralPath 'continued' -Value 'continued'"
+            :"printf ready; while [ ! -e continue ]; do :; done; printf continued > continued";
         String id=terminal.execute(new JSONObject().put("command",
-            "printf ready; while [ ! -e continue ]; do :; done; printf continued > continued"),"test",null).getString("session_id");
+            waitingCommand),"test",null).getString("session_id");
         try {
             long deadline=System.currentTimeMillis()+5000;
             while(!terminal.poll(id,0).getString("output").equals("ready")) {
@@ -39,9 +43,13 @@ public final class ShellTerminalSessionTest {
         } finally {if(!proceed.exists())Files.createFile(proceed.toPath());}
 
         // No original-executor polling: receipt persistence cannot depend on the caller returning.
-        String replaced=terminal.execute(new JSONObject().put("command","exec "+shell+" -c 'printf replaced; exit 7'"),"test",null).getString("session_id");
+        String replaced=terminal.execute(new JSONObject().put("command",windowsShell?"[Console]::Write('replaced'); exit 7":"exec "+shell+" -c 'printf replaced; exit 7'"),"test",null).getString("session_id");
         JSONObject restored=completed(new ShellTerminal(home,shell),replaced);
         check(restored.getInt("exit_code")==7&&restored.getString("output").equals("replaced"),"exec lost its output or exit receipt: "+restored);
+        String unicode="caf\u00e9 \u2713";
+        String unicodeCommand=windowsShell?"[Console]::Write('"+unicode+"')":"printf '"+unicode+"'";
+        String unicodeId=terminal.execute(new JSONObject().put("command",unicodeCommand),"test",null).getString("session_id");
+        check(completed(terminal,unicodeId).getString("output").equals(unicode),"UTF-8 output was changed");
         System.out.println("SHELL_SESSION_TEST=passed");
     }
 }

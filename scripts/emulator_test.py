@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Validate exact Actions APKs only on an explicitly selected emulator."""
+import sys
 import argparse, hashlib, json, re, subprocess, time
 from pathlib import Path
 
@@ -56,7 +57,7 @@ def main():
         args=['shell','am','instrument','-w','-r','-e','class',f'dev.pocket.agent.{cls}'+(f'#{method}' if method else '')]
         if cls=='LiveProviderDeviceTest':
             provision='provision_codex_account.py' if a.codex_account else 'provision_emulator.py'
-            run('python3',str(Path(__file__).with_name(provision)),'--serial',a.serial)
+            run(sys.executable,str(Path(__file__).with_name(provision)),'--serial',a.serial)
             args+=['-e','providerConfigPath','/sdcard/Android/data/dev.pocket.agent/files/provider-test.json']
         adb('logcat','-c')
         result=None

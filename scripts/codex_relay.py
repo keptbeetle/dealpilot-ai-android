@@ -12,8 +12,9 @@ import json
 import os
 from pathlib import Path
 import secrets
-import stat
 from typing import Any
+
+from private_files import protect_private_path, assert_private_path
 
 from aiohttp import ClientSession, ClientTimeout, web
 
@@ -26,16 +27,15 @@ AUTH_FILE = Path.home() / ".codex/auth.json"
 
 def local_bearer(path: Path) -> str:
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    protect_private_path(path.parent, directory=True)
     try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
     except FileExistsError:
         pass
     else:
         with os.fdopen(fd, "w") as file:
             file.write(secrets.token_urlsafe(48) + "\n")
-    info = path.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
-        raise ValueError("Relay bearer file must be owned by this user with mode 0600")
+    assert_private_path(path)
     token = path.read_text().strip()
     if len(token) < 32:
         raise ValueError("Relay bearer file has an invalid value")

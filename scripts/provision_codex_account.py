@@ -10,10 +10,15 @@ import base64
 import json
 import os
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 import tempfile
 import time
+
+try:
+    from .private_files import protect_private_path
+except ImportError:
+    from private_files import protect_private_path
 
 SERIAL = 'emulator-5580'
 DESTINATION = '/sdcard/Android/data/dev.pocket.agent/files/provider-test.json'
@@ -81,12 +86,16 @@ def provision(serial, auth_path=None, runner=subprocess.run):
     except (OSError, ValueError):
         raise ProvisionError('Existing Codex auth file could not be read safely') from None
     temporary = None
+    private_directory = tempfile.TemporaryDirectory(prefix='pocket-account-')
     try:
-        with tempfile.NamedTemporaryFile(mode='w', prefix='pocket-account-', suffix='.json', delete=False) as file:
+        protect_private_path(private_directory.name, directory=True)
+        with tempfile.NamedTemporaryFile(mode='w', prefix='account-', suffix='.json',
+                                         dir=private_directory.name, delete=False) as file:
             temporary = Path(file.name)
-            os.fchmod(file.fileno(), 0o600)
+            if os.name != 'nt':
+                os.fchmod(file.fileno(), 0o600)
             json.dump(config, file, separators=(',', ':'))
-        adb('shell', 'mkdir', '-p', str(Path(DESTINATION).parent))
+        adb('shell', 'mkdir', '-p', str(PurePosixPath(DESTINATION).parent))
         adb('push', str(temporary), DESTINATION)
         # The host-side credential copy is removed before any further command.
         temporary.unlink()
@@ -109,6 +118,7 @@ def provision(serial, auth_path=None, runner=subprocess.run):
             pass
         raise
     finally:
+        private_directory.cleanup()
         if temporary is not None:
             temporary.unlink(missing_ok=True)
 

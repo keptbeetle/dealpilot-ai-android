@@ -1,4 +1,5 @@
 """Exercise production shell sessions on the host JVM without Android or Maven."""
+import os
 import pathlib
 import subprocess
 import tempfile
@@ -43,7 +44,8 @@ class ShellTerminalTest(unittest.TestCase):
             subprocess.run(["javac", "--release", "17", "-d", str(classes), *sources], check=True)
             subprocess.run([
                 "java", "-cp", str(classes), "dev.pocket.agent.ShellTerminalSessionTest",
-                str(temporary / "workspace"), "/bin/sh",
+                str(temporary / "workspace"),
+                os.path.join(os.environ["SystemRoot"], "System32", "WindowsPowerShell", "v1.0", "powershell.exe") if os.name == "nt" else "/bin/sh",
             ], check=True, timeout=15)
 
 
