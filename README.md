@@ -89,6 +89,8 @@ For the latest test build from `main`, open the [**Development prerelease**](htt
 
 **Windows development in this fork:** Run `.\scripts\windows-dev.ps1 -Action Setup -SdkPath D:\sdk`, then `-Action Check` for native runtime, preview, bundle and Python checks. Run `-Action Preview` for the local interface or `-Action BuildAndroid` for debug APKs and lint. See [Windows setup and verification](docs/WINDOWS-PORT-2026-11-01.md). Windows uses native PowerShell, file ACLs, Java and Android SDK tools. Local debug compilation is supported. Distribution signing remains separately configured. GitHub Actions also provides Windows/Linux host checks and the existing APK pipeline. Emulator/device execution uses an explicit serial.
 
+**Shopping development baseline:** [Capability results](docs/SHOPPING-CAPABILITY-RESULTS-2026-11-01.md) measure the unchanged model/session against synthetic phone observations, including a full main→worker→comparison journey. The [conditional integration plan](docs/SHOPPING-CAPABILITY-PLAN-2026-11-01.md) preserves native conversational filtering and proposes explicit evidence/action authority. Shopping runtime integration is not implemented by these evaluation tools.
+
 - [Voice assistant: Deepgram, Android role, lifecycle, and latency](docs/VOICE.md)
 - [Runtime architecture, upstream pins, and limits](docs/RUNTIME.md)
 - [Android host, lifecycle, permissions, and instrumentation](docs/ANDROID_HOST.md)
