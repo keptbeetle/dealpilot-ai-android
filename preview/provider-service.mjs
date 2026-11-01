@@ -161,7 +161,8 @@ export async function createProviderService({directory,fetcher=fetch,wait=delay,
     },
     async shopping(input,tools,systemPrompt,history,signal){
       if(activeRequests)fail('Another provider request is running.',409);
-      const {selected,credential}=config(input);
+      const saved=credentials(provider(input.provider));
+      const {selected,credential}=config({...input,model:input.model||saved.model});
       const session=new MobileSession('shopping-demo',selected,credential,tools,history,systemPrompt);
       const stream=makeStream(selected,credential,'shopping-demo');let generations=0;
       session.agent.streamFunction=(model,context,options)=>{if(++generations>12)throw Error('Shopping model generation budget reached.');return stream(model,context,{...options,fetch:fetcher});};
