@@ -2,7 +2,7 @@ const $=s=>document.querySelector(s),native=Boolean(window.PocketNative);
 let state,ready=false,messages=[],busy=false,sequence=0;const pending=new Map();
 if(native)window.pocketReply=(id,value,error)=>{const p=pending.get(id);if(!p)return;pending.delete(id);error?p.reject(Error(error)):p.resolve(value);};
 async function rpc(kind,body={}){
- if(native)return new Promise((resolve,reject)=>{const id=String(++sequence);pending.set(id,{resolve,reject});PocketNative.request(id,'/shopping/'+kind,JSON.stringify(body));setTimeout(()=>{if(pending.delete(id))reject(Error('Host request timed out. Restore status before retrying payment.'));},100000);});
+ if(native)return new Promise((resolve,reject)=>{const id=String(++sequence);pending.set(id,{resolve,reject});PocketNative.request(id,'/shopping/'+kind,JSON.stringify(checkoutOnly?{...body,hosted:true}:body));setTimeout(()=>{if(pending.delete(id))reject(Error('Host request timed out. Restore status before retrying payment.'));},100000);});
  const response=await fetch('/api/shop/'+kind,{method:'POST',headers:{'content-type':'application/json','x-pocket-request':'1'},body:JSON.stringify(body)}),data=await response.json();if(!response.ok)throw Error(data.error||'Shopping request failed.');return data;
 }
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
@@ -34,6 +34,17 @@ if(checkoutOnly){
  document.querySelector('.intro h1').textContent='Review your sandbox purchase';
  document.querySelector('.intro p').textContent='Review the listing from your Pocket chat and approve the exact test amount.';
  document.querySelector('.intro').append($('#readiness'));
+ const connection=$('#connection');connection.replaceChildren(el('h2','PayPal sandbox connection'),el('p','Connect once using the HTTPS service and access key supplied by the app owner.'));
+ const endpointLabel=el('label','Checkout service URL'),endpoint=el('input');endpoint.id='checkout-endpoint';endpoint.type='url';endpoint.placeholder='https://your-checkout-service.workers.dev';endpoint.autocomplete='url';endpointLabel.append(endpoint);
+ const keyLabel=el('label','Checkout access key'),key=el('input');key.id='checkout-key';key.type='password';key.autocomplete='off';key.placeholder='Leave blank to keep the saved key';keyLabel.append(key);
+ connection.append(endpointLabel,keyLabel,button('Connect checkout',async()=>{
+   try{accept(await rpc('hosted-configure',{endpoint:endpoint.value,accessKey:key.value}));}finally{key.value='';}
+ }));
+ const manage=button('Checkout connection',async()=>{
+   const info=await rpc('hosted-settings');endpoint.value=info.endpoint||'';connection.hidden=false;
+ });
+ document.querySelector('.intro').append(manage);
+
  for(const selector of ['.controls','#chat','#shop-composer','#offers'])$(selector).hidden=true;
 }
 function render(){
@@ -73,10 +84,24 @@ function render(){
 }
 $('#configure').onclick=()=>run(()=>action('configure',{mode:$('#source-mode').value,consent:{sources:$('#source-consent').checked,channel3:$('#channel-consent').checked}}));
 $('#restore').onclick=()=>run(async()=>accept(await rpc('state')));
-$('#new-chat').onclick=()=>run(async()=>{$('#purchase-history').hidden=true;accept(await rpc('new'));});
+$('#new-chat').onclick=()=>run(async()=>{$('#purchase-history').hidden=true;accept(await rpc('new',{operationId:crypto.randomUUID()}));});
 $('#history').onclick=()=>run(async()=>{const result=await rpc('history'),panel=$('#purchase-history');panel.replaceChildren(el('h2','Previous test purchases'));for(const p of result.purchases){const card=el('article',undefined,'offer');card.append(el('h3',p.quote?.title||'Shopping conversation'),el('p',p.payment?'Sandbox: '+p.payment.status:'No payment'),el('p',p.payment?.receiptId||p.payment?.orderId||'No order/receipt'),el('p','Merchant fulfilment is simulated. No real shipment.'));panel.append(card);}panel.hidden=false;});
-$('#pair').onclick=()=>run(async()=>accept(await rpc('pair',{port:Number($('#host-port').value),code:$('#pair-code').value})));
+if($('#pair'))$('#pair').onclick=()=>run(async()=>accept(await rpc('pair',{port:Number($('#host-port').value),code:$('#pair-code').value})));
 $('#shop-composer').onsubmit=e=>{e.preventDefault();run(async()=>{const message=$('#request').value.trim();if(!message)throw Error('Describe what you need.');$('#notice').textContent='Pocket is researching…';const result=await rpc('chat',{message});accept(result);$('#request').value='';$('#notice').textContent='';});};
 if(native){window.pocketBack=()=>void rpc('close').then(()=>location.href='/index.html');$('#back').onclick=e=>{e.preventDefault();window.pocketBack();};}
-run(async()=>{try{accept(await rpc(native?'state':'connect'));}catch(e){if(native)$('#connection').hidden=false;throw e;}});
-if(location.search.includes('paypal_'))$('#notice').textContent='Returning from PayPal is not payment confirmation. Restore this session, then verify and capture only the matching approved test order. On Android, return to Pocket and use its verification button.';
+run(async()=>{
+ try{
+  accept(await rpc(native?'state':'connect'));
+  if(checkoutOnly){
+   const params=new URLSearchParams(location.search),returned=params.get('paypal_return')||params.get('paypal_cancel');
+   if(returned){
+    if(returned!==state.payment?.orderId)throw Error('This PayPal return does not match the active purchase. Restore and review the correct checkout.');
+    await action('reconcile');
+    $('#notice').textContent=params.has('paypal_cancel')?'You returned from PayPal cancellation. Review the saved status before continuing.':'PayPal status refreshed. Use the verification button to complete an approved test payment.';
+   }
+  }
+ }catch(e){if(native&&!state)$('#connection').hidden=false;throw e;}
+});
+if(!checkoutOnly&&location.search.includes('paypal_'))$('#notice').textContent='Returning from PayPal is not payment confirmation. Restore this session, then verify and capture only the matching approved test order. On Android, return to Pocket and use its verification button.';
+
+if(checkoutOnly)void rpc('hosted-settings').then(info=>{$('#checkout-endpoint').value=info.endpoint||'';}).catch(()=>{});

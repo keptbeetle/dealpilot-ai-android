@@ -185,12 +185,21 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         AutonomyScheduler.arm(this);
         if(getIntent().getBooleanExtra("openAutonomy",false))root.post(this::autonomyActivity);
         pendingVoiceInvitation = saved == null ? null : saved.getString("voiceInvitation");
-        root.post(() -> handleVoiceInvitation(getIntent()));
+        root.post(() -> {handleVoiceInvitation(getIntent());handlePayPalReturn(getIntent());});
     }
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        getWindow().getDecorView().post(() -> handleVoiceInvitation(intent));
+        getWindow().getDecorView().post(() -> {handleVoiceInvitation(intent);handlePayPalReturn(intent);});
+    }
+    private void handlePayPalReturn(Intent intent){
+        if(!"dev.pocket.agent.PAYPAL_RETURN".equals(intent.getAction()))return;
+        String token=intent.getStringExtra("paypalOrder");
+        String outcome=intent.getStringExtra("paypalOutcome");
+        intent.setAction(null);
+        if(token==null||!token.matches("[A-Z0-9]{6,40}")||!java.util.Set.of("return","cancel").contains(outcome)||pocketUi==null)return;
+        browserCheckoutOpen=true;
+        pocketUi.view.loadUrl("https://pocket.local/shopping.html?checkout=1&paypal_"+outcome+"="+token);
     }
     @Override protected void onSaveInstanceState(Bundle saved) {
         super.onSaveInstanceState(saved);
@@ -881,6 +890,9 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     private void webRequest(String path,JSONObject body,PocketWebUi.Reply reply) throws Exception {
         if(path.startsWith("/shopping/")){
             String action=path.substring("/shopping/".length());
+            if(action.equals("hosted-settings")||action.equals("hosted-configure")){
+                ShoppingConnection.handle(this,action,body,reply);return;
+            }
             if(action.equals("enter-checkout")){
                 browserCheckoutOpen=true;
                 reply.complete(json("ready",true),null);return;

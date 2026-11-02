@@ -44,6 +44,15 @@
         <activity android:enableOnBackInvokedCallback="true" android:name=".MainActivity" android:exported="true" android:theme="@style/PocketTheme" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|screenSize|smallestScreenSize">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
+        <activity android:name=".PayPalReturnActivity" android:exported="true" android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pocketagent" android:host="paypal" android:path="/return" />
+                <data android:scheme="pocketagent" android:host="paypal" android:path="/cancel" />
+            </intent-filter>
+        </activity>
         <service android:name=".PocketVoiceInteractionService" android:label="Pocket Agent" android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
             <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
