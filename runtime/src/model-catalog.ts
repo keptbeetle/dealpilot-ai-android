@@ -56,7 +56,7 @@ export async function discoverProviderModels(
   const auth = account ? await ensureCodexCredentials(credentials) : null;
   const token = account ? auth!.accessToken : credentials.apiKey;
   if (mode !== 'opencode' && !token?.trim()) throw new Error('Save a provider credential before discovering models.');
-  const url = account ? `${CODEX_MODELS_URL}?client_version=${encodeURIComponent(CODEX_MODELS_CLIENT_VERSION)}` : mode === 'opencode' ? OPENCODE_MODELS_URL : current.baseUrl.replace(/\/$/, '') + '/models';
+  const url = account ? `${CODEX_MODELS_URL}?client_version=${encodeURIComponent(CODEX_MODELS_CLIENT_VERSION)}` : mode === 'opencode' ? OPENCODE_MODELS_URL : mode === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta/openai/models' : current.baseUrl.replace(/\/$/, '') + '/models';
   const headers: Record<string,string> = {Accept: 'application/json'};
   // OpenCode's catalog is public; never send a Console service-account key to that separate public origin.
   if (mode !== 'opencode' && token?.trim()) headers.Authorization = 'Bearer ' + token;
@@ -113,7 +113,8 @@ export async function discoverProviderModels(
   const models: CatalogModel[] = [];
   for (const entry of entries) {
     if (!entry || typeof entry !== 'object' || entry.supported_in_api === false || entry.visibility === 'hide') continue;
-    const id = entry.id ?? entry.slug;
+    const rawId = entry.id ?? entry.slug;
+    const id = mode === 'gemini' && typeof rawId === 'string' ? rawId.replace(/^models\//,'') : rawId;
     if (typeof id !== 'string' || !MODEL_ID.test(id) || seen.has(id)) continue;
     // Nebius lists embedding/reranking endpoints alongside chat models.
     // These cannot be sent to the Chat Completions adapter.

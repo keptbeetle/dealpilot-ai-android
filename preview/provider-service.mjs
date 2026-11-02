@@ -5,11 +5,11 @@ import {MobileSession,CODEX_CLIENT_ID,codexAccessClaims,registerCodexCredentialU
 
 const AUTH='https://auth.openai.com';
 const VERIFY=AUTH+'/codex/device';
-const PROVIDERS=new Set(['codex-account','nebius','opencode']);
-const DEFAULTS={'codex-account':'gpt-6-luna',nebius:'zai-org/GLM-5.3-Flash',opencode:'big-pickle'};
+const PROVIDERS=new Set(['codex-account','gemini','nebius','opencode']);
+const DEFAULTS={'codex-account':'gpt-6-luna',gemini:'gemini-3.5-flash',nebius:'zai-org/GLM-5.3-Flash',opencode:'big-pickle'};
 export class ProviderFailure extends Error {constructor(message,status=400){super(message);this.status=status;}}
 function fail(message,status){throw new ProviderFailure(message,status);}
-function provider(value){if(!PROVIDERS.has(value))fail('Choose Nebius, OpenCode, or Codex.');return value;}
+function provider(value){if(!PROVIDERS.has(value))fail('Choose Gemini, Nebius, OpenCode, or Codex.');return value;}
 function token(value,max=32768){if(typeof value!=='string'||!value||value.length>max||/[\u0000-\u0020\u007f]/.test(value))fail('Credential data is missing or malformed.');return value;}
 export function parseAccount(document){
   const source=document?.tokens||document?.['openai-codex']||document;

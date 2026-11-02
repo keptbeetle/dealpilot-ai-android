@@ -14,7 +14,7 @@ export function mountConnection(parent,{provider,getConfig,onModel,voiceOnly=fal
   function render(state){
     clearTimeout(timer);root.replaceChildren();if(disposed)return;
     const configured=voiceOnly?state.voiceAccount:state.providers[provider]?.configured;
-    root.append(node('h3','connection-title',provider==='codex-account'?'Codex account':provider==='nebius'?'Nebius connection':'OpenCode connection'));
+    root.append(node('h3','connection-title',provider==='codex-account'?'Codex account':provider==='gemini'?'Gemini connection':provider==='nebius'?'Nebius connection':'OpenCode connection'));
     root.append(node('p','connection-state',configured?(provider==='codex-account'?`Signed in · tokens saved on this ${storagePlace}`:`Provider key saved on this ${storagePlace}`):'Not connected'));
     if(provider==='codex-account'){
       if(state.auth.state==='pending'||state.auth.state==='starting'){
@@ -38,7 +38,7 @@ export function mountConnection(parent,{provider,getConfig,onModel,voiceOnly=fal
         });label.append(file);if(!voiceOnly)root.append(label);
       }
     }else{
-      const form=node('form','provider-key-form');const label=node('label','','Provider key');label.htmlFor='provider-key';const input=node('input');input.id='provider-key';input.type='password';input.autocomplete='off';input.required=true;input.maxLength=16384;input.placeholder=provider==='nebius'?'Nebius API key':'OpenCode Console service-account key';
+      const form=node('form','provider-key-form');const label=node('label','','Provider key');label.htmlFor='provider-key';const input=node('input');input.id='provider-key';input.type='password';input.autocomplete='off';input.required=true;input.maxLength=16384;input.placeholder=provider==='gemini'?'Gemini API key':provider==='nebius'?'Nebius API key':'OpenCode Console service-account key';
       const save=node('button','settings-primary',configured?'Test & replace provider key':'Test & save provider key');save.type='submit';
       form.onsubmit=event=>{event.preventDefault();save.disabled=true;void act(async()=>{try{return await api('/api/provider/key',{...getConfig(),provider,apiKey:input.value});}finally{input.value='';if(save.isConnected)save.disabled=false;}});};form.append(label,input,save);root.append(form);
     }

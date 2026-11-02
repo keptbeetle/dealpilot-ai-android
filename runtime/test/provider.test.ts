@@ -3,7 +3,7 @@ import {MobileSession} from '../src/session.js';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {Agent} from '@earendil-works/pi-agent-core';
-import {makeStream,modelFor} from '../src/provider.js';
+import {geminiRetryDelay,makeStream,modelFor} from '../src/provider.js';
 import {SubagentParams} from '../vendor/pi9/schema.js';
 
 test('Responses wire preserves optional Pi9 action fields by explicitly disabling strict normalization',async()=>{
@@ -562,4 +562,12 @@ test('stalled terminal Codex error bodies obey caller cancellation without waiti
 test('message-only invalid encrypted content retains fresh-task recovery guidance',async()=>{
  const {codexFailure}=await import('../src/codex-errors.js');
  assert.match(codexFailure(400,{error:{message:'Invalid encrypted content'}}).message,/fresh task context/);
+});
+
+test('Gemini honors only bounded per-minute quota retry hints',()=>{
+ const rejection='Quota exceeded: Generate content requests per minute limit. Please retry in 1.5s.';
+ assert.equal(geminiRetryDelay(rejection),1750);
+ for (const reason of [rejection.replace('minute','day'),rejection.replace('1.5s','100s'),rejection.replace('1.5s','an hour'),'Bad API key']) {
+   assert.equal(geminiRetryDelay(reason),undefined);
+ }
 });

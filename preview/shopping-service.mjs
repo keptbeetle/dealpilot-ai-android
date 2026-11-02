@@ -73,7 +73,7 @@ export async function createShoppingService({directory,backend,bridgeToken,provi
      db.prepare('INSERT INTO shopping_history (owner,session,created_at) VALUES (?,?,?)').run(row.hash,result.state.id,Date.now());return {...result,messages:[],localAccount:Boolean(localCredentials)};
     }
     if(kind==='action'){
-     const allowed=['configure','select','approve','pay','capture','reconcile','cancel'];
+     const allowed=['configure','select','browserQuote','approve','pay','capture','reconcile','cancel'];
      if(!allowed.includes(input.action))throw new ShoppingFailure('Unknown buyer action.',400);
      const result=await rpc('action',{...input,id:row.session});
      if(input.action==='configure'){db.prepare('UPDATE clients SET messages=\'[]\' WHERE hash=?').run(row.hash);result.messages=[];}

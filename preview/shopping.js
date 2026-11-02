@@ -29,6 +29,13 @@ function richText(text){
  }
  return body;
 }
+const checkoutOnly=native&&new URLSearchParams(location.search).has('checkout');
+if(checkoutOnly){
+ document.querySelector('.intro h1').textContent='Review your sandbox purchase';
+ document.querySelector('.intro p').textContent='Review the listing from your Pocket chat and approve the exact test amount.';
+ document.querySelector('.intro').append($('#readiness'));
+ for(const selector of ['.controls','#chat','#shop-composer','#offers'])$(selector).hidden=true;
+}
 function render(){
  $('#source-mode').value=state.mode;$('#source-consent').checked=state.consent.sources;$('#channel-consent').checked=state.consent.channel3;
  $('#readiness').textContent=ready?'Genuine PayPal sandbox is configured. No payment starts until you approve this exact quote and press Pay.':'PayPal sandbox is not configured. Checkout stays blocked; no fake payment is substituted.';
@@ -42,6 +49,25 @@ function render(){
   if(q.itemsPerPack)checkout.append(el('p',`${q.quantity} purchased packs × ${q.itemsPerPack} items per pack = ${q.quantity*q.itemsPerPack} items total.`));
   if(!p){const label=el('label',undefined,'check'),check=el('input');check.type='checkbox';check.id='approve-check';label.append(check,el('span',`I reviewed ${money(q.totalCents,q.currency)} and approve this exact simulated cart for PayPal sandbox test payment.`));checkout.append(label,button(q.approved?'Exact quote approved':'Approve exact quote',async()=>{if(!check.checked)throw Error('Review and check the exact total acknowledgement first.');await action('approve',{quoteHash:q.hash,acknowledgeSandbox:true});},q.approved||q.currency!=='USD'),button('Pay with PayPal sandbox',()=>action('pay',{quoteHash:q.hash}),!q.approved||!ready||q.currency!=='USD'),button('Cancel unpaid cart',()=>action('cancel')));if(q.currency!=='USD')checkout.append(el('p','INR is retained. This sandbox adapter is USD-only; no currency conversion or substitute amount is used.'));}
   if(p){checkout.append(el('p','Sandbox status: '+p.status));if(p.orderId)checkout.append(el('p','Provider order: '+p.orderId));if(p.approvalUrl&&p.status==='approval-required')checkout.append(button('Open genuine PayPal sandbox',()=>open(p.approvalUrl)),button('I approved at PayPal — verify and capture',()=>action('capture',{returnedOrderId:p.orderId})));if(p.status!=='completed')checkout.append(button('Reconcile status (read only)',()=>action('reconcile')),button('Cancel uncaptured checkout',()=>action('cancel')));if(p.status==='completed'){const receipt=el('div',undefined,'receipt');receipt.append(el('h2','Sandbox test payment verified'),el('p','Capture: '+p.captureId),el('p','Demo order: '+p.receiptId),el('p','Merchant order and fulfilment are SIMULATED. Nothing will ship.'));checkout.append(receipt);}if(p.status==='unknown'||p.status==='creating'||p.status==='processing')checkout.append(el('p','Outcome is uncertain. Do not pay again. Reconciliation never repeats a capture.'));}
+ }
+ if(state.quote?.browserSource){
+   checkout.prepend(el('p','Selected from Pocket browsing. The seller price and availability have not been verified.'));
+   checkout.append(button('Open listing',()=>open(state.quote.browserSource)));
+ }
+ if(checkoutOnly){
+   $('#mode-note').textContent='PayPal sandbox uses test funds. The merchant order is simulated.';
+   const pending=sessionStorage.getItem('browser-checkout');
+   if(pending){
+     const listing=JSON.parse(pending);
+     const panel=el('section',undefined,'offer');
+     panel.append(el('h2',listing.title),el('p',listing.url),el('p',listing.quantity+' × '+money(listing.unitCents,listing.currency)),button('Use this listing for sandbox review',async()=>{
+       await action('browserQuote',{listing});sessionStorage.removeItem('browser-checkout');render();
+     },Boolean(state.payment)));
+     if(state.payment){
+       panel.append(el('p','The checkout below belongs to a previous purchase. Resolve it, then choose New purchase conversation to review this listing.'));
+       checkout.prepend(panel);
+     }else checkout.replaceChildren(panel);
+   }
  }
  const events=$('#events');events.replaceChildren();for(const e of state.events)events.append(el('li',`${e.kind} · ${e.text}`));
 }

@@ -161,3 +161,18 @@ test('OpenAI-compatible catalogs preserve advertised reasoning choices without i
  assert.deepEqual(models,[{id:'custom-model',name:'custom-model',supportedReasoningLevels:['low','high'],defaultReasoningLevel:'high'},
    {id:'no-metadata',name:'no-metadata'}]);
 });
+
+test('Gemini uses its native multimodal adapter and normalizes fixed-origin catalogue IDs',async()=>{
+ const config={mode:'gemini' as const};
+ const selected=modelFor(config,{apiKey:'test'});
+ assert.equal(selected.id,'gemini-3.5-flash');
+ assert.equal(selected.api,'google-generative-ai');
+ assert.ok(selected.input.includes('image'));
+ assert.throws(()=>modelFor({...config,endpoint:'https://other.test'},{}),/fixed API endpoint/);
+ const models=await discoverProviderModels(config,{apiKey:'test'},async(url,init)=>{
+   assert.equal(String(url),'https://generativelanguage.googleapis.com/v1beta/openai/models');
+   assert.equal(init?.redirect,'error');
+   return json({data:[{id:'models/gemini-3.5-flash'},{id:'gemini-3.5-flash'}]});
+ });
+ assert.deepEqual(models.map(model=>model.id),[selected.id]);
+});

@@ -48,7 +48,7 @@ async function loadHistory(){const generation=++historyGeneration;const result=a
 $('#chat-search').oninput=()=>void act(loadHistory);
 async function openArchive(id,title,offset){const page=await api('/native/archive',{threadId:id,offset});archive={id,title,page};renderChat(true);}
 function message(parent,item){const article=el('article','message');article.dataset.role=item.role;article.append(el('h2','message-label',item.role==='user'?'You':providerName()),el('p','message-body',item.text||item.content||''));parent.append(article);}
-function providerName(){return {nebius:'Nebius',opencode:'OpenCode','codex-account':'Codex'}[prefs.provider]||'Pocket';}
+function providerName(){return {gemini:'Gemini',nebius:'Nebius',opencode:'OpenCode','codex-account':'Codex'}[prefs.provider]||'Pocket';}
 function displayText(display){if(!display||display.state==='none'||display.state==='idle')return '';return {waiting:'Waiting for a virtual display',preparing:'Preparing virtual display',active:`Using virtual display${display.displayId==null?'':' #'+display.displayId}`,releasing:'Releasing virtual display'}[display.state]||'';}
 function taskStatus(task){return [task.status||'Ready',`Run ${task.generation??'—'}`,displayText(task.display)].filter(Boolean).join(' · ');}
 function taskCard(parent,task){const n=button('',()=>openWorker(task.conversationId),'native-task');n.dataset.worker=task.conversationId;n.append(el('strong','',task.label||task.title||'Background task'),el('small','',taskStatus(task)),el('span','','Open worker'));parent.append(n);}
@@ -56,7 +56,18 @@ function chatThreads(){return(snapshot.state.tasks||[]).filter(task=>task.mainTh
 function updateThreadCards(body){const tasks=chatThreads();for(const node of body.querySelectorAll('.native-task'))if(!tasks.some(t=>t.conversationId===node.dataset.worker))node.remove();for(const task of tasks){let node=Array.from(body.querySelectorAll('.native-task')).find(n=>n.dataset.worker===task.conversationId);if(!node){taskCard(body,task);node=body.lastElementChild;node.dataset.worker=task.conversationId;}const title=task.label||task.title||'Background task',status=taskStatus(task);if(node.querySelector('strong').textContent!==title)node.querySelector('strong').textContent=title;if(node.querySelector('small').textContent!==status)node.querySelector('small').textContent=status;}}
 function openThreads(){++navigationGeneration;dispose();dispose=()=>{};route='threads';settings.hidden=false;activity.hidden=true;main.inert=true;settings.replaceChildren();screenHeader(settings,'Threads',closeScreen);const body=el('div','settings-body');settings.append(body);heading(body,'Behind this conversation.','Subagents and their work stay here.');const tasks=chatThreads();for(const task of tasks)taskCard(body,task);if(!tasks.length)body.append(el('p','settings-description','No subagent threads in this chat yet.'));}
 $('#show-threads').onclick=openThreads;
-$('#shopping-demo').onclick=()=>void act(async()=>{await api('/shopping/enter');location.href='/shopping.html';});
+$('#shopping-demo').remove(); // Native shopping requests use the original main chat.
+function checkoutProposal(message){
+ if(typeof message!=='string')return null;
+ const marker=message.match(/(?:^|\n)POCKET_CHECKOUT (\{[^\n]+\})\s*$/);
+ if(!marker)return null;
+ try{
+   const {title,url,currency,unitCents,quantity}=JSON.parse(marker[1]);
+   const link=new URL(url);
+   if(link.protocol!=='https:'||link.username||link.password||currency!=='USD'||!Number.isInteger(unitCents)||unitCents<1||unitCents>10000000||!Number.isInteger(quantity)||quantity<1||quantity>10||typeof title!=='string'||!title.trim()||title.length>120)return null;
+   return {text:message.slice(0,marker.index).trim(),listing:{title,url,currency,unitCents,quantity}};
+ }catch{return null;}
+}
 function renderChat(force=false){const state=snapshot.state;
  let work=$('#chat-work-status');if(!work){work=el('div','chat-work-status');work.id='chat-work-status';$('#conversation').append(work);}
  work.replaceChildren();const mainDisplay=displayText(state.displays?.main);if(mainDisplay)work.append(el('p','settings-description',mainDisplay));
@@ -64,7 +75,19 @@ function renderChat(force=false){const state=snapshot.state;
  work.hidden=!!archive||!work.children.length;
 setThinking(!archive&&(state.busy||!!pendingSend));if(pendingSend&&(pendingSend.threadId!==state.mainThreadId||(state.messages||[]).slice(pendingSend.baseline).some(item=>item.role==='user'&&(item.text||item.content)===pendingSend.text)))pendingSend=null;syncComposer();$('#show-threads').hidden=!state.messages?.length&&!chatThreads().length;$('#show-threads').textContent=chatThreads().length?`Threads · ${chatThreads().length}`:'Threads';const signature=JSON.stringify([state.mainThreadId,state.messages,archive,pendingSend]);if(signature===chatSignature&&!force)return;chatSignature=signature;const list=$('#messages'),items=(archive?archive.page.messages:state.messages||[]).filter(item=>!(item.role==='user'&&/^\[Worker completion\]/.test(item.text||item.content||'')));if(pendingSend&&!archive)items.push({role:'user',text:pendingSend.text});const scroller=$('#conversation');const top=scroller.scrollTop,follow=scroller.scrollHeight-top-scroller.clientHeight<100;if(archive)list.replaceChildren();$('#welcome').hidden=items.length>0||!!archive;list.hidden=!$('#welcome').hidden;
  if(archive){list.append(el('p','settings-native-note','Saved conversation · Read-only archive'),button('Back to current chat',()=>{archive=null;renderChat(true);}));}
+ const last=items.at(-1);
+ const proposal=!archive&&last?.role==='assistant'?checkoutProposal(last.text||last.content):null;
+ if(proposal)items[items.length-1]={...last,text:proposal.text,content:proposal.text};
  if(archive)for(const item of items)message(list,item);else reconcileMessages(list,items);
+ document.querySelector('#browser-checkout-action')?.remove();
+ if(proposal){
+   const review=button('Review '+proposal.listing.title+' in PayPal sandbox',async()=>{
+     await api('/shopping/enter-checkout');
+     sessionStorage.setItem('browser-checkout',JSON.stringify(proposal.listing));
+     location.href='/shopping.html?checkout=1';
+   });
+   review.id='browser-checkout-action';list.after(review);
+ }
  if(pendingSend&&list.lastElementChild)list.lastElementChild.dataset.sent='true';
  if(archive){if(archive.page.offset>0)list.append(button('Earlier messages',()=>openArchive(archive.id,archive.title,Math.max(0,archive.page.offset-60))));if(archive.page.offset+60<archive.page.total)list.append(button('More messages',()=>openArchive(archive.id,archive.title,archive.page.offset+60)));}
  $('#copy-chat').disabled=!items.length;input.disabled=!!archive;syncComposer();if(follow||force)scroller.scrollTop=scroller.scrollHeight;else scroller.scrollTop=top;
@@ -91,7 +114,7 @@ function field(parent,label,value='',{multiline=false,password=false,placeholder
 function select(parent,label,options,value,onChange){const wrap=el('div','settings-field'),caption=el('label','',label),n=el('select');n.id='native-select-'+(++sequence);caption.htmlFor=n.id;for(const [id,text]of options){const option=el('option','',text);option.value=id;n.append(option);}n.value=value;n.onchange=()=>void act(()=>onChange(n.value));wrap.append(caption,n);parent.append(wrap);return n;}
 function toggle(parent,label,description,value,onChange){const n=el('label','settings-switch-row'),copy=el('span');copy.append(el('span','settings-row-label',label),el('small','settings-row-detail',description));const check=el('input');check.type='checkbox';check.checked=value;check.onchange=()=>void act(async()=>{try{await onChange(check.checked);}catch(e){check.checked=!check.checked;throw e;}});n.append(copy,check);parent.append(n);return check;}
 function foot(body){const status=el('p','settings-save-status','Preferences stay on this phone');status.setAttribute('role','status');body.append(status,el('p','settings-preview-note','Pocket Agent · Credentials protected by Android Keystore.'));}
-const providers=[['none','Not configured'],['nebius','Nebius Token Factory'],['opencode','OpenCode Free'],['codex-account','Codex account']];
+const providers=[['none','Not configured'],['gemini','Gemini'],['nebius','Nebius Token Factory'],['opencode','OpenCode Free'],['codex-account','Codex account']];
 function openSettings(next='overview'){++navigationGeneration;dispose();dispose=()=>{};route=next;main.inert=true;activity.hidden=true;settings.hidden=false;settings.replaceChildren();const titles={overview:'Settings',profile:'Your profile',ai:'AI & model',instructions:'Personal instructions',voice:'Voice & wake word',phone:'Phone access',connections:'Connections',background:'Background work'};screenHeader(settings,titles[route]||'Settings',()=>route==='overview'?closeScreen():openSettings());const body=el('div','settings-body');settings.append(body);
  if(route==='overview'){
  const profile=button('',()=>openSettings('profile'),'settings-profile'),avatar=el('span','profile-avatar',prefs.name?.trim()?prefs.name.trim()[0].toUpperCase():'P'),copy=el('span');copy.append(el('strong','',prefs.name?.trim()||'Your Pocket'),el('small','','Personal agent · Local profile'));profile.append(avatar,copy,icon('arrow'));body.append(profile);
@@ -102,7 +125,7 @@ function openSettings(next='overview'){++navigationGeneration;dispose();dispose=
  }else if(route==='instructions'){heading(body,'Help Pocket understand you.','Your tone, priorities, and preferences.');const value=field(body,'Personal instructions',prefs.instructions,{multiline:true,placeholder:'Keep replies concise. Ask before making plans. Call me…'});body.append(button('Save instructions',async()=>{await api('/native/preferences',{instructions:value.value});prefs.instructions=value.value;note('Instructions saved.');},'settings-primary'));
  }else if(route==='ai'){
  heading(body,'The brain behind Pocket.','Choose a provider, model, and reasoning preference.');let provider=prefs.provider,proof;
- select(body,'Provider',providers,provider,async value=>{const selection=++providerSelection;try{const profile=value==='none'?{}:await api('/native/select-provider',{provider:value});if(selection!==providerSelection||route!=='ai')return;prefs.provider=value;prefs.model=profile.model||({'codex-account':'gpt-6-luna',nebius:'zai-org/GLM-5.3-Flash',opencode:'big-pickle'})[value]||'';prefs.reasoning=profile.reasoning||'low';snapshot.preferences=prefs;modelPicker.update();openSettings('ai');}catch(error){if(selection===providerSelection&&route==='ai')openSettings('ai');throw error;}});
+ select(body,'Provider',providers,provider,async value=>{const selection=++providerSelection;try{const profile=value==='none'?{}:await api('/native/select-provider',{provider:value});if(selection!==providerSelection||route!=='ai')return;prefs.provider=value;prefs.model=profile.model||({'codex-account':'gpt-6-luna',gemini:'gemini-3.5-flash',nebius:'zai-org/GLM-5.3-Flash',opencode:'big-pickle'})[value]||'';prefs.reasoning=profile.reasoning||'low';snapshot.preferences=prefs;modelPicker.update();openSettings('ai');}catch(error){if(selection===providerSelection&&route==='ai')openSettings('ai');throw error;}});
  const model=field(body,'Model ID',provider==='none'?'':prefs.model,{placeholder:'Enter your provider’s model ID'});const reasoning=select(body,'Reasoning effort',[['minimal','Minimal'],['low','Low'],['medium','Medium'],['high','High'],['xhigh','Extra high'],['max','Maximum']],prefs.reasoning||'low',()=>{});reasoning.disabled=provider!=='codex-account';model.oninput=()=>{proof=undefined;};
  if(provider!=='none'){dispose=mountConnection(body,{provider,getConfig:()=>({provider,model:model.value,reasoning:reasoning.value}),onModel:chosen=>{model.value=chosen.id;proof=chosen.supportedReasoningLevels;if(proof?.length&&!proof.includes(reasoning.value))reasoning.value=chosen.defaultReasoningLevel||proof[0];}});body.append(button('Save model & reasoning',async()=>{await api('/native/provider',{provider,model:model.value,reasoning:reasoning.value,preferredReasoning:reasoning.value,...(proof?{supportedReasoningLevels:proof}:{})});prefs.model=model.value;prefs.reasoning=reasoning.value;snapshot.preferences=prefs;modelPicker.update();note('Model settings saved.');},'settings-primary'));}else body.append(el('p','settings-native-note','Choose a provider to sign in or add its key.'));
  }else if(route==='voice'){

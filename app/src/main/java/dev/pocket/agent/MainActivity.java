@@ -604,7 +604,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     static String savedProviderKeyForEndpoint(JSONObject profile, String mode, String endpoint, String enteredKey) {
         String key = enteredKey.trim();
         if (!key.isEmpty()) return key;
-        String resolvedEndpoint = mode.equals(CredentialStore.OPENCODE) ? CredentialStore.OPENCODE_ENDPOINT
+        String resolvedEndpoint = mode.equals(CredentialStore.GEMINI) ? CredentialStore.GEMINI_ENDPOINT : mode.equals(CredentialStore.OPENCODE) ? CredentialStore.OPENCODE_ENDPOINT
                 : mode.equals(CredentialStore.NEBIUS) ? CredentialStore.NEBIUS_ENDPOINT : endpoint.trim();
         return resolvedEndpoint.equals(profile.optString("endpoint")) ? profile.optString("apiKey") : "";
     }
@@ -616,7 +616,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 || (mode.equals("codex") && (savedMode.equals("codexRelay") || savedMode.equals("codex-relay")));
         if (!sameMode) return false;
         if (mode.equals(CredentialStore.CODEX_ACCOUNT) || mode.equals("scripted")) return true;
-        boolean fixed = mode.equals(CredentialStore.OPENCODE) || mode.equals(CredentialStore.NEBIUS);
+        boolean fixed = mode.equals(CredentialStore.GEMINI) || mode.equals(CredentialStore.OPENCODE) || mode.equals(CredentialStore.NEBIUS);
         String key = enteredKey.trim();
         return (fixed || endpoint.trim().equals(saved.optString("endpoint")))
                 && (key.isEmpty() || key.equals(saved.optString("apiKey")));
@@ -811,7 +811,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     }
     private void updateProviderLabel() {
         if (providerLabel == null) return;
-        try { String mode = new CredentialStore(this).get().optString("authMode"); providerLabel.setText(switch (mode) { case "nebius" -> "Nebius"; case "opencode" -> "OpenCode"; case "codex-account" -> "Codex"; default -> "Pocket Agent"; }); }
+        try { String mode = new CredentialStore(this).get().optString("authMode"); providerLabel.setText(switch (mode) { case "gemini" -> "Gemini"; case "nebius" -> "Nebius"; case "opencode" -> "OpenCode"; case "codex-account" -> "Codex"; default -> "Pocket Agent"; }); }
         catch (Exception unavailable) { providerLabel.setText("Connect provider"); }
     }
     private void renderNativeMessages(JSONArray items) {
@@ -845,13 +845,13 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     private JSONObject webStatus() throws Exception {
         CredentialStore credentials=new CredentialStore(this);JSONObject config=credentials.get();String mode=config.optString("authMode");
         JSONObject providers = new JSONObject();
-        for(String provider:new String[]{"nebius","opencode","codex-account"}){JSONObject profile=credentials.getProviderProfile(provider);providers.put(provider,json("configured",!profile.optString(provider.equals("codex-account")?"accessToken":"apiKey").isEmpty(),"active",mode.equals(provider),"model",profile.optString("model"),"reasoning",profile.optString("reasoningEffort","low")));}
+        for(String provider:new String[]{"gemini","nebius","opencode","codex-account"}){JSONObject profile=credentials.getProviderProfile(provider);providers.put(provider,json("configured",!profile.optString(provider.equals("codex-account")?"accessToken":"apiKey").isEmpty(),"active",mode.equals(provider),"model",profile.optString("model"),"reasoning",profile.optString("reasoningEffort","low")));}
         return json("providers",providers,"auth",webAuth,"voiceAccount",!new CredentialStore(this).getVoiceCodex().optString("accessToken").isEmpty(),"voice",json("groq",new VoiceCredentialStore(this,"groq").configured(),"deepgram",new VoiceCredentialStore(this).configured()));
     }
     private JSONObject webSnapshot() throws Exception { return webSnapshot(state); }
     private JSONObject webSnapshot(JSONObject currentState) throws Exception {
         JSONObject config = new CredentialStore(this).get(); String mode=config.optString("authMode");
-        JSONObject prefs=json("name",getSharedPreferences("pocket-ui",0).getString("name",""),"provider",java.util.List.of("nebius","opencode","codex-account").contains(mode)?mode:"none","model",config.optString("model"),"reasoning",config.optString("reasoningEffort","low"),"preferredReasoning",config.optString("preferredReasoningEffort",config.optString("reasoningEffort","low")),"instructions",currentState.optString("personalInstructions"),"stt",getSharedPreferences("pocket-ui",0).getString("voiceEngine","system"),"wake",WakeWordService.enabled(this),"autonomy",AutonomyStore.enabled(this));
+        JSONObject prefs=json("name",getSharedPreferences("pocket-ui",0).getString("name",""),"provider",java.util.List.of("gemini","nebius","opencode","codex-account").contains(mode)?mode:"none","model",config.optString("model"),"reasoning",config.optString("reasoningEffort","low"),"preferredReasoning",config.optString("preferredReasoningEffort",config.optString("reasoningEffort","low")),"instructions",currentState.optString("personalInstructions"),"stt",getSharedPreferences("pocket-ui",0).getString("voiceEngine","system"),"wake",WakeWordService.enabled(this),"autonomy",AutonomyStore.enabled(this));
         JSONArray servers=new JSONArray(),stored=credentialsForUi();
         for(int i=0;i<stored.length();i++){JSONObject server=stored.getJSONObject(i);servers.put(json("id",server.optString("id"),"name",server.optString("name"),"url",server.optString("url"),"authMode",server.optString("authMode"),"enabled",server.optBoolean("enabled")));}
         JSONObject result=json("state",currentState,"preferences",prefs,"connection",webStatus(),"servers",servers,"voiceActive",SubscriptionVoiceService.isActive());
@@ -877,17 +877,22 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 else reply.complete(json("saved",true),null);
             });});
     }
+    private boolean browserCheckoutOpen;
     private void webRequest(String path,JSONObject body,PocketWebUi.Reply reply) throws Exception {
         if(path.startsWith("/shopping/")){
             String action=path.substring("/shopping/".length());
+            if(action.equals("enter-checkout")){
+                browserCheckoutOpen=true;
+                reply.complete(json("ready",true),null);return;
+            }
             if(action.equals("enter")){
                 if(activeWork())throw new IllegalStateException("Stop active phone work before entering the shopping demo");
                 getSharedPreferences("shopping-host",0).edit().putBoolean("active",true).apply();
                 AutonomyStore.requestEnabled(this,false,error->{});
                 reply.complete(json("ready",true),null);return;
             }
-            if(action.equals("close")){getSharedPreferences("shopping-host",0).edit().putBoolean("active",false).apply();reply.complete(json("closed",true),null);return;}
-            if(!getSharedPreferences("shopping-host",0).getBoolean("active",false))throw new IllegalStateException("Enter the shopping demo from Pocket first");
+            if(action.equals("close")){browserCheckoutOpen=false;getSharedPreferences("shopping-host",0).edit().putBoolean("active",false).apply();reply.complete(json("closed",true),null);return;}
+            if(!browserCheckoutOpen&&!getSharedPreferences("shopping-host",0).getBoolean("active",false))throw new IllegalStateException("Enter the shopping demo from Pocket first");
             if(action.equals("open")){ShoppingConnection.open(this,body.getString("url"));reply.complete(json("opened",true),null);return;}
             ShoppingConnection.handle(this,action,body,reply);return;
         }
@@ -949,7 +954,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             }
             case "/native/select-provider" -> {
                 if(activeWork())throw new IllegalStateException("Stop active work before changing connections");String provider=body.optString("provider");
-                if(!java.util.List.of("nebius","opencode","codex-account").contains(provider))throw new IllegalArgumentException("Choose a provider");
+                if(!java.util.List.of("gemini","nebius","opencode","codex-account").contains(provider))throw new IllegalArgumentException("Choose a provider");
                 JSONObject profile=credentials.getProviderProfile(provider);boolean configured=!profile.optString(provider.equals("codex-account")?"accessToken":"apiKey").isEmpty();
                 invalidateAccountOperations();webAuth=json("state","idle");webModelProofs.clear();
                 if(configured){credentials.save(profile);if(AgentService.isRunning())command(json("action","configure"));}
@@ -958,7 +963,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             case "/native/provider" -> {
                 if(activeWork())throw new IllegalStateException("Stop active work before changing connections");
                 JSONObject config=credentials.get();String provider=body.optString("provider");
-                if(!java.util.List.of("nebius","opencode","codex-account").contains(provider))throw new IllegalArgumentException("Choose a provider");
+                if(!java.util.List.of("gemini","nebius","opencode","codex-account").contains(provider))throw new IllegalArgumentException("Choose a provider");
                 if(!provider.equals(config.optString("authMode")))throw new IllegalStateException("Connect this provider first");
                 config.put("preferredReasoningEffort",body.optString("preferredReasoning",config.optString("preferredReasoningEffort",config.optString("reasoningEffort","low"))));
                 config.put("model",body.optString("model"));config.put("reasoningEffort",body.optString("reasoning","low"));config.put("modelSource",body.has("supportedReasoningLevels")?"catalog":"manual");
@@ -967,8 +972,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 credentials.save(config);if(AgentService.isRunning())command(json("action","configure"));
             }
             case "/api/provider/key" -> {
-                if(activeWork())throw new IllegalStateException("Stop active work before changing connections");String provider=body.optString("provider");if(!provider.equals("nebius")&&!provider.equals("opencode"))throw new IllegalArgumentException("Choose a key provider");
-                JSONObject draft=json("authMode",provider,"apiKey",body.optString("apiKey"),"model",body.optString("model",provider.equals("nebius")?"zai-org/GLM-5.3-Flash":"big-pickle"));
+                if(activeWork())throw new IllegalStateException("Stop active work before changing connections");String provider=body.optString("provider");if(!provider.equals("gemini")&&!provider.equals("nebius")&&!provider.equals("opencode"))throw new IllegalArgumentException("Choose a key provider");
+                JSONObject draft=json("authMode",provider,"apiKey",body.optString("apiKey"),"model",body.optString("model",provider.equals("gemini")?CredentialStore.GEMINI_MODEL:provider.equals("nebius")?"zai-org/GLM-5.3-Flash":"big-pickle"));
                 validateWebConnection(draft,reply);return;
             }
             case "/api/provider/disconnect" -> {
@@ -1198,8 +1203,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         }));
         final int aiStart = panel.getChildCount();
         panel.addView(text("Provider")); Spinner mode = new Spinner(this);
-        String[] names = advanced ? new String[]{"Scripted model (local validation)", "API key (HTTPS)", "OpenCode Free (Console key)", "Nebius Token Factory", "Codex emulator relay (development)", "Codex account (ChatGPT)"} : new String[]{"Nebius Token Factory", "OpenCode Free", "Codex account"};
-        String[] modes = advanced ? new String[]{"scripted", "openai", CredentialStore.OPENCODE, CredentialStore.NEBIUS, "codex", CredentialStore.CODEX_ACCOUNT} : new String[]{CredentialStore.NEBIUS, CredentialStore.OPENCODE, CredentialStore.CODEX_ACCOUNT};
+        String[] names = advanced ? new String[]{"Scripted model (local validation)", "API key (HTTPS)", "OpenCode Free (Console key)", "Nebius Token Factory", "Google Gemini", "Codex emulator relay (development)", "Codex account (ChatGPT)"} : new String[]{"Google Gemini", "Nebius Token Factory", "OpenCode Free", "Codex account"};
+        String[] modes = advanced ? new String[]{"scripted", "openai", CredentialStore.OPENCODE, CredentialStore.NEBIUS, CredentialStore.GEMINI, "codex", CredentialStore.CODEX_ACCOUNT} : new String[]{CredentialStore.GEMINI, CredentialStore.NEBIUS, CredentialStore.OPENCODE, CredentialStore.CODEX_ACCOUNT};
         mode.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, names));
         String auth = saved.optString("authMode");
         String normalizedAuth = auth.equals("api-key") ? "openai" : auth.equals("codexRelay") || auth.equals("codex-relay") ? "codex" : auth;
@@ -1342,7 +1347,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             boolean account = selectedMode.equals(CredentialStore.CODEX_ACCOUNT);
             boolean openCode = selectedMode.equals(CredentialStore.OPENCODE);
             boolean nebius = selectedMode.equals(CredentialStore.NEBIUS);
-            boolean fixedProvider = openCode || nebius;
+            boolean gemini = selectedMode.equals(CredentialStore.GEMINI);
+            boolean fixedProvider = openCode || nebius || gemini;
             boolean reasoningProvider = account || selectedMode.equals("openai") || selectedMode.equals("codex");
             reasoning.setEnabled(reasoningProvider);
             reasoning.setAlpha(reasoningProvider ? 1.0f : 0.45f);
@@ -1378,7 +1384,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             endpointPanel.setVisibility(account || fixedProvider ? View.GONE : View.VISIBLE);
             secretPanel.setVisibility(account ? View.GONE : View.VISIBLE);
             accountPanel.setVisibility(account ? View.VISIBLE : View.GONE);
-            secret.setHint(openCode ? "OpenCode Console service-account key (required)" : nebius ? "Nebius API key (required)" : "API key / relay token (blank keeps saved value)");
+            secret.setHint(gemini ? "Gemini API key (required)" : openCode ? "OpenCode Console service-account key (required)" : nebius ? "Nebius API key (required)" : "API key / relay token (blank keeps saved value)");
             changingModel[0] = true;
             modelSource[0] = sameProvider ? savedModelSource[0] : "manual";
             manualModelEdited[0] = false;
@@ -1387,6 +1393,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 model.setText(profile.optString("model", model.getText().toString()));
             } else if (account) model.setText(CredentialStore.CODEX_MODEL);
             else if (openCode) { endpoint.setText(CredentialStore.OPENCODE_ENDPOINT); model.setText(CredentialStore.OPENCODE_MODEL); }
+            else if (gemini) { endpoint.setText(CredentialStore.GEMINI_ENDPOINT); model.setText(CredentialStore.GEMINI_MODEL); }
             else if (nebius) { endpoint.setText(CredentialStore.NEBIUS_ENDPOINT); model.setText(CredentialStore.NEBIUS_MODEL); }
             else if (selectedMode.equals("codex")) { endpoint.setText("http://10.0.2.2:8787/v1"); model.setText(CredentialStore.CODEX_MODEL); }
             else if (selectedMode.equals("openai")) { endpoint.setText("https://api.openai.com/v1"); model.setText("gpt-4.1-mini"); }

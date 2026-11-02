@@ -1,6 +1,7 @@
 /** Selected Pi adapters. Agent loops and tool execution stay inside Android. */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Model } from '@earendil-works/pi-ai';
+import { streamSimple as googleStream } from '@earendil-works/pi-ai/api/google-generative-ai';
 import { streamSimple } from '@earendil-works/pi-ai/api/openai-responses';
 import { streamSimple as completionsStreamSimple } from '@earendil-works/pi-ai/api/openai-completions';
 import { streamSimple as codexStreamSimple } from '@earendil-works/pi-ai/api/openai-codex-responses';
@@ -11,7 +12,7 @@ import {codexFailure} from './codex-errors.js';
 export {registerCodexCredentialUpdater,redactProviderSecrets} from './codex-auth.js';
 
 export interface ProviderConfig {
-  mode?: 'scripted' | 'openai' | 'codex' | 'codex-account' | 'opencode' | 'nebius';
+  mode?: 'scripted' | 'openai' | 'codex' | 'codex-account' | 'opencode' | 'nebius' | 'gemini';
   endpoint?: string;
   model?: string;
   reasoningEffort?: ReasoningEffort;
@@ -24,7 +25,7 @@ export interface ProviderCredentials extends CodexCredentialInput {
   reasoningEffortModel?: string;
   reasoningEfforts?: string[];
 }
-type ProviderModel = Model<'openai-responses'> | Model<'openai-codex-responses'> | Model<'openai-completions'>;
+type ProviderModel = Model<'openai-responses'> | Model<'openai-codex-responses'> | Model<'openai-completions'> | Model<'google-generative-ai'>;
 export const OPENCODE_BASE_URL = 'https://opencode.ai/inference/openai/v1';
 export const NEBIUS_BASE_URL = 'https://api.tokenfactory.nebius.com/v1';
 export const REASONING_EFFORTS = ['minimal','low','medium','high','xhigh','max'] as const;
@@ -65,7 +66,7 @@ export function modelFor(config: ProviderConfig, credentials: ProviderCredential
   const mode = selectedMode(config, credentials);
   const account = accountMode(config, credentials), relay = isRelay(config, credentials);
   if (account && (config.endpoint || credentials.endpoint)) throw new Error('Codex account inference uses a fixed provider endpoint; remove the endpoint override.');
-  const fixed = mode === 'opencode' ? OPENCODE_BASE_URL : mode === 'nebius' ? NEBIUS_BASE_URL : undefined;
+  const fixed = mode === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : mode === 'opencode' ? OPENCODE_BASE_URL : mode === 'nebius' ? NEBIUS_BASE_URL : undefined;
   const configured = credentials.endpoint || config.endpoint;
   if (fixed && configured && configured.replace(/\/$/, '') !== fixed) throw new Error('This provider uses a fixed API endpoint.');
   const endpoint = account ? CODEX_RESPONSES_URL : fixed || configured || (relay ? 'http://10.0.2.2:8787/v1' : 'https://api.openai.com/v1');
@@ -74,8 +75,12 @@ export function modelFor(config: ProviderConfig, credentials: ProviderCredential
   if (relay) {
     if (url.protocol !== 'http:' || !['10.0.2.2', '127.0.0.1', 'localhost'].includes(url.hostname)) throw new Error('Codex relay is restricted to the Android emulator host or loopback.');
   } else if (url.protocol !== 'https:') throw new Error('Direct API providers require HTTPS.');
-  const id = override || credentials.model || config.model || (account ? 'gpt-6-luna' : mode === 'opencode' ? 'big-pickle' : mode === 'nebius' ? 'zai-org/GLM-5.3-Flash' : 'gpt-6-sol');
+  const id = override || credentials.model || config.model || (mode === 'gemini' ? 'gemini-3.5-flash' : account ? 'gpt-6-luna' : mode === 'opencode' ? 'big-pickle' : mode === 'nebius' ? 'zai-org/GLM-5.3-Flash' : 'gpt-6-sol');
   if (!/^[a-zA-Z0-9._:/+@-]{1,160}$/.test(id)) throw new Error('Invalid model identifier.');
+  if (mode === 'gemini') {
+    return {id, name:id, provider:'google', api:'google-generative-ai', baseUrl:fixed!, input:['text','image'],
+      reasoning:true, contextWindow:1048576, maxTokens:8192, cost:{input:0,output:0,cacheRead:0,cacheWrite:0}};
+  }
   if (mode === 'opencode' || mode === 'nebius') {
     return {
       id, name: id, provider: mode, api: 'openai-completions',
@@ -148,6 +153,13 @@ function retryDelay(headers: Headers | undefined, attempt: number): number {
     if (Number.isFinite(date)) return Math.max(0,date-Date.now());
   }
   return 1000 * 2**attempt;
+}
+// Only retry an explicitly time-limited Gemini rejection before any content/tool delta.
+export function geminiRetryDelay(reason: string): number | undefined {
+  if (!/quota exceeded/i.test(reason) || !/per minute/i.test(reason) || /per day|billing disabled/i.test(reason)) return;
+  const match = reason.match(/retry in ([0-9.]+)s/i);
+  const seconds = match && Number(match[1]);
+  if (seconds && seconds > 0 && seconds <= 60) return Math.ceil(seconds * 1000) + 250;
 }
 function retryWait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve,reject)=>{
@@ -288,6 +300,8 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
                 ...(Array.isArray(body.tools) ? {tools:body.tools.map((tool:any)=>tool.type==='function'?{...tool,strict:false}:tool)} : {})};
             },
           })
+        : model!.api === 'google-generative-ai'
+          ? googleStream(model!,context,shared)
         : model!.api === 'openai-completions'
           ? completionsStreamSimple(model!,context,{
               ...shared,
@@ -297,12 +311,14 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
       const guarded = new AssistantMessageEventStream();
       void(async()=>{
         let forwardedStart = false;
+        let geminiRetried = false;
         try {
           while (true) {
             let retryableStreamFailure = false;
             let emittedProgress = false;
             let providerProgress = false;
             let restart = false;
+            let geminiWait: number | undefined;
             const source = sourceFor((event:any)=>{
               const type = event?.type;
               if (typeof type !== 'string') return;
@@ -319,7 +335,7 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
               retryableStreamFailure = typeof code === 'string' && RETRYABLE_CODEX_STREAM_ERRORS.has(code.toLowerCase());
             });
             for await (const event of source) {
-              if (account && event.type === 'start') {
+              if ((account || mode === 'gemini') && event.type === 'start') {
                 if (!forwardedStart) {
                   // Pi mutates its partial message when a later SSE failure arrives.
                   // Never expose the upstream object across a suppressed retry.
@@ -335,6 +351,10 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
                 restart = true;
                 break;
               }
+              if (mode === 'gemini' && event.type === 'error' && !geminiRetried && !emittedProgress && !options?.signal?.aborted) {
+                geminiWait = geminiRetryDelay(event.error.errorMessage || '');
+                if (geminiWait !== undefined) { geminiRetried = true; restart = true; break; }
+              }
               if (event.type !== 'error') emittedProgress = true;
               if (event.type === 'error') {
                 if (account) {
@@ -342,12 +362,21 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
                   event.reason=options?.signal?.aborted?'aborted':'error';
                   event.error = {...event.error,stopReason:options?.signal?.aborted?'aborted':'error',errorMessage:options?.signal?.aborted?'Request cancelled.':deadline?.aborted?'Codex inference timed out. Check the phone connection and retry.':budget.error??'Codex inference failed. The saved sign-in may still be valid.'};
                   delete event.error.diagnostics;
+                } else if (mode === 'gemini') {
+                  const reason = event.error.errorMessage || '';
+                  event.error.errorMessage = options?.signal?.aborted ? 'Request cancelled.'
+                    : /RESOURCE_EXHAUSTED|quota exceeded|\b429\b/i.test(reason) ? 'Gemini reached its request quota (HTTP 429). Retry when your quota is available.'
+                    : /UNAVAILABLE|high demand|\b503\b/i.test(reason) ? 'Gemini is temporarily unavailable (HTTP 503). Retry this request later.'
+                    : /API_KEY_INVALID|INVALID_API_KEY|UNAUTHENTICATED|PERMISSION_DENIED/i.test(reason) ? 'Gemini rejected this connection. Check the saved key and its access to the selected model.'
+                    : 'Gemini could not finish this request. Check the model, connection and device network.';
+                  delete event.error.diagnostics;
                 } else event.error.errorMessage = redactProviderSecrets(event.error.errorMessage || 'Provider request failed.',credentials).slice(0,512);
               }
               guarded.push(event);
             }
             if (!restart) break;
-            await retryWait(retryDelay(undefined,budget.attempts-1),retrySignal!);
+            if (geminiWait !== undefined) await retryWait(geminiWait,options?.signal ?? AbortSignal.timeout(65000));
+            else await retryWait(retryDelay(undefined,budget.attempts-1),retrySignal!);
           }
           // Terminal events carry the sanitized final message; do not replace it
           // with the upstream stream's unredacted error result.
