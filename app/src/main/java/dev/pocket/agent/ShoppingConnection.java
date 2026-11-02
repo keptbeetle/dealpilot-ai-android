@@ -94,7 +94,7 @@ final class ShoppingConnection {
             try{
                 android.content.SharedPreferences prefs=context.getSharedPreferences("shopping-host",0);
                 if(action.equals("settings")){
-                    JSONObject info=new JSONObject().put("configured",prefs.contains("remote"));
+                    JSONObject info=new JSONObject().put("configured",prefs.contains("remote")).put("endpoint",BuildConfig.PAYPAL_CHECKOUT_ORIGIN);
                     if(prefs.contains("remote"))info.put("endpoint",saved(context,"remote").getString("endpoint"));
                     reply.complete(info,null);return;
                 }

@@ -36,6 +36,7 @@ android {
         resValue("string", "app_name", if (providers.gradleProperty("uiPreview").isPresent) "Pocket Agent Preview" else "Pocket Agent")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "DEVELOPMENT_TOOLS", "false")
+        buildConfigField("String", "PAYPAL_CHECKOUT_ORIGIN", "\"https://pocket-sandbox-checkout.dealpilot-ai.workers.dev\"")
     }
     buildFeatures { buildConfig = true; aidl = true; resValues = true }
     signingConfigs {

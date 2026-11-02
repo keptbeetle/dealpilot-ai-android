@@ -14,7 +14,7 @@ An unrecognized return link cannot capture a payment. Interrupted or uncertain p
 
 The companion DealPilot checkout service is in `src/api/pocket-mobile.ts`, with `wrangler.pocket.jsonc` and `db/pocket-mobile.sql`. The maintainer deployment guide is `docs/POCKET-MOBILE-PAYPAL-HTTPS-2026-11-03.md` in the sibling DealPilot repository.
 
-Cloudflare Workers and D1 were selected for the free plan. The service needs the owner's Cloudflare authorization before deployment. A compiled APK and Worker dry-run are available locally. Hosted availability, real phone execution and buyer-approved provider capture are still pending. Windows/ADB pairing is supported only by the older development workflow.
+Cloudflare Workers and D1 are deployed on the free plan at https://pocket-sandbox-checkout.dealpilot-ai.workers.dev. The APK prefills this public origin. One-time access details are stored in the owner's private DealPilot setup file at .local/pocket-mobile-private/phone-setup.txt. Live HTTPS health, authenticated D1 session, quote, approval and cancellation checks passed. PayPal sandbox OAuth returned 200. No order was created during these live checks. Physical-phone execution and buyer-approved provider capture are still pending. Windows/ADB pairing is supported only by the older development workflow.
 
 The Android implementation uses the existing PayPal Orders API approval page and a return activity. It does not embed the PayPal merchant secret or depend on a model response as proof of payment.
 
