@@ -34,6 +34,20 @@ jobs:
         working-directory: runtime
       - run: npm test
         working-directory: runtime
+      - name: Diagnose Windows private-file ownership
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $probe = Join-Path $env:RUNNER_TEMP 'pocket-private-owner-probe'
+          New-Item -ItemType Directory -Path $probe -Force | Out-Null
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $acl = Get-Acl -LiteralPath $probe
+          [pscustomobject]@{
+            Caller = $identity.User.Value
+            TokenDefaultOwner = $identity.Owner.Value
+            NewDirectoryOwner = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+          } | ConvertTo-Json
+          powershell.exe -NoProfile -NonInteractive -Command 'Get-ExecutionPolicy -List | Format-Table -AutoSize'
       - run: npm run test:ui
         working-directory: runtime
       - run: npm run build
