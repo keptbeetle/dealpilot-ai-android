@@ -34,6 +34,7 @@ def local_bearer(path: Path) -> str:
         pass
     else:
         with os.fdopen(fd, "w") as file:
+            protect_private_path(path)
             file.write(secrets.token_urlsafe(48) + "\n")
     assert_private_path(path)
     token = path.read_text().strip()

@@ -94,6 +94,7 @@ def provision(serial, auth_path=None, runner=subprocess.run):
             temporary = Path(file.name)
             if os.name != 'nt':
                 os.fchmod(file.fileno(), 0o600)
+            protect_private_path(temporary)
             json.dump(config, file, separators=(',', ':'))
         adb('shell', 'mkdir', '-p', str(PurePosixPath(DESTINATION).parent))
         adb('push', str(temporary), DESTINATION)
