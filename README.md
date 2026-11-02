@@ -1,5 +1,9 @@
 # Pocket Agent
 
+**Latest test APK:** [GitHub Actions downloads](https://github.com/keptbeetle/pocket-agent/actions/workflows/debug-apk.yml) · [download/install guide](docs/APK-DOWNLOADS.md). Every code push/PR builds ARM64, x86-64 and universal debug APKs with checksums and source provenance. The Actions run contains the download links; artifacts expire after seven days.
+
+**Local shopping fork audit (2026-11-02):** [Actual Android emulator results](docs/EMULATOR-AUDIT-RESULTS-2026-11-02.md), [host-assisted shopping/sandbox setup](docs/SHOPPING-SANDBOX-2026-11-01.md), [private59-screen walkthrough](artifacts/emulator-audit-20261102/report.html). Real-source/model journeys and genuine sandbox create/login were tested; merchant cart/fulfilment are simulated. INR laptop coverage and actual payer-approved capture remain incomplete.
+
 An Android assistant that delegates phone work to background agents while you keep talking to the main conversation. Pi and the adapted `@pi9/subagent` runtime run inside the app; workers call native Android tools directly. Settings can route speech-to-text three ways: **Hybrid**, **Android default only**, or **Deepgram only**. Hybrid sends the same PCM to Deepgram and, on Android 13+, an available system recognizer in parallel; its configurable switch threshold defaults to 3 seconds, with Android preferred below the threshold and Deepgram at or above it. Android default only uses the phone's normal `SpeechRecognizer` microphone path with no hybrid arbitration or threshold. Deepgram only skips Android recognition entirely. Deepgram continues to provide speech synthesis in every mode.
 
 **Preview:** [v0.1.1-preview.1](https://github.com/ru-aish/pocket-agent/releases/tag/v0.1.1-preview.1) adds direct Codex account sign-in and secure login-cache import. The signed x86_64 APK passed direct Luna delegation with the relay stopped. ARM64 execution remains unverified. See the [account validation record](docs/CODEX_AUTH_VALIDATION.md).
@@ -85,9 +89,13 @@ Android can restrict or terminate the user-started service. Interrupted work is 
 
 ## Development
 
+**Shopping sandbox demo:** Run `.\scripts\windows-dev.ps1 -Action ShopDemo`, then open `http://127.0.0.1:3090/shopping.html`. [Setup, flow, functional/simulated boundaries and verification](docs/SHOPPING-SANDBOX-2026-11-01.md). This host-assisted mode uses Pocket's actual model loop, permitted real sources or explicitly selected sample inventory, a simulated merchant cart/order and genuine PayPal sandbox. Android packages the paired shopping screen; buyer approval/capture and actual Android runtime acceptance remain separate gates.
+
 For the latest test build from `main`, open the [**Development prerelease**](https://github.com/ru-aish/pocket-agent/releases/tag/development) and expand **Assets**. Download **`Pocket-Agent-development-arm64.apk`** for an ARM64 phone, `Pocket-Agent-development-x86_64.apk` for an emulator, or `Pocket-Agent-development-universal.apk` if unsure. The [Scheduled development APK workflow](https://github.com/ru-aish/pocket-agent/actions/workflows/development-apk.yml) checks every three hours and only builds when `main` differs from the last successfully published development build. See [development build downloads and schedule](docs/DEVELOPMENT_APK.md#downloads-and-schedule) for details.
 
-**Compile and sign APKs only in GitHub Actions.** The workflow builds release/test APKs, runs runtime tests and lint, and packages hashes and provenance. Emulator/device execution is a separate local step; use an explicit emulator serial, as described in the validation documentation.
+**Windows development in this fork:** Run `.\scripts\windows-dev.ps1 -Action Setup -SdkPath D:\sdk`, then `-Action Check` for native runtime, preview, bundle and Python checks. Run `-Action Preview` for the local interface or `-Action BuildAndroid` for debug APKs and lint. See [Windows setup and verification](docs/WINDOWS-PORT-2026-11-01.md). Windows uses native PowerShell, file ACLs, Java and Android SDK tools. Local debug compilation is supported. Distribution signing remains separately configured. GitHub Actions also provides Windows/Linux host checks and the existing APK pipeline. Emulator/device execution uses an explicit serial.
+
+**Shopping development baseline:** [Capability results](docs/SHOPPING-CAPABILITY-RESULTS-2026-11-01.md) measure the unchanged model/session against synthetic phone observations, including a full main→worker→comparison journey. The [conditional integration plan](docs/SHOPPING-CAPABILITY-PLAN-2026-11-01.md) preserves native conversational filtering and proposes explicit evidence/action authority. Shopping runtime integration is not implemented by these evaluation tools.
 
 - [Voice assistant: Deepgram, Android role, lifecycle, and latency](docs/VOICE.md)
 - [Runtime architecture, upstream pins, and limits](docs/RUNTIME.md)

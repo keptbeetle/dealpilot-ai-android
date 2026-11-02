@@ -1,3 +1,5 @@
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -6,7 +8,7 @@ import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
 
 test('fresh preview serves the complete chat module graph and restricts provider requests',async t=>{
-  const directory=await mkdtemp('/tmp/pocket-preview-http-');
+  const directory=await mkdtemp(join(tmpdir(),'pocket-preview-http-'));
   const child=spawn(process.execPath,[fileURLToPath(new URL('../server.mjs',import.meta.url))],{
     env:{...process.env,POCKET_PREVIEW_PORT:'0',POCKET_PREVIEW_STATE_DIR:directory},stdio:['ignore','pipe','pipe'],
   });

@@ -26,7 +26,7 @@ that engine is selected. Android keeps its own live voice/wake-word services.
 
 Browser preferences and conversations use local storage. Provider/account/voice
 credentials never do: the server keeps an AES-GCM encrypted vault and a mode-0600
-key in `~/.local/state/pocket-agent/live-ui/`. These are local-computer credentials,
+key in `~/.local/state/pocket-agent/live-ui/`. On Windows the vault directory and files use an owner-private DACL with SYSTEM access. File contents are flushed before atomic replacement. Directory flushing applies on POSIX hosts. These are local-computer credentials,
 separate from Android Keystore. Do not publish or tunnel this local server.
 
 Schedules, subagents, and virtual displays still run inside Android. Browser

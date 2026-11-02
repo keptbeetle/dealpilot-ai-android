@@ -878,6 +878,19 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             });});
     }
     private void webRequest(String path,JSONObject body,PocketWebUi.Reply reply) throws Exception {
+        if(path.startsWith("/shopping/")){
+            String action=path.substring("/shopping/".length());
+            if(action.equals("enter")){
+                if(activeWork())throw new IllegalStateException("Stop active phone work before entering the shopping demo");
+                getSharedPreferences("shopping-host",0).edit().putBoolean("active",true).apply();
+                AutonomyStore.requestEnabled(this,false,error->{});
+                reply.complete(json("ready",true),null);return;
+            }
+            if(action.equals("close")){getSharedPreferences("shopping-host",0).edit().putBoolean("active",false).apply();reply.complete(json("closed",true),null);return;}
+            if(!getSharedPreferences("shopping-host",0).getBoolean("active",false))throw new IllegalStateException("Enter the shopping demo from Pocket first");
+            if(action.equals("open")){ShoppingConnection.open(this,body.getString("url"));reply.complete(json("opened",true),null);return;}
+            ShoppingConnection.handle(this,action,body,reply);return;
+        }
         CredentialStore credentials=new CredentialStore(this);
         switch(path) {
             case "/native/snapshot" -> {

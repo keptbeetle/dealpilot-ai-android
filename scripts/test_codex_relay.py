@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Local relay protocol/security tests; no account or network API is needed."""
+import os
+import subprocess
+from private_files import assert_private_path
 import asyncio
 import json
 from pathlib import Path
@@ -98,8 +101,11 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         path = Path(self.temp.name) / 'secret'
         token = local_bearer(path)
         self.assertEqual(token, local_bearer(path))
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
-        path.chmod(0o644)
+        assert_private_path(path)
+        if os.name == 'nt':
+            subprocess.run(['icacls', str(path), '/grant', '*S-1-1-0:(R)'], check=True, capture_output=True)
+        else:
+            path.chmod(0o644)
         with self.assertRaises(ValueError):
             local_bearer(path)
 

@@ -3,7 +3,10 @@
 import base64
 import json
 from pathlib import Path
-import stat
+try:
+    from .private_files import assert_private_path
+except ImportError:
+    from private_files import assert_private_path
 import subprocess
 import tempfile
 import time
@@ -63,7 +66,7 @@ class ProvisionTests(unittest.TestCase):
                 if command[3:6] == ['shell', 'cmd', 'package']:
                     return subprocess.CompletedProcess(command, 0, 'package:dev.pocket.agent uid:10148\n', '')
                 if command[3] == 'push':
-                    temporary = Path(command[4]);self.assertEqual(stat.S_IMODE(temporary.stat().st_mode), 0o600)
+                    temporary = Path(command[4]);assert_private_path(temporary)
                     self.assertEqual(command[5], DESTINATION);pushed.update(json.loads(temporary.read_text()))
                 if command[3:5] == ['shell', 'chmod']:
                     self.assertFalse(temporary.exists(), 'host credential copy must be removed before chmod')
