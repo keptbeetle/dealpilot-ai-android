@@ -8,11 +8,21 @@ try {
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
         throw 'Private storage cannot be a reparse point.'
     }
-    $owner = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $owner = $identity.User
     $system = New-Object Security.Principal.SecurityIdentifier('S-1-5-18')
     $acl = $item.GetAccessControl()
     if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $owner.Value) {
-        throw 'Private storage has another owner.'
+        # Elevated Windows tokens can create files owned by their default owner
+        # group (for example Administrators on hosted runners). Normalize only
+        # that known creator-owner on an explicit Protect call. Check stays
+        # read-only and strict; unrelated owners are never taken over.
+        if ($Action -eq 'Protect' -and
+            $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -eq $identity.Owner.Value) {
+            $acl.SetOwner($owner)
+        } else {
+            throw 'Private storage has another owner.'
+        }
     }
     if ($Action -eq 'Protect') {
         if ($item.PSIsContainer) {
