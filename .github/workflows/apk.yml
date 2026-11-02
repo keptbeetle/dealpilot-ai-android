@@ -29,7 +29,7 @@ jobs:
     if: inputs.isolated_history == true
     uses: ./.github/workflows/history-device.yml
   build:
-    if: inputs.isolated_history != true
+    if: inputs.isolated_history != true && (github.repository == 'ru-aish/pocket-agent' || vars.ENABLE_DISTRIBUTION_BUILDS == 'true' || inputs.validation_signing == true)
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
@@ -61,7 +61,7 @@ jobs:
           java -cp /tmp/pocket-voice-sim dev.pocket.agent.SubscriptionVoiceStartupSimulator
       - name: Test provider protocols, display ownership and private emulator provisioning
         run: |
-          python3 -m pip install aiohttp==3.13.5
+          python3 -m pip install -r scripts/requirements-dev.txt
           python3 -m unittest discover -s scripts -p 'test_*.py' -v
       - uses: android-actions/setup-android@v4
       - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'

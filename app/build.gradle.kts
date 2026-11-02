@@ -1,4 +1,9 @@
 plugins { id("com.android.application") }
+val ciBuildNumber = providers.gradleProperty("ciBuildNumber").orNull?.let {
+    it.toIntOrNull()?.takeIf { number -> number in 1..2_099_899_999 }
+        ?: error("ciBuildNumber must be a positive bounded integer")
+}
+val ciDebugKeystore = System.getenv("CI_DEBUG_KEYSTORE")
 val ngrokNativeClasses = configurations.create("ngrokNativeClasses") { isTransitive = false }
 val ngrokAndroidArm64 = configurations.create("ngrokAndroidArm64") { isTransitive = false }
 val syncPocketUi = tasks.register<Sync>("syncPocketUi") {
@@ -26,14 +31,22 @@ android {
             "dev.pocket.agent.historyvalidation" else "dev.pocket.agent"
         minSdk = 31
         targetSdk = 36
-        versionCode = 31
-        versionName = "0.1.31-local-shell.2"
+        versionCode = ciBuildNumber?.let { 100_000 + it } ?: 31
+        versionName = "0.1.31-local-shell.2" + (ciBuildNumber?.let { "-ci.$it" } ?: "")
         resValue("string", "app_name", if (providers.gradleProperty("uiPreview").isPresent) "Pocket Agent Preview" else "Pocket Agent")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "DEVELOPMENT_TOOLS", "false")
     }
     buildFeatures { buildConfig = true; aidl = true; resValues = true }
     signingConfigs {
+        if (!ciDebugKeystore.isNullOrBlank()) {
+            create("ciDebug") {
+                storeFile = file(ciDebugKeystore)
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         create("distribution") {
             storeFile = file(System.getenv("APK_KEYSTORE") ?: "missing-keystore.jks")
             storePassword = System.getenv("APK_STORE_PASSWORD")
@@ -43,6 +56,9 @@ android {
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     buildTypes {
+        getByName("debug") {
+            if (!ciDebugKeystore.isNullOrBlank()) signingConfig = signingConfigs.getByName("ciDebug")
+        }
         release {
             buildConfigField("boolean", "DEVELOPMENT_TOOLS", "false")
             testProguardFiles.add(file("test-proguard-rules.pro"))
