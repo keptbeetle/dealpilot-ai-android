@@ -44,7 +44,7 @@ test('Windows creator-default group ownership is normalized only by Protect',{sk
   const directory=await mkdtemp(join(tmpdir(),'pocket-creator-owner-'));t.after(()=>rm(directory,{recursive:true,force:true}));
   await assert.rejects(assertPrivatePath(directory,true),/Private storage/);
   await protectPrivatePath(directory,true);await assertPrivatePath(directory,true);
-  const owner=(await runFile('powershell.exe',['-NoProfile','-NonInteractive','-Command','(Get-Acl -LiteralPath $env:POCKET_TEST_PATH).GetOwner([Security.Principal.SecurityIdentifier]).Value'],{windowsHide:true,env:{...process.env,POCKET_TEST_PATH:directory}})).stdout.trim();
+  const owner=(await runFile('powershell.exe',['-NoProfile','-NonInteractive','-Command','(Get-Item -LiteralPath $env:POCKET_TEST_PATH).GetAccessControl().GetOwner([Security.Principal.SecurityIdentifier]).Value'],{windowsHide:true,env:{...process.env,POCKET_TEST_PATH:directory}})).stdout.trim();
   assert.equal(owner,info.user);
 });
 

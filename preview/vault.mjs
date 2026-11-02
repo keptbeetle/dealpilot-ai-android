@@ -15,7 +15,7 @@ export async function createVault(directory){
     key=randomBytes(32);const tempKey=join(directory,`.vault-key-${randomUUID()}`);
     try {
       const handle=await open(tempKey,'wx',0o600);
-      try{await handle.writeFile(key);await handle.sync();}finally{await handle.close();}
+      try{await protectPrivatePath(tempKey);await handle.writeFile(key);await handle.sync();}finally{await handle.close();}
       // Publish the complete key without replacing a concurrent creator's key.
       try{await link(tempKey,keyPath);}catch(error){if(error.code!=='EEXIST')throw error;key=await readFile(keyPath);}
     } finally {await rm(tempKey,{force:true});}
@@ -41,7 +41,7 @@ export async function createVault(directory){
         const encrypted=Buffer.concat([cipher.update(JSON.stringify(next),'utf8'),cipher.final()]);
         const temp=join(directory,`.credentials-${randomUUID()}`),handle=await open(temp,'wx',0o600);
         try {
-          try{await handle.writeFile(Buffer.concat([iv,cipher.getAuthTag(),encrypted]));await handle.sync();}finally{await handle.close();}
+          try{await protectPrivatePath(temp);await handle.writeFile(Buffer.concat([iv,cipher.getAuthTag(),encrypted]));await handle.sync();}finally{await handle.close();}
           check();await rename(temp,dataPath);state=next;
           // Windows flushes the file above. Node cannot fsync directory handles there.
           if(process.platform!=='win32'){
