@@ -1,5 +1,7 @@
 # Pocket shopping + genuine PayPal sandbox demo
 
+**2026-11-02 Android audit update:** Actual Android16/API36 emulator pairing/runtime is now verified in `5c76cc6`, with backend `6b37236`; eight defects fixed. [Full results/remaining gaps](EMULATOR-AUDIT-RESULTS-2026-11-02.md), [59-screen report](../artifacts/emulator-audit-20261102/report.html).819 backend tests/build, Pocket204/44/24 and Android build/lint pass. Real INR laptop coverage, physical-device/standalone execution and actual payer-approved capture remain pending. Older compilation-only results below are historical.
+
 Implemented locally on1 November2026. Open **http://127.0.0.1:3090/shopping.html** while the demo launcher is running. Pocket's browser sidebar and Android sidebar also have **Shopping sandbox demo**.
 
 The corresponding DealPilot backend engineering commit is `fe2fc3e`. This document and the implementation contract supersede the earlier planning-only status for the host-assisted demo, while preserving that baseline's original measurements and remaining native-device gates.
@@ -53,7 +55,7 @@ Suggested requests: headphones/no SKU; brand preferences→hard restriction; lap
 
 ## Android development setup
 
-Build `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` with `windows-dev.ps1 -Action BuildAndroid -SdkPath D:\sdk`. Install on an explicitly chosen test device. This task did not install or run it on a phone: `adb devices` was empty.
+Build `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` with `windows-dev.ps1 -Action BuildAndroid -SdkPath D:\sdk`. Install on an explicitly chosen test device. The November2 audit installed the x86-64 debug APK on `emulator-5554` and verified pairing, actual model/source flows, lifecycle and sandbox create/login/unapproved hold/cancel; physical-phone transfer remains unverified.
 
 ```powershell
 # Replace SERIAL with the intended development device/emulator:
@@ -68,7 +70,7 @@ Entering this mode pauses background automation; native phone/shell dispatch is 
 
 - DealPilot **813/813 tests**, including **40 new Pocket backend/payment tests**, and strict app/API typing plus production build pass.
 - Pocket **204/204 runtime**, **43/43 preview/service/security**, **24/24 Python/host JVM** checks and bundle pass on native Windows. The additional provider test verifies only the supplied shopping tool is advertised and failed inference remains an error.
-- Android debug ARM64/x86-64/universal and fixture APK builds/lint pass:0 errors/124 warnings. All three app payloads and the universal debug signature verify; no credentials are packaged. Actual Android runtime remains unverified.
+- Original November1 Android debug ARM64/x86-64/universal and fixture APK builds/lint pass:0 errors/124 warnings. The November2 x86-64 emulator audit now verifies actual native runtime and installed debug signature; ARM64/physical-device execution remains unverified.
 - Actual Pocket model/browser journey: headphones→comparison→natural selection→$69 simulation→exact review→genuine sandbox order creation→actual sandbox login page→unapproved capture held→local cancellation. No payer sign-in, buyer approval or successful genuine capture occurred.
 - Other live-model browser cases: ASUS-only/spec filters, budget reduction/no-match, INR hold, real Channel3 no-match without substitution, fresh real ARK research and refreshed$75 simulation, two packs of10=20 stickers/$10, desktop/390px rendering and restore after host restart. No page script errors or body overflow in the verified browser runs.
 - Real ARK evidence:3 permitted rendered product observations; each successful research/refresh reported4 catalogue GETs and3 page visits. Identity/price/stock agree with source evidence, condition remains UNKNOWN and purchase recommendation remains withheld. Only a source-informed cart simulation was allowed; no seller cart was touched. These observed URLs are exposed development examples, not blind evaluation cases.
@@ -84,6 +86,6 @@ The general Pocket production TypeScript debt noted in the earlier baseline rema
 
 The backend uses [PayPal's Orders create→buyer approval→capture workflow](https://developer.paypal.com/api/rest/integration/orders-api). Its fixed sandbox transport is reused from DealPilot; it verifies response identity and amounts, stores idempotency keys and treats uncertain outcomes as unknown. A fake local success can never fill the genuine capture acceptance gate.
 
-**Pending:** actual sandbox buyer approval and successful provider capture, Android pairing/device runtime, unrestricted real-store coverage and autonomous general-phone shopping. No public deployment/push, real payment, merchant order, fulfilment or Phase3 release work.
+**Pending:** actual sandbox buyer approval and successful provider capture, physical-device/standalone execution, real INR laptop/signed merchant coverage and autonomous general-phone shopping. Android16 x86-64 emulator pairing/runtime is now verified. No public deployment/push, real payment, merchant order, fulfilment or Phase3 release work.
 
 Historical movement: Phase1 **50/50→50/50 (+0)**, automated Phase2 **40/40→40/40 (+0)**, Phase3 **3/10→3/10 (+0)**, total **93/100→93/100 (+0)**.
