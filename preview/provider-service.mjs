@@ -163,7 +163,8 @@ export async function createProviderService({directory,fetcher=fetch,wait=delay,
       if(activeRequests)fail('Another provider request is running.',409);
       const saved=credentials(provider(input.provider));
       const {selected,credential}=config({...input,model:input.model||saved.model});
-      const session=new MobileSession('shopping-demo',selected,credential,tools,history,systemPrompt);
+      const messages=history.map(m=>m.role==='user'?{role:'user',content:m.text,timestamp:Date.now()}:{role:'assistant',content:[{type:'text',text:m.text}],api:selected.mode==='codex-account'?'openai-codex-responses':'openai-completions',provider:selected.mode,model:selected.model,stopReason:'stop',timestamp:Date.now(),usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}});
+      const session=new MobileSession('shopping-demo',selected,credential,tools,messages,systemPrompt);
       const stream=makeStream(selected,credential,'shopping-demo');let generations=0;
       session.agent.streamFunction=(model,context,options)=>{if(++generations>12)throw Error('Shopping model generation budget reached.');return stream(model,context,{...options,fetch:fetcher});};
       const abort=()=>void session.abort();signal?.addEventListener('abort',abort,{once:true});activeRequests++;

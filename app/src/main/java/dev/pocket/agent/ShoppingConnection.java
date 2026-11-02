@@ -43,7 +43,9 @@ final class ShoppingConnection {
                 int port=connection.getInt("port");if(port<1024||port>65535)throw new IllegalArgumentException("Invalid local host port");
                 String kind=action.equals("pair")?"connect":action;
                 JSONObject payload=action.equals("pair")?new JSONObject().put("native",true).put("code",body.optString("code")):body;
-                OkHttpClient client=new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(10,TimeUnit.SECONDS).callTimeout(95,TimeUnit.SECONDS).build();
+                // Research/model turns can exceed OkHttp's default ten-second read timeout.
+                // Retain a bounded call while allowing the host's ninety-second turn to finish.
+                OkHttpClient client=new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(10,TimeUnit.SECONDS).readTimeout(95,TimeUnit.SECONDS).callTimeout(95,TimeUnit.SECONDS).build();
                 Request.Builder request=new Request.Builder().url("http://127.0.0.1:"+port+"/api/shop/"+kind).header("x-pocket-request","1").post(RequestBody.create(payload.toString(),MediaType.get("application/json")));
                 if(!action.equals("pair"))request.header("Authorization","Bearer "+connection.getString("bearer"));
                 try(Response response=client.newCall(request.build()).execute()){
