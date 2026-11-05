@@ -10,7 +10,7 @@ OpenRouter was not supported by the initial APK. Added a fixed OpenRouter Chat C
 
 The owner's original `nvidia/nemotron-3-ultra-550b-a55b:free` accepts text only. Queried actual OpenRouter metadata and chose `nvidia/nemotron-3.5-super-vl:free`, advertising images and tools with zero prompt/completion price. Live host SDK probes verified tool continuation and reading the heading in an actual phone screenshot. The phone saved the new model normally.
 
-The key then reached OpenRouter's 50-request daily free quota. The response reported zero remaining and reset at **5:30 AM IST on 6 November**. Switching free models does not avoid an account-wide allowance. Added shared request-start pacing and guidance to use one worker at a time. These controls cannot restore an exhausted daily quota. Full phone browsing with the OpenRouter vision model remains unverified.
+The key then reached OpenRouter's 50-request daily free quota. The response reported zero remaining and reset at **5:30 AM IST on 6 November**. Switching free models does not avoid an account-wide allowance. Added shared request-start pacing and guidance to use one worker at a time. These controls cannot restore an exhausted daily quota. Full phone browsing with the OpenRouter vision model remains unverified. The original laptop failure was caused by quota and setup errors. Screenshot incompatibility was identified from model metadata, rather than established as the HTTP failure cause.
 
 The existing `gemini-3.5-flash-lite` key passed live inference and phone setup. It was used explicitly as the existing fallback for the completed source browsing case. No paid OpenRouter model was used.
 
@@ -30,7 +30,7 @@ The existing `gemini-3.5-flash-lite` key passed live inference and phone setup. 
 | Transport fix | Changed to manual redirect handling with rejection of non-2xx responses, so credentials are never forwarded to a redirect target. Live hosted OAuth then passed. |
 | Test-record recovery | Preserved the exact original test record and made an annotated, revision-checked maintenance update to blocked after reproducing the pre-OAuth redirect-policy failure. No order-create replay or capture occurred. |
 | Fresh sandbox create after fix | A fresh quote and explicit approval created a genuine PayPal sandbox order and opened the actual sandbox login on this phone. |
-| Buyer approval and capture | Pending buyer action at the sandbox login. No completed capture is claimed. |
+| Buyer approval and capture | Owner approved at PayPal. A read-only provider check returned APPROVED. The phone then verified a completed **USD 250.00** capture and showed the receipt. Reload restored that receipt. |
 
 ## Confirmed flaws and fixes
 
@@ -40,19 +40,24 @@ The existing `gemini-3.5-flash-lite` key passed live inference and phone setup. 
 4. **Cloudflare payment transport rejected redirect:error.** Fixed manual redirect rejection, added bounded transport diagnostics and a regression for credential-safe redirect handling.
 5. **Pre-order authentication failure incorrectly trapped the buyer as an unknown order.** Explicitly track dispatch of the PayPal order operation. Future authentication failures before dispatch are blocked without claiming an order exists. Genuinely uncertain outcomes remain unknown.
 6. **Stale provider error stayed visible after successful fallback.** Clear the previous notice when the buyer sends the next message.
-7. **Installed-app signature mismatch.** Used a separate test package and label to preserve the owner's original installation. The normal installed app has not been replaced.
+7. **Returning to the selected offer showed a duplicate pending panel.** Recognize the same title, URL, unit amount, currency and quantity and restore its existing quote. Added a UI regression.
+8. **Installed-app signature mismatch.** Used a separate test package and label to preserve the owner's original installation. The normal installed app has not been replaced.
 
 During development, one deployment command continued after a failed check. That temporary build was replaced by the corrected version after typechecking and the payment regression suite passed. The failed logs are retained.
 
 ## Verification and evidence
 
 - Backend full suite **827 passed**, strict app/API typecheck and production build passed.
-- Pocket runtime **207 passed**. Preview **47 passed, one platform skip**. Android isolated ARM64/x86-64/universal build and lint passed.
+- Pocket runtime **207 passed**. Preview **48 passed, one platform skip**. Android isolated ARM64/x86-64/universal build and lint passed.
 - Payment regressions **71 passed**, including known pre-dispatch failures, duplicate-operation preservation, capture-once, unknown recovery and manual redirect rejection.
-- Live service authenticated with PayPal sandbox after deployment of the transport fix. The next physical-phone create returned a genuine approval URL.
+- Live service authenticated with PayPal sandbox after deployment of the transport fix. The next physical-phone create returned a genuine approval URL. The owner completed sandbox approval, and the phone verified the exact provider order, amount and completed capture. This is a genuine provider outcome, not an injected response.
 - Private ordered screenshot report lives at `artifacts/phone-audit-20261106/report.html`. Raw model, native observation, source, failure and test records remain in the same ignored directory.
 - Development screenshots, API keys, credentials, device databases and the private service access key are excluded from source commits.
 
 The full DealPilot shopping verifier remains deferred. Price and stock above are observed page facts, while the payable merchant cart/order and delivery remain simulations. This audit does not establish broad retailer coverage or universal shopping success.
 
-Historical phase-weighted score remains **50/50 + 40/40 + 3/10 = 93/100 (+0)**. The physical-phone acceptance milestone is still incomplete pending actual buyer approval/capture and broader source browsing.
+Historical phase-weighted score remains **50/50 + 40/40 + 3/10 = 93/100 (+0)**. The single ARK phone browsing-to-sandbox-capture scenario passed. Broader phone browsing, laptop discovery, OpenRouter-only transfer and owner acceptance of the full application remain incomplete.
+
+## Verified provider result
+
+The USD250.00 ARK test payment completed on 6 November. Exact provider and receipt identifiers are preserved in the private audit record `artifacts/phone-audit-20261106/capture-result.json`. The screenshots show the actual phone receipt and restoration. No seller order or shipment was placed.

@@ -67,7 +67,13 @@ function render(){
  }
  if(checkoutOnly){
    $('#mode-note').textContent='PayPal sandbox uses test funds. The merchant order is simulated.';
-   const pending=sessionStorage.getItem('browser-checkout');
+   let pending=sessionStorage.getItem('browser-checkout');
+   if(pending&&state.quote){
+     const listing=JSON.parse(pending),q=state.quote;
+     if(q.browserSource===listing.url&&q.title===listing.title&&q.unitCents===listing.unitCents&&q.currency===listing.currency&&q.quantity===listing.quantity){
+       sessionStorage.removeItem('browser-checkout');pending=null;
+     }
+   }
    if(pending){
      const listing=JSON.parse(pending);
      const panel=el('section',undefined,'offer');
