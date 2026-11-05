@@ -61,3 +61,19 @@ Historical phase-weighted score remains **50/50 + 40/40 + 3/10 = 93/100 (+0)**. 
 ## Verified provider result
 
 The USD250.00 ARK test payment completed on 6 November. Exact provider and receipt identifiers are preserved in the private audit record `artifacts/phone-audit-20261106/capture-result.json`. The screenshots show the actual phone receipt and restoration. No seller order or shipment was placed.
+
+## Follow-up model allowance and laptop test, 1:23–1:33 AM IST
+
+OpenRouter was checked again and returned HTTP429 for the daily free-model limit, with **50 allowed, zero remaining**, reset at **5:30 AM IST on 6 November**. Its key information endpoint's null spending limit is not a remaining request allowance. Gemini answered small probes, intermittently returned503, and later hit429 during the larger shopping workflow. Its exact remaining daily workflow allowance was not established.
+
+The earlier Amazon worker failed at missing Shizuku/Accessibility authorization. The earlier Flipkart worker did reach **com.flipkart.android** and read actual laptop cards before the OpenRouter minute limit stopped it. One observed card was8GB/256GB; another16GB/512GB listing had a regular price above₹80,000 and a lower conditional bank price. This was insufficient to present a qualifying comparison.
+
+A fresh bounded Chrome-based search uncovered an additional routing flaw. The selected main model was Gemini3.5 Flash Lite, but both first workers explicitly requested `gemini-2.5-flash`. A direct read-only inference check returned404, explaining that this model is no longer available to new users. Catalogue presence did not establish inference access.
+
+Changed the default main-agent guidance to let workers inherit the selected model and reasoning. Explicit model overrides remain supported when requested or required. Runtime207 tests, isolated Android build and lint passed, and the corrected test APK was installed.
+
+The retest's workers omitted model overrides and inherited the selected Gemini model. The first request received503. A retry performed real phone browser/navigation/capture actions and reached an Amazon product screen. Android opened the installed Amazon app despite the request for Chrome. The worker eventually received429 before a verified comparison. The bounded test was stopped. No cart, order or payment was started by this follow-up.
+
+Remaining gaps are a complete qualifying laptop comparison, reliable provider quota handling and explicit Chrome-only routing. The existing genuine ARK sandbox receipt remains recorded independently.
+
+Private evidence is under `artifacts/phone-followup-20261106/`, including frozen AI expectations, original404 routing failure, corrected worker selections, retry logs and the observed Amazon frame. The test harness's final WebView screenshot timed out, so the saved private-display frame and state/log records are the available visual/runtime evidence.
