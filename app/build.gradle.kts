@@ -33,7 +33,7 @@ android {
         targetSdk = 36
         versionCode = ciBuildNumber?.let { 100_000 + it } ?: 31
         versionName = "0.1.31-local-shell.2" + (ciBuildNumber?.let { "-ci.$it" } ?: "")
-        resValue("string", "app_name", if (providers.gradleProperty("uiPreview").isPresent) "Pocket Agent Preview" else "Pocket Agent")
+        resValue("string", "app_name", if (providers.gradleProperty("uiPreview").isPresent) "Pocket Agent Preview" else if (providers.gradleProperty("isolatedDeviceValidation").isPresent) "Pocket Agent Test" else "Pocket Agent")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "DEVELOPMENT_TOOLS", "false")
         buildConfigField("String", "PAYPAL_CHECKOUT_ORIGIN", "\"https://pocket-sandbox-checkout.dealpilot-ai.workers.dev\"")

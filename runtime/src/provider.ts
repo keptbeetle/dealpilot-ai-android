@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 /** Selected Pi adapters. Agent loops and tool execution stay inside Android. */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Model } from '@earendil-works/pi-ai';
@@ -12,7 +13,7 @@ import {codexFailure} from './codex-errors.js';
 export {registerCodexCredentialUpdater,redactProviderSecrets} from './codex-auth.js';
 
 export interface ProviderConfig {
-  mode?: 'scripted' | 'openai' | 'codex' | 'codex-account' | 'opencode' | 'nebius' | 'gemini';
+  mode?: 'scripted' | 'openai' | 'codex' | 'codex-account' | 'opencode' | 'nebius' | 'gemini' | 'openrouter';
   endpoint?: string;
   model?: string;
   reasoningEffort?: ReasoningEffort;
@@ -36,7 +37,7 @@ export function normalizeReasoningEffort(value: unknown): ReasoningEffort {
   return typeof value === 'string' && REASONING_EFFORT_SET.has(value) ? value as ReasoningEffort : DEFAULT_REASONING_EFFORT;
 }
 function providerInput(mode: string, id: string): Array<'text'|'image'> {
-  const normalized = id.toLowerCase();
+  const normalized = id.toLowerCase().replace(/:free$/,'');
   const vision = /(^|[/._-])(vl|vision|omni)([/._-]|$)/.test(normalized)
     || normalized === 'zai-org/glm-5.3-flash'
     || normalized === 'glm-5.3-flash-free';
@@ -66,7 +67,7 @@ export function modelFor(config: ProviderConfig, credentials: ProviderCredential
   const mode = selectedMode(config, credentials);
   const account = accountMode(config, credentials), relay = isRelay(config, credentials);
   if (account && (config.endpoint || credentials.endpoint)) throw new Error('Codex account inference uses a fixed provider endpoint; remove the endpoint override.');
-  const fixed = mode === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : mode === 'opencode' ? OPENCODE_BASE_URL : mode === 'nebius' ? NEBIUS_BASE_URL : undefined;
+  const fixed = mode === 'openrouter' ? 'https://openrouter.ai/api/v1' : mode === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : mode === 'opencode' ? OPENCODE_BASE_URL : mode === 'nebius' ? NEBIUS_BASE_URL : undefined;
   const configured = credentials.endpoint || config.endpoint;
   if (fixed && configured && configured.replace(/\/$/, '') !== fixed) throw new Error('This provider uses a fixed API endpoint.');
   const endpoint = account ? CODEX_RESPONSES_URL : fixed || configured || (relay ? 'http://10.0.2.2:8787/v1' : 'https://api.openai.com/v1');
@@ -75,13 +76,14 @@ export function modelFor(config: ProviderConfig, credentials: ProviderCredential
   if (relay) {
     if (url.protocol !== 'http:' || !['10.0.2.2', '127.0.0.1', 'localhost'].includes(url.hostname)) throw new Error('Codex relay is restricted to the Android emulator host or loopback.');
   } else if (url.protocol !== 'https:') throw new Error('Direct API providers require HTTPS.');
-  const id = override || credentials.model || config.model || (mode === 'gemini' ? 'gemini-3.5-flash' : account ? 'gpt-6-luna' : mode === 'opencode' ? 'big-pickle' : mode === 'nebius' ? 'zai-org/GLM-5.3-Flash' : 'gpt-6-sol');
+  const id = override || credentials.model || config.model || (mode === 'openrouter' ? 'nvidia/nemotron-3.5-super-vl:free' : mode === 'gemini' ? 'gemini-3.5-flash' : account ? 'gpt-6-luna' : mode === 'opencode' ? 'big-pickle' : mode === 'nebius' ? 'zai-org/GLM-5.3-Flash' : 'gpt-6-sol');
   if (!/^[a-zA-Z0-9._:/+@-]{1,160}$/.test(id)) throw new Error('Invalid model identifier.');
+  if (mode === 'openrouter' && !id.endsWith(':free')) throw new Error('OpenRouter is restricted to explicitly free models.');
   if (mode === 'gemini') {
     return {id, name:id, provider:'google', api:'google-generative-ai', baseUrl:fixed!, input:['text','image'],
       reasoning:true, contextWindow:1048576, maxTokens:8192, cost:{input:0,output:0,cacheRead:0,cacheWrite:0}};
   }
-  if (mode === 'opencode' || mode === 'nebius') {
+  if (mode === 'opencode' || mode === 'nebius' || mode === 'openrouter') {
     return {
       id, name: id, provider: mode, api: 'openai-completions',
       baseUrl: url.toString().replace(/\/$/, ''), input: providerInput(mode,id),
@@ -89,7 +91,7 @@ export function modelFor(config: ProviderConfig, credentials: ProviderCredential
       thinkingLevelMap: selectedThinkingLevelMap(config,credentials),
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       compat: { supportsDeveloperRole: false,
-        ...(mode === 'nebius' ? {supportsReasoningEffort:false,supportsStore:false} : {}),
+        ...(mode === 'nebius' || mode === 'openrouter' ? {supportsReasoningEffort:false,supportsStore:false} : {}),
       },
     };
   }
@@ -113,12 +115,20 @@ function failure(model: ProviderModel | undefined, text: string, aborted = false
   };
   stream.push({type:'error',reason:aborted ? 'aborted' : 'error',error:output});stream.end(output);return stream;
 }
+const openRouterNextRequest=new Map<string,number>();
+async function paceOpenRouter(headers:HeadersInit|undefined,signal:AbortSignal){
+  const key=createHash('sha256').update(new Headers(headers).get('authorization')||'').digest('hex');
+  const now=Date.now(),start=Math.max(now,openRouterNextRequest.get(key)||0);
+  openRouterNextRequest.set(key,start+4500);
+  if(start>now)await retryWait(start-now,signal);
+  if(signal.aborted)throw new Error('Request cancelled.');
+}
 function fixedCompletionsFetch(mode: string, fetcher: typeof fetch, requestSignal?: AbortSignal): typeof fetch {
   const expected = mode === 'opencode'
     ? OPENCODE_BASE_URL + '/chat/completions'
     : mode === 'nebius'
       ? NEBIUS_BASE_URL + '/chat/completions'
-      : undefined;
+      : mode === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions' : undefined;
   if (!expected) return fetcher;
   return (async(input: any, init?: RequestInit)=>{
     if (String(input) !== expected) throw new Error('Unexpected fixed-provider inference destination.');
@@ -126,6 +136,7 @@ function fixedCompletionsFetch(mode: string, fetcher: typeof fetch, requestSigna
     // Keep both the wall-clock timeout and the original conversation signal
     // attached after response headers arrive so a stalled SSE body cannot hang.
     const signal = AbortSignal.any([timeout,...(init?.signal?[init.signal]:[]),...(requestSignal?[requestSignal]:[])]);
+    if(mode==='openrouter')await paceOpenRouter(init?.headers,signal);
     return fetcher(expected,{...init,redirect:'error',signal});
   }) as typeof fetch;
 }
@@ -370,6 +381,11 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
                     : /API_KEY_INVALID|INVALID_API_KEY|UNAUTHENTICATED|PERMISSION_DENIED/i.test(reason) ? 'Gemini rejected this connection. Check the saved key and its access to the selected model.'
                     : 'Gemini could not finish this request. Check the model, connection and device network.';
                   delete event.error.diagnostics;
+                } else if(mode==='openrouter'){
+                  const reason=event.error.errorMessage||'';
+                  event.error.errorMessage=/429|rate limit/i.test(reason)?'OpenRouter free-model request limit reached (HTTP 429). Wait for the quota to reset before continuing.'
+                    : /402|credits|balance/i.test(reason)?'The selected free route is unavailable. No paid model was substituted.'
+                    : redactProviderSecrets(reason||'OpenRouter request failed.',credentials).slice(0,512);
                 } else event.error.errorMessage = redactProviderSecrets(event.error.errorMessage || 'Provider request failed.',credentials).slice(0,512);
               }
               guarded.push(event);

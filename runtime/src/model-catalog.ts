@@ -51,7 +51,7 @@ export async function discoverProviderModels(
   if (config.mode === 'scripted') return [{id: 'scripted', name: 'Scripted model'}];
   const current = modelFor(config, credentials); // Validates scheme/host/credential-free base URL.
   const account = current.api === 'openai-codex-responses';
-  const maxCatalogBytes = account ? MAX_CODEX_CATALOG_BYTES : MAX_PROVIDER_CATALOG_BYTES;
+  const maxCatalogBytes = credentials.authMode === 'openrouter' || config.mode === 'openrouter' ? 2 * 1024 * 1024 : account ? MAX_CODEX_CATALOG_BYTES : MAX_PROVIDER_CATALOG_BYTES;
   const mode = credentials.authMode || config.mode || 'openai';
   const auth = account ? await ensureCodexCredentials(credentials) : null;
   const token = account ? auth!.accessToken : credentials.apiKey;
@@ -120,6 +120,7 @@ export async function discoverProviderModels(
     // These cannot be sent to the Chat Completions adapter.
     if (mode === 'nebius' && /(^|[/._-])(embedding\w*|rerank\w*)([/._-]|$)/i.test(id)) continue;
     if (mode === 'opencode' && ((id !== 'big-pickle' && !id.endsWith('-free')) || OPENCODE_NON_CHAT_FREE.has(id))) continue;
+    if (mode === 'openrouter' && (!id.endsWith(':free') || entry.pricing?.prompt !== '0' || entry.pricing?.completion !== '0' || !entry.supported_parameters?.includes('tools'))) continue;
     seen.add(id);
     const display = entry.display_name ?? entry.name;
     models.push({

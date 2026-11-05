@@ -1,5 +1,5 @@
 import {api} from './connection.js';
-const providers=[['codex-account','Codex'],['gemini','Gemini'],['nebius','Nebius'],['opencode','OpenCode']];
+const providers=[['codex-account','Codex'],['openrouter','OpenRouter Free'],['gemini','Gemini'],['nebius','Nebius'],['opencode','OpenCode']];
 const effortOrder=['none','minimal','low','medium','high','xhigh','max'];
 export function compactModelName(name){const model=(name||'Model').split('/').at(-1).replace(/^gpt-/i,'GPT ');return model.length>12?model.slice(0,11)+'…':model;}
 export function reasoningLevels(model){return effortOrder.filter(level=>model?.supportedReasoningLevels?.includes(level));}

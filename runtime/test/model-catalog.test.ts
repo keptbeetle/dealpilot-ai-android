@@ -176,3 +176,24 @@ test('Gemini uses its native multimodal adapter and normalizes fixed-origin cata
  });
  assert.deepEqual(models.map(model=>model.id),[selected.id]);
 });
+
+test('OpenRouter uses free tool models, fixed completions origin and a bounded large catalogue',async()=>{
+ const config={mode:'openrouter' as const},credentials={apiKey:'test'};
+ const selected=modelFor(config,credentials);
+ assert.equal(selected.api,'openai-completions');
+ assert.deepEqual(selected.input,['text','image']);
+ assert.deepEqual(modelFor(config,credentials,'nvidia/nemotron-3-ultra-550b-a55b:free').input,['text']);
+ assert.throws(()=>modelFor(config,credentials,'paid/model'),/free models/);
+ assert.throws(()=>modelFor({...config,endpoint:'https://other.test'},credentials),/fixed/);
+ const models=await discoverProviderModels(config,credentials,async(url,init)=>{
+  assert.equal(String(url),'https://openrouter.ai/api/v1/models');
+  assert.equal(init?.redirect,'error');
+  return json({data:[
+   {id:'vendor/text:free',pricing:{prompt:'0',completion:'0'},supported_parameters:['tools']},
+   {id:'vendor/paid',pricing:{prompt:'1',completion:'1'},supported_parameters:['tools']},
+   {id:'vendor/no-tools:free',pricing:{prompt:'0',completion:'0'},supported_parameters:[]},
+   {id:'vendor/mispriced:free',pricing:{prompt:'0',completion:'1'},supported_parameters:['tools']},
+  ],padding:'x'.repeat(550000)});
+ });
+ assert.deepEqual(models.map(m=>m.id),['vendor/text:free']);
+});

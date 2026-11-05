@@ -34,6 +34,9 @@ public final class CredentialStore {
     public static final String OPENCODE = "opencode";
     public static final String OPENCODE_ENDPOINT = "https://opencode.ai/inference/openai/v1";
     public static final String OPENCODE_MODEL = "big-pickle";
+    public static final String OPENROUTER = "openrouter";
+    public static final String OPENROUTER_MODEL = "nvidia/nemotron-3.5-super-vl:free";
+    public static final String OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1";
     public static final String GEMINI = "gemini";
     public static final String GEMINI_MODEL = "gemini-3.5-flash";
     public static final String GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
@@ -442,7 +445,7 @@ public final class CredentialStore {
         }
     }
     public void removeKeyProvider(String mode) throws Exception { synchronized(LOCK) {
-        if(!GEMINI.equals(mode)&&!NEBIUS.equals(mode)&&!OPENCODE.equals(mode))throw new IllegalArgumentException("Choose a key provider");
+        if(!OPENROUTER.equals(mode)&&!GEMINI.equals(mode)&&!NEBIUS.equals(mode)&&!OPENCODE.equals(mode))throw new IllegalArgumentException("Choose a key provider");
         JSONObject current=read(),profiles=current.optJSONObject(PROFILES);if(profiles==null)profiles=new JSONObject();profiles.remove(mode);
         if(mode.equals(current.optString("authMode"))){
             for(String field:new String[]{"apiKey","accessToken","refreshToken","accountId","expiresAt","idToken","modelSource","reasoningEffortModel","reasoningEfforts"})current.remove(field);
@@ -513,13 +516,14 @@ public final class CredentialStore {
     }
     private static String fixedEndpoint(String authMode, String endpoint) {
         if (OPENCODE.equals(authMode)) return OPENCODE_ENDPOINT;
+        if (OPENROUTER.equals(authMode)) return OPENROUTER_ENDPOINT;
         if (GEMINI.equals(authMode)) return GEMINI_ENDPOINT;
         if (NEBIUS.equals(authMode)) return NEBIUS_ENDPOINT;
         return endpoint;
     }
     public static void validateEndpoint(String endpoint, String authMode) throws Exception {
         if (authMode.equals("scripted") || authMode.equals(CODEX_ACCOUNT)) return;
-        if (!authMode.equals("openai") && !authMode.equals("api-key") && !authMode.equals(OPENCODE) && !authMode.equals(GEMINI) && !authMode.equals(NEBIUS) && !authMode.equals("codex") && !authMode.equals("codexRelay") && !authMode.equals("codex-relay")) throw new IllegalArgumentException("Unknown authentication mode");
+        if (!authMode.equals("openai") && !authMode.equals("api-key") && !authMode.equals(OPENCODE) && !authMode.equals(OPENROUTER) && !authMode.equals(GEMINI) && !authMode.equals(NEBIUS) && !authMode.equals("codex") && !authMode.equals("codexRelay") && !authMode.equals("codex-relay")) throw new IllegalArgumentException("Unknown authentication mode");
         URI uri;
         try { uri = new URI(endpoint); } catch (Exception invalid) { throw new IllegalArgumentException("Enter a valid API base URL"); }
         if (uri.getUserInfo() != null || uri.getFragment() != null || uri.getQuery() != null || uri.getHost() == null)

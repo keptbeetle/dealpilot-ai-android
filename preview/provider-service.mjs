@@ -5,8 +5,8 @@ import {MobileSession,CODEX_CLIENT_ID,codexAccessClaims,registerCodexCredentialU
 
 const AUTH='https://auth.openai.com';
 const VERIFY=AUTH+'/codex/device';
-const PROVIDERS=new Set(['codex-account','gemini','nebius','opencode']);
-const DEFAULTS={'codex-account':'gpt-6-luna',gemini:'gemini-3.5-flash',nebius:'zai-org/GLM-5.3-Flash',opencode:'big-pickle'};
+const PROVIDERS=new Set(['codex-account','openrouter','gemini','nebius','opencode']);
+const DEFAULTS={'codex-account':'gpt-6-luna',openrouter:'nvidia/nemotron-3.5-super-vl:free',gemini:'gemini-3.5-flash',nebius:'zai-org/GLM-5.3-Flash',opencode:'big-pickle'};
 export class ProviderFailure extends Error {constructor(message,status=400){super(message);this.status=status;}}
 function fail(message,status){throw new ProviderFailure(message,status);}
 function provider(value){if(!PROVIDERS.has(value))fail('Choose Gemini, Nebius, OpenCode, or Codex.');return value;}

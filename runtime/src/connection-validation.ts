@@ -4,7 +4,7 @@ import {makeStream,modelFor,type ProviderConfig,type ProviderCredentials} from '
 /** Tests a draft without replacing or persisting the active connection. */
 export async function validateConnection(credentials: ProviderCredentials, fetcher: typeof fetch = globalThis.fetch) {
   const mode = credentials.authMode;
-  if (!['gemini','nebius','opencode','openai','api-key','codex','codexRelay','codex-relay'].includes(mode ?? ''))
+  if (!['openrouter','gemini','nebius','opencode','openai','api-key','codex','codexRelay','codex-relay'].includes(mode ?? ''))
     throw new Error('Select an API-key provider to test.');
   const config: ProviderConfig = {mode:(mode === 'api-key' ? 'openai' : mode?.startsWith('codex') ? 'codex' : mode) as ProviderConfig['mode'],
     endpoint:credentials.endpoint,model:credentials.model};

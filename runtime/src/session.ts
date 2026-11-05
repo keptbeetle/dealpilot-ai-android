@@ -18,7 +18,7 @@ export class MobileSession {
     // the manually configured main model. Omitted models inherit main's source.
     this.agent=new Agent({streamFn:makeStream(config,credentials,owner,reasoning,supportedReasoning,
       selectedModel === undefined ? credentials.modelSource : 'catalog'),initialState:{
-      model:selected,systemPrompt,tools,messages,
+      model:selected,systemPrompt:systemPrompt+(selected.provider==='openrouter'?'\nThis free provider shares a small request quota across main and workers. Use one browsing worker at a time. Prefer focused lookups and finish with verified observations or a clear access limitation. Do not repeatedly respawn workers after a quota error.':''),tools,messages,
     },toolExecution:'sequential',sessionId:owner,
       beforeToolCall:()=>{if(++this.calls>MOBILE_SESSION_BUDGET.toolCallsPerGeneration)throw new Error(`Mobile tool-call budget reached (${MOBILE_SESSION_BUDGET.toolCallsPerGeneration} per generation); saved context was retained`);return undefined;},
       finishTurn:()=>{if(++this.turns>MOBILE_SESSION_BUDGET.turnsPerGeneration)throw new Error(`Mobile generation turn budget reached (${MOBILE_SESSION_BUDGET.turnsPerGeneration}); saved context was retained`);if(this.full())throw new Error('Mobile saved conversation context limit reached; saved context was retained');return undefined;},
