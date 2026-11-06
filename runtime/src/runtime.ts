@@ -9,6 +9,8 @@ import { MobileSession } from './session.js';
 import { DisplayPool } from './display-pool.js';
 import {generateChatTitle} from './chat-title.js';
 import {browserReports,groundedShoppingResearch} from './shopping-evidence.js';
+import {verifyShoppingReport} from './shopping-verification.js';
+import {updateShoppingRequest,restoreShoppingRequest,type ShoppingRequest} from './shopping-request.js';
 import { nativeTools,subagentTool,sendMessageTool,requestVoiceConversationTool,clearNativeToolUiState } from './tools.js';
 import {memoryTools,recallBlock,MEMORY_GUIDANCE,MEMORY_TOOL_NAMES} from './memory.js';
 import { messageText } from './scripted.js';
@@ -76,7 +78,8 @@ export class PocketRuntime {
   private mainThreadId:string;
   private readonly workerHistoryOwners=new Map<string,string>();
   private readonly workerMainThreads=new Map<string,string>();
-  private readonly privateResearchOwners=new Set<string>();
+  private readonly focusedResearchOwners=new Set<string>();
+  private readonly shoppingRequests=new Map<string,ShoppingRequest>();
   private personalInstructions='';
   private titleRequest?:AbortController;
   private readonly credentialHistory=new Set<any>();
@@ -122,6 +125,12 @@ export class PocketRuntime {
       ?saved.mainThreadId:!freshMainRequested&&Array.isArray(saved.mainMessages)&&saved.mainMessages.length>0
       ?'00000000-0000-4000-8000-000000000000':randomUUID();
     this.personalInstructions=migratePersonal(saved);
+    for(const [key,value] of Object.entries(saved.shoppingRequests??{})){const request=restoreShoppingRequest(value);if(request&&key.length<180)this.shoppingRequests.set(key,request);}
+    if(!this.shoppingRequests.has('thread:'+this.mainThreadId)){
+      let request:ShoppingRequest|undefined;
+      for(const message of saved.mainMessages??[])if(message.role==='user'&&!/^\[Worker completion\]|^\[Autonomous run/.test(messageText(message)))request=updateShoppingRequest(request,messageText(message));
+      if(request)this.shoppingRequests.set('thread:'+this.mainThreadId,request);
+    }
     this.config={...this.config,...saved.config};
     // Fresh platform settings override old public runtime configuration.
     if(this.credentials.authMode) this.config.mode=normalizeMode(this.credentials.authMode);
@@ -230,8 +239,10 @@ export class PocketRuntime {
     return pending;
   }
   private configureSessionTools(session:MobileSession,parent?:any):void {
-    if(parent?.definition?.name==='shopping-researcher')this.privateResearchOwners.add(session.owner);
-    else this.privateResearchOwners.delete(session.owner);
+    if(parent?.definition?.name==='shopping-researcher'){
+      this.focusedResearchOwners.add(session.owner);
+      if(!this.shoppingRequests.has('worker:'+session.owner)){const request=this.shoppingRequest('main');if(request)this.shoppingRequests.set('worker:'+session.owner,request);}
+    }else this.focusedResearchOwners.delete(session.owner);
     const grant=parent?.requestedConfig.tools??parent?.definition.tools;
     const remote=(!grant||this.mcp.toolNames.some(name=>grant.includes(name)))?this.mcp.tools.filter(tool=>!grant||grant.includes(tool.name)):[];
     session.agent.state.tools=[...autonomyTools(this,session.owner,grant).filter(tool=>tool.name!=='notify_user'||this.autonomyOwner(session.owner).startsWith('auto:')),...nativeTools(this,session.owner,grant),...memoryTools(this,session.owner,grant),...(!grant||grant.includes('send_message')?[sendMessageTool(this,session.owner)]:[]),...(!grant||grant.includes('request_voice_conversation')?[requestVoiceConversationTool(this,session.owner)]:[]),...(!grant||grant.includes('subagent')?[subagentTool(this,parent)]:[]),...remote];
@@ -254,7 +265,7 @@ export class PocketRuntime {
     if(owner!=='main'&&!this.workerMainThreads.has(owner))this.workerMainThreads.set(owner,this.mainThreadId);
     if(owner!=='main'&&!this.workerHistoryOwners.has(owner))this.workerHistoryOwners.set(owner,owner+'@'+randomUUID());
     const systemPrompt=composePrompt(parent?.definition?.systemPrompt??(owner==='main'?DEFAULT_MAIN_PROMPT:WORKER_PROMPT),this.personalInstructions)+'\n'+MEMORY_GUIDANCE+'\nDisplay readiness: virtual backend idle means ready on demand, not unavailable. Read available/status and attempt allocation before reporting a blocker. To install an app, open its https://play.google.com/store/apps/details?id=PACKAGE link on the virtual display, observe the listing, tap Install, and verify the installed package using phone_apps; a dispatched tap is not completion. Idle background Play Store tasks transfer automatically into the private session and close when it is released. A visible Store or another worker\'s Store task cannot be taken over. Preserve other personal tasks and never fall back to the physical screen unless the user explicitly authorizes visible-screen work. Background-only work must remain background-only.';
-    const scopedPrompt=parent?.definition?.name==='shopping-researcher'?systemPrompt+'\nShopping research display policy: this worker is private-display only. Never request display_target=physical, physical screenshots, or a shell command/image fallback. The general shell guidance above applies to general phone workers; this focused research worker can use only shell context/acquire/release/own-display capture/poll/stop. Use phone_store_app first for Amazon and Flipkart, not Google or Chrome. A private-session or source restriction is a hold, not permission to switch surfaces.':systemPrompt;
+    const scopedPrompt=systemPrompt;
     const restored=messages[0]?.role==='system'?[{...messages[0],content:scopedPrompt},...messages.slice(1)]:messages;
     const selectedModel=parent?.requestedConfig?.model;
     const currentModel=modelFor(this.config,this.credentials);
@@ -280,12 +291,12 @@ export class PocketRuntime {
             if(completedShopping){const worker=this.sessions.get(completed!);reports=worker?browserReports(worker.messages.slice(worker.messages.findLastIndex((m:any)=>m.role==='user'))):[];}
             // A separately buyer-requested sandbox proposal follows its existing
             // quote/review boundary; this guard formats research conclusions.
-            if(messageText(message).includes('POCKET_CHECKOUT'))shopping=false;
+            if(messageText(message).includes('POCKET_CHECKOUT'))shopping=this.shoppingRequest('main')?.checks.currency==='INR'||reports.some(report=>verifyShoppingReport(report,this.shoppingRequest('main')).status==='contradicted');
           }
           if(shopping){
             message.researchDraft=messageText(message);
             message.researchGrounded=true;
-            message.content=[{type:'text',text:groundedShoppingResearch(reports)}];
+            message.content=[{type:'text',text:groundedShoppingResearch(reports,Date.now(),this.shoppingRequest(owner))}];
           }
         }
         this.coalesce();
@@ -323,7 +334,8 @@ export class PocketRuntime {
     if(messages[0]?.role!=='system')throw Error('Memory injection requires a system transcript');
     const latestUser:any=messages.findLast((message:any)=>message.role==='user');
     const sourceLabel=owner==='main'&&latestUser?.inputSource?'\nCurrent user input source: '+latestUser.inputSource+'. Voice input is transcribed speech; typed input was written by the user.':'';
-    const prompt=composePrompt(initial,this.personalInstructions)+'\n'+MEMORY_GUIDANCE+(owner==='main'?this.responsePreferenceGuidance():'')+sourceLabel;
+    const request=this.shoppingRequest(owner);
+    const prompt=composePrompt(initial,this.personalInstructions)+'\n'+MEMORY_GUIDANCE+(owner==='main'?this.responsePreferenceGuidance():'')+sourceLabel+(request?'\nCanonical user shopping request (host-owned; always preserve these constraints): '+JSON.stringify(request):'');
     session.agent.state.messages=[{...messages[0],content:prompt+recallBlock(this,owner,query,session.agent.state.tools.map((tool:any)=>tool.name))},...messages.slice(1)];
   }
   private responsePreferenceGuidance():string {
@@ -438,6 +450,7 @@ export class PocketRuntime {
         const item=this.inbox.shift();
         const previousMessages=this.main.agent.state.messages;
         const previousTurns=this.mainTurns,previousInterrupted=this.mainInterrupted,previousSpeaking=this.speakingTurn;
+        const requestKey='thread:'+this.mainThreadId,previousRequest=this.shoppingRequests.get(requestKey);
         let completion:any,receiptBefore:any,deliveredAdded=false;
         let prompt=item.text;
         if(item.type==='completion') {
@@ -449,11 +462,13 @@ export class PocketRuntime {
         this.busy=true;this.mainInterrupted=false;this.lastError=null;this.mainTurns++;
         this.speakingTurn=typeof item.voiceSessionId==='string'&&/^[a-f0-9-]{36}$/.test(item.voiceSessionId)?item.voiceSessionId:null;
         this.main.agent.state.messages=[...this.main.messages,{role:'user',content:[{type:'text',text:prompt}],timestamp:Date.now(),...(item.type==='user'?{inputSource:item.inputSource==='voice'?'voice':'typed'}:{})}];
+        if(item.type==='user'){const request=updateShoppingRequest(previousRequest,item.text);if(request)this.shoppingRequests.set(requestKey,request);}
         this.injectMemory(this.main,'main',prompt);
         // Never begin inference until queue removal, transcript delivery and the exact
         // completion receipt are durably committed together.
         if(!this.save()) {
           this.main.agent.state.messages=previousMessages;
+          if(previousRequest)this.shoppingRequests.set(requestKey,previousRequest);else this.shoppingRequests.delete(requestKey);
           this.mainTurns=previousTurns;this.mainInterrupted=previousInterrupted;this.speakingTurn=previousSpeaking;
           this.busy=false;this.inbox.unshift(item);
           if(deliveredAdded)this.delivered.delete(item.key);
@@ -546,8 +561,7 @@ export class PocketRuntime {
     return this.runtime?.listConversations().some(c=>c.conversationId===owner&&c.agent.name==='autonomy-worker')?'auto:'+owner:owner;
   }
   authorizePhone(owner:string,name:string,args:any):void {
-    if(this.privateDisplayResearch(owner)){
-      if(args?.display_target==='physical')throw Error('Shopping research is private-display only. The physical screen was not accessed; report a private-session hold.');
+    if(this.focusedShoppingResearch(owner)){
       if(name==='phone_shell'&&(!['context','acquire','release','capture','poll','stop'].includes(args?.action)||args?.display_id!==undefined))throw Error('Focused shopping research cannot use unrestricted shell or external-display images. Use the native app or private browser tools; report a hold when unavailable.');
     }
     if(!this.autonomyOwner(owner).startsWith('auto:'))return;
@@ -561,7 +575,12 @@ export class PocketRuntime {
     if(spec?.annotations?.readOnlyHint===true)return;
     if(task.status!=='active'||!run.approvedTools?.includes(name)||!(run.approvalExpiresAt>Date.now()))throw Error('This phone action needs a current user approval for this task');
   }
-  privateDisplayResearch(owner:string):boolean {return this.privateResearchOwners.has(owner);}
+  focusedShoppingResearch(owner:string):boolean {return this.focusedResearchOwners.has(owner);}
+  shoppingRequest(owner:string):ShoppingRequest|undefined {
+    const key=owner==='main'?'thread:'+this.mainThreadId:'worker:'+owner;
+    if(owner==='main'&&!this.shoppingRequests.has(key)&&this.main){let request:ShoppingRequest|undefined;for(const message of this.main.messages)if(message.role==='user'&&!/^\[Worker completion\]|^\[Autonomous run/.test(messageText(message)))request=updateShoppingRequest(request,messageText(message));if(request)this.shoppingRequests.set(key,request);}
+    const value=this.shoppingRequests.get(key);return value?structuredClone(value):undefined;
+  }
   authorizeAutonomy(owner:string,name:string,args:any):void {
     if(name==='request_decision'&&args.tools?.some((name:string)=>!phoneSchemas.some(s=>s.name===name)||name==='phone_batch'))throw Error('Request exact known phone tools, not batch access');
     if(!this.autonomyOwner(owner).startsWith('auto:'))return;
@@ -881,7 +900,7 @@ export class PocketRuntime {
       // Queued workers may not have a session yet, but their first checkpoint must already own a unique archive scope.
       for(const worker of workers)if(!this.workerHistoryOwners.has(worker.conversationId))
         this.workerHistoryOwners.set(worker.conversationId,worker.conversationId+'@'+randomUUID());
-      let state:any={version:1,mainThreadId:this.mainThreadId,workerHistoryOwners:Object.fromEntries(this.workerHistoryOwners),workerMainThreads:Object.fromEntries(this.workerMainThreads),config:this.config,providerRevision:this.credentials.providerRevision,busy:this.busy,lastError:this.lastError,mainPaused:this.mainPaused,totalStarts:this.totalStarts,personalInstructions:this.personalInstructions,mainMessages:stripImages(this.main.messages),workers,workerMessages,workerReasoningProofs:Object.fromEntries(this.workerReasoningProofs),inbox:this.inbox,delivered:[...this.delivered],mainTurns:this.mainTurns,observationPending:this.observationPending};
+      let state:any={version:1,mainThreadId:this.mainThreadId,workerHistoryOwners:Object.fromEntries(this.workerHistoryOwners),workerMainThreads:Object.fromEntries(this.workerMainThreads),config:this.config,providerRevision:this.credentials.providerRevision,busy:this.busy,lastError:this.lastError,mainPaused:this.mainPaused,totalStarts:this.totalStarts,personalInstructions:this.personalInstructions,mainMessages:stripImages(this.main.messages),workers,workerMessages,workerReasoningProofs:Object.fromEntries(this.workerReasoningProofs),shoppingRequests:Object.fromEntries(this.shoppingRequests),inbox:this.inbox,delivered:[...this.delivered],mainTurns:this.mainTurns,observationPending:this.observationPending};
       let serialized=this.redactCheckpoint(state);
       if(utf8Bytes(serialized)>MAX_DURABLE_CHECKPOINT_BYTES) {
         const compactWorkers:any={};
@@ -919,7 +938,7 @@ export class PocketRuntime {
     const cleanupOnly=this.releaseRetries.size>0&&!otherActive;
     const cleanupWakeMs=cleanupOnly?Math.min(...[...this.releaseRetries.values()].map(retry=>Math.max(1,(retry.dueAt??Date.now()+200)-Date.now()))):0;
     return {messages:textMessages(this.main.messages,this.sanitize),mainThreadId:this.mainThreadId,tasks:tasks.map(task=>({...task,mainThreadId:this.workerMainThreads.get(task.conversationId)})),busy:this.busy,lastError:this.lastError,active:this.releaseRetries.size>0||otherActive,cleanupOnly,cleanupWakeMs,mainPaused:this.mainPaused,mainInterrupted:this.mainInterrupted,provider:{...this.config},mainTurns:this.mainTurns,personalInstructions:this.personalInstructions,
-      autonomy:this.autonomy.snapshot(),
+      shoppingRequest:this.shoppingRequest('main'),autonomy:this.autonomy.snapshot(),
       displays:{capacity:this.displayPool.capacity,active:this.displayPool.active,waiting:this.displayPool.waiting,main:this.displayStatus('main')},
       workerMessages:Object.fromEntries([...this.sessions].map(([id,s])=>[id,textMessages(s.messages,this.sanitize)]))};
   }

@@ -19,7 +19,7 @@ function sourceAddress(nodes:ObservationNode[]):string|null{
  }catch{return null;}
 }
 function capacity(text:string,attribute:'ram'|'storage'):number[]{
- const noun=attribute==='ram'?'(?:RAM|memory)':'(?:SSD|HDD|storage|hard drive)';
+ const noun=attribute==='ram'?'(?:RAM|memory)':'(?:SSD|HDD|storage|hard drive|ROM)';
  const after=new RegExp('(\\d+(?:\\.\\d+)?)[ \\t]*(GB|TB)[ \\t]*'+noun,'gi');
  const before=new RegExp(noun+'[ \\t]*[:=-]?[ \\t]*(\\d+(?:\\.\\d+)?)[ \\t]*(GB|TB)','gi');
  return [...new Set([...text.matchAll(after),...text.matchAll(before)].map(match=>Number(match[1])*(match[2].toUpperCase()==='TB'?1024:1)))];

@@ -1,5 +1,6 @@
 import {browsePage} from './browser.js';
 import {navigateStoreApp,type StoreContext} from './native-store.js';
+import {verifyShoppingReport} from './shopping-verification.js';
 import { Type } from 'typebox';
 import { randomUUID } from 'node:crypto';
 import schemas from '../../app/src/main/assets/tools.json';
@@ -170,26 +171,28 @@ function recordBatchUiState(host:any,owner:string,args:any,result:any):void {
 }
 
 export function nativeTools(host:any,owner:string,grant?:readonly string[]):any[] {
-  const privateResearch=Boolean(host.privateDisplayResearch?.(owner));
+  const focusedResearch=Boolean(host.focusedShoppingResearch?.(owner));
   return schemas.filter(s=>s.name==='phone_shell' || !grant || grant.includes(s.name)).map(s=>({
-    name:s.name,label:s.name,description:privateResearch&&s.name==='phone_shell'?'Focused shopping shell context only: context, acquire, release, own-private-display capture, poll and stop. Arbitrary commands, file images and external display IDs are disabled for this worker. Use phone_store_app for Amazon/Flipkart and report source/session holds.':privateResearch&&s.name==='phone_browser'?'Private-display browser for other supported stores. For Amazon and Flipkart use phone_store_app directly, never Google or a website fallback. Visible-screen fallback is disabled. '+s.description:s.description,
-    parameters:Type.Unsafe(privateResearch?{...s.inputSchema,properties:{...s.inputSchema.properties,...(Object.hasOwn(s.inputSchema.properties??{},'display_target')?{display_target:{type:'string',enum:['virtual'],default:'virtual'}}:{}),...(s.name==='phone_shell'?{action:{type:'string',enum:['context','acquire','release','capture','poll','stop']}}:{})}}:s.inputSchema),
+    name:s.name,label:s.name,description:focusedResearch&&s.name==='phone_shell'?'Focused shopping shell context only: context, acquire, release, own-private-display capture, poll and stop. Arbitrary commands, file images and external display IDs are disabled for this worker. Use phone_store_app for Amazon/Flipkart and report source/session holds.':focusedResearch&&s.name==='phone_browser'?'Rendered browser for other supported stores. For Amazon and Flipkart use phone_store_app directly, never Google or a website fallback. Visible-screen navigation is authorized. '+s.description:s.description,
+    parameters:Type.Unsafe(focusedResearch?{...s.inputSchema,properties:{...s.inputSchema.properties,...(s.name==='phone_shell'?{action:{type:'string',enum:['context','acquire','release','capture','poll','stop']}}:{})}}:s.inputSchema),
     execute:async(_id:string,args:any,signal?:AbortSignal)=>{
       if(signal?.aborted) throw new Error('Cancelled before native dispatch');
-      if(privateResearch)host.authorizePhone?.(owner,s.name,args);
+      if(focusedResearch)host.authorizePhone?.(owner,s.name,args);
       if(s.name==='phone_browser'||s.name==='phone_store_app'){
+        const request=host.shoppingRequest?.(owner);
+        if(request)args={...args,checks:request.checks};
         const primitives=nativeTools(host,owner,grant);
         const execute=async(name:string,input:Record<string,unknown>)=>{
           const tool=primitives.find(tool=>tool.name===name);
           if(!tool)throw new Error('Shopping research requires the granted '+name+' capability.');
           return tool.execute(_id+'_'+name,input,signal);
         };
-        if(s.name==='phone_browser')return toolResult(await browsePage(execute,args,_id,signal));
+        if(s.name==='phone_browser'){const result=await browsePage(execute,args,_id,signal);return toolResult(result.isError?result:{...result,verification:verifyShoppingReport(result,request)});}
         let contexts=storeContexts.get(host);if(!contexts){contexts=new Map();storeContexts.set(host,contexts);}
-        const key=owner+'|'+(owner==='main'?host.state?.().mainThreadId??'main':owner)+'|'+displayTarget(args)+'|'+args.store;
+        const key=owner+'|'+(owner==='main'?host.state?.().mainThreadId??'main':owner)+'|'+(args.display_target||'physical')+'|'+args.store;
         let context=contexts.get(key);if(!context){context={};contexts.set(key,context);}
         const result=await navigateStoreApp(execute,args,_id,signal,context);
-        return toolResult(result.isError?{...result,store:args.store,observedAt:Date.now()}:result);
+        return toolResult(result.isError?{...result,store:args.store,observedAt:Date.now()}:{...result,verification:verifyShoppingReport(result,request)});
       }
       const authorize=()=>{
         host.authorizePhone?.(owner,s.name,args);

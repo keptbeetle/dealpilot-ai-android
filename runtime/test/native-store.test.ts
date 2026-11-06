@@ -33,9 +33,9 @@ test('browser calls cannot navigate to Amazon or Flipkart or bind their website 
   assert.equal(report.sourceBound,false);assert.equal(report.regularPrice,null);
  }
 });
-test('private-only research refuses physical control and missing apps without launching a browser',async()=>{
- const execute=async()=>{throw Error('Must not access phone');};
- assert.equal((await navigateStoreApp(execute,{store:'amazon',display_target:'physical'},'physical')).code,'PRIVATE_STORE_SESSION_REQUIRED');
+test('native research accepts the authorized physical display and missing apps never launch a browser',async()=>{
+ const visible=bridge([product()]);
+ const report=await navigateStoreApp(visible.execute,{store:'amazon',display_target:'physical'},'physical');assert.equal(report.display_target,'physical');
  const calls:string[]=[];const absent=async(name:string)=>{calls.push(name);return wrap(name==='phone_apps'?{apps:[]}:{operation_prefix:'owned'});};
  assert.equal((await navigateStoreApp(absent,{store:'flipkart',query:'headphones'},'absent')).code,'STORE_APP_NOT_INSTALLED');
  assert.deepEqual(calls,['phone_capabilities','phone_apps']);
@@ -46,22 +46,22 @@ test('native links reject credential, wrong-store, insecure, unusual-port and ch
  }
 });
 test('native product links use the installed package on a private display and retain real observation provenance',async()=>{
- const host=bridge([product()]);const report=await navigateStoreApp(host.execute,{store:'amazon',url:'https://www.amazon.in/dp/example'},'native-link');
+ const host=bridge([product()]);const report=await navigateStoreApp(host.execute,{store:'amazon',url:'https://www.amazon.in/dp/example',display_target:'virtual'},'native-link');
  const launch=host.calls.find(c=>c.name==='phone_open_url');assert.equal(launch.args.app_package,pkg);assert.equal(launch.args.browser,undefined);
  assert.ok(host.calls.filter(c=>!['phone_apps','phone_capabilities'].includes(c.name)).every(c=>c.args.display_target==='virtual'));
  assert.equal(report.sourceKind,'android-app');assert.equal(report.sourceUrl,null);assert.match(report.sourceRef,/^android-app:\/\//);
 });
-test('no-SKU native search confirms typed text and submits through a fresh app snapshot',async()=>{
+test('no-SKU search plus scroll confirms native input and observes actual results before acting',async()=>{
  const query='Sony JBL wireless headphones';const host=bridge([
   screen([{text:'Search Amazon.in',resource_id:'search_box',clickable:true},{text:'Home'},{text:'Categories'},{text:'Deals'}],{snapshot_id:'home'}),
   screen([{resource_id:'search_edit',editable:true,text:'Search Amazon.in'},{text:'Recent'},{text:'Headphones'},{text:'Cancel'}],{snapshot_id:'input'}),
   screen([{resource_id:'search_edit',editable:true,text:query}],{snapshot_id:'typed'}),
   screen([{text:'Filters'},{text:'Sony headphones'},{text:'JBL headphones'},{text:'INR 4999'}],{snapshot_id:'results'}),
  ]);
- const report=await navigateStoreApp(host.execute,{store:'amazon',query},'no-sku');
+ const report=await navigateStoreApp(host.execute,{store:'amazon',query,action:{kind:'scroll',direction:'down'}},'no-sku');
  const acts=host.calls.filter(c=>c.name==='phone_act').map(c=>c.args);
- assert.deepEqual(acts.map(a=>a.kind),['click','type','key']);assert.equal(acts[1].text,query);assert.equal(acts[2].snapshot_id,'typed');assert.equal(acts[2].key,'enter');
- assert.equal(new Set(acts.map(a=>a.operation_id)).size,3);assert.equal(report.pageKind,'search-results');assert.equal(report.regularPrice,null);
+ assert.deepEqual(acts.map(a=>a.kind),['click','type','key','swipe']);assert.equal(acts[1].text,query);assert.equal(acts[2].snapshot_id,'typed');assert.equal(acts[2].key,'enter');assert.equal(acts[3].snapshot_id,'results');
+ assert.equal(new Set(acts.map(a=>a.operation_id)).size,4);assert.equal(report.pageKind,'search-results');assert.equal(report.regularPrice,null);
 });
 test('source package, freshness and individual-product evidence are required; cards remain discovery',()=>{
  const report=inspectStoreObservation(product(),'amazon',{}, {currency:'INR',budgetCents:500000});
@@ -137,4 +137,21 @@ test('scroll continuity keeps the previously proven product identity with its or
  const report=inspectStoreObservation(price,'amazon',context);assert.equal(report.pageKind,'product-page');assert.equal(report.regularPrice?.amountCents,298900);assert.equal(report.identityObservation?.snapshot_id,'identity-proof');
  assert.equal(inspectStoreObservation({...price,captured_at_ms:now+16*60000},'amazon',context).pageKind,'unknown');
  assert.equal(inspectStoreObservation({...price,nodes:[...price.nodes!,{text:'All Filters Icon'}]},'amazon',context).pageKind,'search-results');
+ const accessibleTitle={resource_id:'product_title',text:source.listingTitle+'. View media content in full screen'};
+ assert.equal(inspectStoreObservation({...price,nodes:[accessibleTitle,...price.nodes!]},'amazon',context).pageKind,'product-page');
+ assert.equal(inspectStoreObservation({...price,nodes:[accessibleTitle,...price.nodes!]},'amazon',context).listingTitle,source.listingTitle);
+});
+
+test('a redundant query is context for a fresh click, not a second search or an argument failure',async()=>{
+ const host=bridge([screen([{text:'Sony headphones',clickable:true},{text:'Filters'},{text:'Search'},{text:'Help'}]),product()]);
+ const result=await navigateStoreApp(host.execute,{store:'amazon',query:'Sony headphones',action:{kind:'click',selector:{text:'Sony headphones'}}},'redundant',undefined,{query:'Sony headphones'});
+ assert.ok(!result.isError);assert.ok(host.calls.some(c=>c.name==='phone_act'));assert.ok(!host.calls.some(c=>c.name==='phone_open_app'));
+});
+test('only an explicitly nondispatched stale action can recover once with a fresh snapshot and new operation ID',async()=>{
+ const calls:any[]=[];let observations=0,actions=0;
+ const execute=async(name:string,args:any)=>{calls.push({name,args});return wrap(name==='phone_capabilities'?{operation_prefix:'owned'}:name==='phone_apps'?{apps:[{package_name:pkg}]}:name==='phone_observe'?{...product(),snapshot_id:'fresh-'+(++observations)}:name==='phone_act'&&actions++===0?{isError:true,code:'STALE_OBSERVATION',dispatch_status:'not_dispatched'}:{status:'dispatched'});};
+ const result=await navigateStoreApp(execute,{store:'amazon',action:{kind:'scroll',direction:'down'}},'safe-retry');const acts=calls.filter(c=>c.name==='phone_act');assert.equal(acts.length,2);assert.notEqual(acts[0].args.operation_id,acts[1].args.operation_id);assert.notEqual(acts[0].args.snapshot_id,acts[1].args.snapshot_id);assert.equal(result.preDispatchRecoveries?.length,1);
+});
+test('unknown action outcomes are never retried',async()=>{
+ const host=bridge([product()],{isError:true,code:'RESULT_UNKNOWN'});const result=await navigateStoreApp(host.execute,{store:'amazon',action:{kind:'scroll',direction:'down'}},'unknown');assert.equal(result.code,'RESULT_UNKNOWN');assert.equal(host.calls.filter(c=>c.name==='phone_act').length,1);
 });

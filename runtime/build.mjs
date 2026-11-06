@@ -16,6 +16,7 @@ await writeFile('dist/THIRD_PARTY_NOTICES.txt',notices);
 const manifest={protocol:1,pi:'1.2.0',piCommit:'dc939913f6142adce7c09da5707fdd6451b37fb0',piMcp:'1.2.0',piMcpCommit:'06a466935536f8c9bcacb2d5efc0fc021be1bdff',pi9:'0.12.0',pi9Commit:'94405f79bb1e400fcba5e1b973778ef82d8378b2',...report};
 await writeFile('dist/runtime-manifest.json',JSON.stringify(manifest,null,2));
 await copyFile('SOURCE_PINS.json','dist/SOURCE_PINS.json');
+await copyFile('vendor/dealpilot/SOURCE_MANIFEST.json','../app/src/main/assets/dealpilot-verification-manifest.json');
 await copyFile('dist/runtime.cjs','../app/src/main/assets/runtime.cjs');
 await copyFile('dist/runtime-manifest.json','../app/src/main/assets/runtime-manifest.json');
 await copyFile('dist/THIRD_PARTY_NOTICES.txt','../app/src/main/assets/runtime-notices.txt');

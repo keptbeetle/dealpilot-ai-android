@@ -29,11 +29,12 @@ function selectorFor(node:ObservationNode,nodes:ObservationNode[]):Selector{
 }
 function matches(node:ObservationNode,selector:Selector){return Object.entries(selector).length>0&&Object.entries(selector).every(([key,value])=>value&&(key==='bounds'?sameBounds(node.bounds,value as Selector['bounds']):node[key as keyof Selector]===value));}
 function explicitProductTitle(nodes:ObservationNode[],selected?:string){
- const candidates=nodes.filter(n=>/product.?title|product.?name|pdp.?title/i.test(n.resource_id||'')).map(nodeLabel).filter(t=>t.length>8);
+ const titleLabel=(text:string)=>text.replace(/\.?\s*View media content in full screen\.?$/i,'').trim();
+ const candidates=nodes.filter(n=>/product.?title|product.?name|pdp.?title/i.test(n.resource_id||'')).map(nodeLabel).map(titleLabel).filter(t=>t.length>8);
  if(candidates.length)return candidates[0].slice(0,400);
  if(!selected)return undefined;
  const words=[...new Set(selected.toLowerCase().replace(/₹[\d,.]+/g,'').split(/[^a-z0-9-]+/).filter(w=>w.length>2&&!/^(?:sponsored|reviews|ratings|stars|price|with|free|delivery|offer|from)$/.test(w)))].slice(0,14);
- const scored=nodes.map(nodeLabel).filter(t=>t.length>10&&t.length<=400&&!forbidden.test(t)).map(text=>({text,score:words.filter(w=>text.toLowerCase().includes(w)).length})).sort((a,b)=>b.score-a.score||a.text.length-b.text.length);
+ const scored=nodes.map(nodeLabel).map(titleLabel).filter(t=>t.length>10&&t.length<=400&&!forbidden.test(t)).map(text=>({text,score:words.filter(w=>text.toLowerCase().includes(w)).length})).sort((a,b)=>b.score-a.score||a.text.length-b.text.length);
  return words.length>=2&&scored[0]?.score>=Math.min(4,words.length)?scored[0].text:undefined;
 }
 export function inspectStoreObservation(observation:BrowserObservation,store:StoreName,context:StoreContext={},checks:ShoppingChecks={}){
@@ -67,15 +68,16 @@ export function inspectStoreObservation(observation:BrowserObservation,store:Sto
 export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:string,signal?:AbortSignal,context:StoreContext={}){
  if(signal?.aborted)throw Error('Store navigation cancelled.');
  if(!Object.hasOwn(STORE_APPS,args.store))throw Error('Choose the installed Amazon or Flipkart app.');
- if(args.display_target==='physical')return {isError:true,code:'PRIVATE_STORE_SESSION_REQUIRED',store:args.store,message:'Amazon and Flipkart research is configured for private displays. No visible-screen takeover or web fallback was used.'};
  if(args.action&&!['click','scroll','back'].includes(args.action.kind))throw Error('Unsupported native store action.');
  // Only an explicit scroll can continue an already observed product identity.
  // New navigation, searches and unrelated inspections must prove identity again.
  if(args.action?.kind!=='scroll')context.productPage=undefined;
  if(args.query!==undefined&&(!args.query.trim()||args.query.length>180))throw Error('Store search requires 1 to 180 characters.');
- if([args.query,args.url,args.action].filter(Boolean).length>1)throw Error('Choose a search query, product link or an app action in one call.');
+ // Search+action is a bounded sequence: finish and observe the search before
+ // validating the action against its actual results. A URL remains standalone.
+ if(args.url&&(args.query||args.action))throw Error('Choose a product link or search/navigation in one call.');
  if(args.url){const url=new URL(args.url);if(url.protocol!=='https:'||url.username||url.password||url.port&&url.port!=='443'||args.url.length>2048||nativeStoreForUrl(args.url)!==args.store||/\/(?:cart|checkout|payment|orders?|account)(?:\/|$)/i.test(url.pathname))throw Error('Use an ordinary HTTPS product/search link for the selected store.');}
- const definition=STORE_APPS[args.store],target={display_target:'virtual'};
+ const definition=STORE_APPS[args.store],target={display_target:args.display_target||'physical'};
  const caps=unwrap(await execute('phone_capabilities',{}));if(caps.isError)return caps;
  const inventory=unwrap(await execute('phone_apps',{}));if(inventory.isError)return inventory;
  const pkg=definition.packages.find(pkg=>inventory.apps?.some((app:any)=>app.package_name===pkg));
@@ -83,34 +85,52 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  const base=createHash('sha256').update(callId).digest('hex').slice(0,16);let step=0;
  const operation=()=>caps.operation_prefix+'_store_'+base+'_'+(++step);
  const observe=async()=>unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false}));
- const read=async(requirePageContent=false)=>{
+ const read=async(requirePageContent=false,requireSearch=false)=>{
   let current:any;
-  for(let attempt=0;attempt<16;attempt++){
-   current=await observe();if(current.isError){if(current.code==='NOT_READY'&&attempt<15){await wait(500,signal);continue;}return current;}
+  const attempts=requireSearch?32:16;
+  for(let attempt=0;attempt<attempts;attempt++){
+   current=await observe();if(current.isError){if(current.code==='NOT_READY'&&attempt<attempts-1){await wait(500,signal);continue;}return current;}
    const report=inspectStoreObservation(current,args.store,context,args.checks);
    if(report.blocked)return current;
    const meaningful=(current.nodes||[]).filter((n:ObservationNode)=>nodeLabel(n).length>2&&!/placeholder/i.test(nodeLabel(n))).length;
    const body=report.visibleText.split('\n').filter(t=>t.length>2&&!/^(?:back|search(?: amazon\.in)?|scan it|home(?: tab.*)?|your amazon\.com tab.*|you|wallet(?: tab.*)?|cart(?: \d.*)?|browse menu tab.*|menu)$/i.test(t));
-   if(current.package_name===pkg&&meaningful>=4&&(!requirePageContent||body.length>=3))return current;
+   const searchReady=!requireSearch||(current.nodes||[]).some((n:ObservationNode)=>n.enabled!==false&&(n.clickable||n.editable)&&searchLabel.test([n.resource_id,n.text,n.description].join(' ')))||(current.nodes||[]).some((n:ObservationNode)=>/^skip sign in$|^skip for now$/i.test(nodeLabel(n)));
+   if(current.package_name===pkg&&meaningful>=4&&searchReady&&(!requirePageContent||body.length>=3))return current;
    await wait(500,signal);
   }
   return current;
  };
+ const recoveries:Array<{failedOperation:string;recoveryOperation:string}>=[];
  const act=async(observation:BrowserObservation,action:Record<string,unknown>)=>{
   if(signal?.aborted)throw Error('Store navigation cancelled.');
   if(action.selector&&Object.keys(action.selector).length===0)return {isError:true,code:'APP_TARGET_AMBIGUOUS',message:'No unique complete native selector was observed. Truncated or duplicate labels cannot be clicked.'};
-  const op=operation();const result=unwrap(await execute('phone_act',{...target,...action,snapshot_id:observation.snapshot_id,operation_id:op}));
+  const op=operation();let result=unwrap(await execute('phone_act',{...target,...action,snapshot_id:observation.snapshot_id,operation_id:op}));
+  if(result.isError&&result.code==='STALE_OBSERVATION'&&result.dispatch_status==='not_dispatched'){
+   const fresh=await observe();
+   const uniqueSelector=action.selector&&(fresh.nodes||[]).filter((n:ObservationNode)=>matches(n,action.selector as Selector)).length===1;
+   const sameViewport=action.kind==='swipe'&&fresh.coordinate_width===observation.coordinate_width&&fresh.coordinate_height===observation.coordinate_height;
+   if(!fresh.isError&&fresh.package_name===pkg&&!inspectStoreObservation(fresh,args.store,context,args.checks).blocked&&(uniqueSelector||sameViewport)){
+    const recovery=operation();recoveries.push({failedOperation:op,recoveryOperation:recovery});
+    result=unwrap(await execute('phone_act',{...target,...action,snapshot_id:fresh.snapshot_id,operation_id:recovery}));
+    return result.isError?{...result,operation_id:recovery}:result;
+   }
+  }
   return result.isError?{...result,operation_id:op}:result;
  };
  const reportError=(message:string,code='STORE_APP_NOT_READY')=>({isError:true,code,store:args.store,message:message+' No browser fallback was used.'});
  let current:any;
+ let continuedQuery=false;
+ if(args.action&&args.query&&context.query===args.query.trim()){
+  const observed=await observe();
+  if(!observed.isError&&observed.package_name===pkg){current=observed;args={...args,query:undefined};continuedQuery=true;}
+ }
  if(args.query||args.url){
   context.query=args.query?.trim();context.selectedLabel=undefined;context.selectedFromSnapshot=undefined;
   const opened=unwrap(await execute(args.url?'phone_open_url':'phone_open_app',{...target,...(args.url?{url:args.url,app_package:pkg}:{package_name:pkg}),operation_id:operation()}));if(opened.isError)return opened;
-  current=await read();
- }else current=await read();
+  current=await read(false,Boolean(args.query));
+ }else if(!continuedQuery)current=await read();
  if(current.isError)return current;
- if(current.package_name!==pkg)return reportError('The store did not remain on its private display. An existing app session may have been reused. No visible-screen takeover was attempted.','PRIVATE_STORE_SESSION_UNAVAILABLE');
+ if(current.package_name!==pkg)return reportError('The observed screen did not match the requested store and display.','PRIVATE_STORE_SESSION_UNAVAILABLE');
  if(inspectStoreObservation(current,args.store,context,args.checks).blocked)return inspectStoreObservation(current,args.store,context,args.checks);
  if(args.query){
   // Only an explicit guest affordance can dismiss optional sign-in. Never enter credentials.
@@ -151,17 +171,17 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
     action={kind:'click',x:Math.round((Math.max(0,b.left)+Math.min(w,b.right))/2),y:Math.round((Math.max(0,b.top)+Math.min(h,b.bottom))/2)};
    }else action={kind:'click',selector:selectorFor(node,current.nodes)};
   }else if(args.action.kind==='scroll'){
-   if(!['up','down'].includes(args.action.direction))throw Error('Native store scrolling requires up or down.');
+   const direction=args.action.direction||'down';if(!['up','down'].includes(direction))throw Error('Native store scrolling requires up or down.');
    const w=current.coordinate_width,h=current.coordinate_height;if(!Number.isInteger(w)||!Number.isInteger(h)||w<64||h<64)return reportError('A fresh viewport is required for scrolling.');
-   const down=args.action.direction==='down';action={kind:'swipe',x:Math.round(w*.5),y:Math.round(h*(down?0.75:0.3)),end_x:Math.round(w*.5),end_y:Math.round(h*(down?0.3:0.75)),duration_ms:450};
+   const down=direction==='down';action={kind:'swipe',x:Math.round(w*.5),y:Math.round(h*(down?0.75:0.3)),end_x:Math.round(w*.5),end_y:Math.round(h*(down?0.3:0.75)),duration_ms:450};
   }else{context.selectedLabel=undefined;context.selectedFromSnapshot=undefined;action={kind:'key',key:'back'};}
   const result=await act(current,action);if(result.isError)return result;
   await wait(550,signal);current=await read(args.action.kind==='click');
  }
  if(current.isError)return current;
- if(current.package_name!==pkg)return reportError('The store left its private display. No visible-screen takeover was attempted.','PRIVATE_STORE_SESSION_UNAVAILABLE');
+ if(current.package_name!==pkg)return reportError('The observed screen left the selected store.','PRIVATE_STORE_SESSION_UNAVAILABLE');
  const report=inspectStoreObservation(current,args.store,context,args.checks);
  if(report.pageKind==='product-page'&&report.listingTitle&&report.sourceBound&&!context.productPage)context.productPage={label:report.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id};
  if(report.pageKind!=='product-page')context.productPage=undefined;
- return {...report,...target,operation_prefix:caps.operation_prefix};
+ return {...report,...target,operation_prefix:caps.operation_prefix,preDispatchRecoveries:recoveries};
 }

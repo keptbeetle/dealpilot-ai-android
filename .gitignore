@@ -15,3 +15,5 @@ preview/.generated/
 .omo/
 
 .venv/
+
+app/src/main/assets/dealpilot-verification-manifest.json

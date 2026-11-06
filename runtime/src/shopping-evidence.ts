@@ -1,5 +1,7 @@
 import type {inspectBrowserObservation} from './browser.js';
 import {STORE_APPS,nativeStoreForPackage,nativeStoreForUrl,type StoreName} from './store-policy.js';
+import {verifyShoppingReport,compareVerifiedListings} from './shopping-verification.js';
+import type {ShoppingRequest} from './shopping-request.js';
 
 type Report=ReturnType<typeof inspectBrowserObservation>&{store?:string;listingTitle?:string;query?:string;identityObservation?:{snapshot_id:string;observedAt:number};accessHold?:boolean};
 function native(report:Report){return report.sourceKind==='android-app'&&Boolean(report.sourcePackage&&nativeStoreForPackage(report.sourcePackage))&&report.sourceRef?.startsWith('android-app://'+report.sourcePackage+'/observations/');}
@@ -31,7 +33,7 @@ function priceLabel(price:Report['prices'][number]){
  return 'Reference amount';
 }
 /** Research output is built from page observations, never from the model's draft. */
-export function groundedShoppingResearch(reports:Report[],now=Date.now()):string {
+export function groundedShoppingResearch(reports:Report[],now=Date.now(),request?:ShoppingRequest):string {
  const accessHolds=reports.filter(report=>report.accessHold&&report.store&&Object.hasOwn(STORE_APPS,report.store)&&report.observedAt&&now-report.observedAt<=15*60000&&report.observedAt<=now+5000);
  const accessText=accessHolds.length?'\n\nNative app session holds:\n'+[...new Map(accessHolds.map(report=>[report.store,report])).values()].map(report=>'- ['+report.sourceLabel+' — manual app handoff](pocket-store://'+report.store+')\n  '+report.holds.join(' ')).join('\n'):'';
  const unique=new Map<string,Report>();
@@ -56,7 +58,13 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now()):string
   else lines.push('- Price was not established.');
   lines.push('- Availability reported by page: '+report.stock+'.');
   if(report.holds.length)lines.push('- Hold: '+report.holds.slice(0,4).join(' '));
+  const verification=verifyShoppingReport(report,request,now);
+  lines.push('- DealPilot checks: '+verification.status+'.');
+  for(const check of verification.checks)lines.push('- '+check.attribute+': '+check.outcome+'.');
+  lines.push('- Identity: '+verification.identity.status+'; delivered cost: '+(verification.cost?.status||'unknown')+'.');
+  for(const reason of verification.reasons.slice(0,8))lines.push('- Verification hold: '+reason);
   return lines.join('\n');
  });
- return 'Source-observed listing evidence follows. This is not a verified purchase recommendation.\n\n'+sections.join('\n\n')+accessText+'\n\nConditional offers require eligibility checks. Exact variant, seller, shipping, taxes and delivered total still require review. This evidence does not establish a cart, payment or merchant order.';
+ const equivalence=products.length>1?'\n\nCross-listing identity: '+compareVerifiedListings(products[0],products[1]).reason:'';
+ return 'Source-observed listing evidence follows. This is not a verified purchase recommendation.\n\n'+sections.join('\n\n')+equivalence+accessText+'\n\nConditional offers require eligibility checks. Exact variant, seller, shipping, taxes and delivered total still require review. This evidence does not establish a cart, payment or merchant order.';
 }

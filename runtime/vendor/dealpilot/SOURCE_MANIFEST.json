@@ -1,0 +1,30 @@
+{
+  "source": "DealPilot owner workspace",
+  "adaptation": "Type-only import paths rewritten to mobile contracts; runtime verification logic unchanged.",
+  "modules": [
+    {
+      "source": "src/shared/product-identifiers.ts",
+      "destination": "product-identifiers.ts",
+      "sourceSha256": "8109f4228f1df00604dc87b22b7042dfe60d5fb2054928c53da6072441a3a432",
+      "adaptedSha256": "dccca42b7bb0f762275344921f6b9d8c72a452fc46334820af8950efb9c37f44"
+    },
+    {
+      "source": "src/shared/source-identity.ts",
+      "destination": "source-identity.ts",
+      "sourceSha256": "f05c2e3811b67d9dd19f7dbea46d27f258613e9b9c734fd7a32b1cfcb3fd04f3",
+      "adaptedSha256": "79ab1afccab9d6db2dc79d61a30a53a95a50b5345e573c8c869414772a4b33fc"
+    },
+    {
+      "source": "src/shared/purchase-cost.ts",
+      "destination": "purchase-cost.ts",
+      "sourceSha256": "0e9a36ec3f00f3ace74df43eefd6ee765a0af1985299e9c7992938bf0820021c",
+      "adaptedSha256": "7e149c0b29506f73bde0a50f9a226d5828241f7e6ec739673bbfc695f76b447d"
+    },
+    {
+      "source": "src/api/source-freshness.ts",
+      "destination": "source-freshness.ts",
+      "sourceSha256": "0c8165e614c088b4b717bb8233649bea0ea03703f67556e8ed34d98a1e08117b",
+      "adaptedSha256": "766dc4a394b4b67b4d5bebc507e8158b6fce94e331425d847332c8a542617094"
+    }
+  ]
+}
