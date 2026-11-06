@@ -1,0 +1,11 @@
+# On-device screen text recognition
+
+The Android app pins `com.google.mlkit:text-recognition:16.0.1`, bundled Latin-script recognition, following the [official Android integration guide](https://developers.google.com/ml-kit/vision/text-recognition/v2/android). It processes a screenshot locally and returns bounded text/coordinates, capture time, snapshot ID and original image SHA256. Raw image data is not returned to the model unless the separate existing `include_image` option is requested.
+
+Use is governed by [ML Kit Terms & Privacy](https://developers.google.com/ml-kit/terms), incorporating Google APIs terms; the model is supplied as SDK software, not newly relicensed as Pocket source. No model extraction or reverse engineering is performed. Google documents on-device processing of input/output and SDK performance/utilization metrics plus possible service contacts; the Phone access settings disclose these metrics. Do not describe the SDK as entirely network-free or use of a paid cloud OCR API. Publication/privacy-store disclosures remain part of the paused release gate.
+
+The native fallback crops only the digits immediately to the right of a same-snapshot, visible accessibility currency glyph, preserving crop and currency bounds. This prevents a rupee glyph misread as a numeral from becoming a different amount. Complete full-line OCR is preserved separately. No guessed glyph substitutions, inferred currency, external image upload or fabricated numbers are accepted.
+
+Runtime admission requires source-bound product identity, two distinct captures at least400ms apart with matching complete explicit-currency amounts, matching app/window/geometry and valid image hashes. Native/OCR disagreements, partial/conditional prices and unknown identity remain held. Product/cart/checkout/payment authentication is not supplied by OCR.
+
+Private device evidence: `artifacts/sequential-comparison-20261107/stage4-*`. The first weak substring test did not distinguish the full-line `7899` misread from899; its original result remains. The strengthened actual recognizer test asserts an exact INR899 region from the archived Flipkart screenshot, alongside a generated-image OCR test. These are AI development/source replay tests, not a fresh retailer offer or independent human accuracy sample.

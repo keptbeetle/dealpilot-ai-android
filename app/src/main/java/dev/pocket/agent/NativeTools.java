@@ -330,7 +330,9 @@ final class NativeTools implements AutoCloseable {
     }
     private JSONObject observation(JSONObject a,String owner) throws Exception {return observation(a,owner,OBSERVATION_TEXT_BUDGET);}
     private JSONObject observation(JSONObject a,String owner,int textBudget) throws Exception {
-        ControlBackend.Observation o=screen(owner,a).observe(a.optBoolean("include_image",false),a.optInt("max_image_dimension",1280),a.optInt("max_nodes",DEFAULT_OBSERVATION_NODES));
+        boolean ocr=a.optBoolean("include_ocr",false);
+        if(ocr)textBudget=Math.min(textBudget,14000);
+        ControlBackend.Observation o=screen(owner,a).observe(a.optBoolean("include_image",false)||ocr,a.optInt("max_image_dimension",1280),a.optInt("max_nodes",DEFAULT_OBSERVATION_NODES));
         List<ControlBackend.Node> observationNodes=o.nodes();
         if(a.optBoolean("compact",false)) {
             // Native WebViews can retain the full off-screen document. Keep the
@@ -340,7 +342,15 @@ final class NativeTools implements AutoCloseable {
         }
         JSONObject bounded=boundedObservationNodes(observationNodes,textBudget,a.optBoolean("compact",false));JSONArray nodes=bounded.getJSONArray("nodes");
         JSONObject data=Json.obj("snapshot_id",o.snapshotId(),"captured_at_ms",o.capturedAtMs(),"package_name",o.packageName(),"window_id",o.windowId(),"display_target",displayTarget(a),"display_id",displays.display(owner,physical(a),displayGeneration),"coordinate_width",o.coordinateWidth(),"coordinate_height",o.coordinateHeight(),"interactive",o.interactive(),"locked",o.locked(),"nodes",nodes,"nodes_truncated",o.nodesTruncated()||bounded.getBoolean("nodes_truncated"),"image_width",o.imageWidth(),"image_height",o.imageHeight());
-        JSONObject result=Json.tool(data);byte[] image=o.image();if(image!=null) result.put("images",Json.arr(Json.obj("data",Base64.encodeToString(image,Base64.NO_WRAP),"mimeType",o.imageMime())));
+        byte[] image=o.image();
+        if(ocr)try{
+            JSONArray anchors=new JSONArray();for(ControlBackend.Node n:o.nodes()) {
+                String t=n.text()==null?"":n.text().trim(),currency=t.matches("₹|INR|Rs\\.?")?"INR":t.matches("USD|US\\$")?"USD":null;
+                if(currency!=null&&n.left()>=0&&n.top()>=0&&n.right()<=o.coordinateWidth()&&n.bottom()<=o.coordinateHeight()&&n.bottom()>n.top()&&n.right()>n.left()&&n.right()-n.left()<o.coordinateWidth()/8)anchors.put(Json.obj("currency",currency,"bounds",Json.obj("left",n.left(),"top",n.top(),"right",n.right(),"bottom",n.bottom())));
+            }
+            data.put("ocr",ScreenTextRecognition.recognize(image,o.snapshotId(),o.capturedAtMs(),anchors,o.coordinateWidth(),o.coordinateHeight()));
+        }catch(Exception failure){data.put("ocr",Json.obj("isError",true,"message","On-device text recognition unavailable; retain unknown fields"));}
+        JSONObject result=Json.tool(data);if(image!=null&&a.optBoolean("include_image",false)) result.put("images",Json.arr(Json.obj("data",Base64.encodeToString(image,Base64.NO_WRAP),"mimeType",o.imageMime())));
         return result;
     }
     private PhoneAccountHandle account(String id) throws ControlException {

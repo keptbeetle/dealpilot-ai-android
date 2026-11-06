@@ -34,3 +34,8 @@ test('host checkpoint really saves and restores the offer ledger without refresh
  const r=new PocketRuntime(bridge);const at=Date.now(),one=frame('price',['INR 2999'],'persist',at);r.recordShoppingEvidence('main',one);
  assert.ok(Object.values(saved.offerEvidence).length);const restored=new PocketRuntime(bridge),combined=restored.recordShoppingEvidence('main',frame('seller',['Sold by: A Seller'],'persist',at+1));assert.equal(combined.regularPrice.amountCents,299900);assert.equal(combined.evidenceFields.regularPrice[0].observedAt,at);
 });
+test('OCR image provenance persists with its original earliest time and conflicts cannot revive a price',()=>{
+ const l=new OfferEvidenceLedger();l.record({...frame('price',['INR 899']),priceEvidenceType:'ocr-stable',ocrEvidence:{snapshots:[{snapshotId:'pixels-one',observedAt:now-700,imageSha256:'a'.repeat(64)},{snapshotId:'pixels-two',observedAt:now,imageSha256:'b'.repeat(64)}]}},now);
+ const restored=new OfferEvidenceLedger(l.snapshot()),r=restored.record(frame('details',['Condition: New']),now);assert.equal(r.ocrEvidence.snapshots[0].snapshotId,'pixels-one');assert.equal(r.evidenceObservedAt,now-700);
+ const held=restored.record({...frame('conflict',['INR 999']),ocrConflict:true,regularPrice:null},now);assert.equal(held.regularPrice,null);assert.equal(verifyShoppingReport(held,undefined,now).status,'contradicted');
+});

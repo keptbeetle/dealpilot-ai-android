@@ -49,6 +49,11 @@
           ],
           "default": "virtual",
           "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants Pocket Agent to inspect, control, or present content on the visible device screen."
+        },
+        "include_ocr": {
+          "type": "boolean",
+          "default": false,
+          "description": "Optional on-device screenshot text transcription with image/snapshot provenance. Google ML Kit processes pixels locally; SDK usage/performance metrics may be sent to Google. Does not verify product facts."
         }
       },
       "required": [],

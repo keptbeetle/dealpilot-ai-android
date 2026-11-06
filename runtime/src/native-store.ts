@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {inspectShoppingObservation,type BrowserObservation,type ObservationNode,type ShoppingChecks} from './browser.js';
 import {STORE_APPS,nativeStoreForUrl,type StoreName} from './store-policy.js';
+import {applyStableOcrPrice} from './screen-ocr.js';
 export {STORE_APPS} from './store-policy.js';
 export type {StoreName} from './store-policy.js';
 
@@ -239,7 +240,15 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  }
  if(current.isError)return current;
  if(current.package_name!==pkg)return reportError('The observed screen left the selected store.','PRIVATE_STORE_SESSION_UNAVAILABLE');
- const report=inspectStoreObservation(current,args.store,context,args.checks);
+ let report:any=inspectStoreObservation(current,args.store,context,args.checks);
+ if(report.pageKind==='product-page'&&report.sourceBound&&!report.blocked&&!report.regularPrice){
+  const first=unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false,include_ocr:true,max_image_dimension:1800}));
+  if(!first.isError&&first.ocr&&!first.ocr.isError){
+   await wait(650,signal);
+   const second=unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false,include_ocr:true,max_image_dimension:1800}));
+   if(!second.isError&&second.package_name===pkg){const refreshed=inspectStoreObservation(second,args.store,context,args.checks);if(refreshed.listingTitle===report.listingTitle){current=second;report=applyStableOcrPrice(refreshed,first,second);}}
+  }
+ }
  if(report.pageKind==='product-page'&&report.listingTitle&&report.sourceBound&&!context.productPage)context.productPage={label:report.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id};
  if(report.pageKind!=='product-page')context.productPage=undefined;
  if(!context.evidenceChain)context.evidenceChain=base;
