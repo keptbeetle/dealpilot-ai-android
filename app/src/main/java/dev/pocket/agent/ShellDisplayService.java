@@ -435,6 +435,24 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
         return launchTracked(id,"/system/bin/am","start","--display",String.valueOf(id),"-f",WORKER_ACTIVITY_FLAGS,
             "-a",android.content.Intent.ACTION_VIEW,"-d",uri.toString());
     }
+    @Override public synchronized boolean openBrowserUrl(int id,String url) {
+        owned(id);
+        android.net.Uri uri=android.net.Uri.parse(url);
+        if(!"https".equalsIgnoreCase(uri.getScheme())||uri.getHost()==null||uri.getUserInfo()!=null||url.length()>2048)
+            throw new IllegalArgumentException("Chrome browsing requires an ordinary HTTPS URL");
+        android.content.Intent intent=chromeBrowserIntent(asShell().getPackageManager(),uri);
+        if(intent==null)return false;
+        if(!canLaunchSeparately(id,intent))return false;
+        return launchTrackedForPackage(id,"com.android.chrome","/system/bin/am","start","--display",String.valueOf(id),"-f",WORKER_ACTIVITY_FLAGS,
+            "-a",android.content.Intent.ACTION_VIEW,"-d",uri.toString(),"-n",intent.getComponent().flattenToString());
+    }
+    static android.content.Intent chromeBrowserIntent(android.content.pm.PackageManager packages,android.net.Uri uri) {
+        // Chrome's URL dispatcher can hand off into an existing personal window.
+        // Its exported launcher supports separate tasks and accepts VIEW URLs.
+        android.content.Intent launcher=packages.getLaunchIntentForPackage("com.android.chrome");
+        if(launcher==null||launcher.getComponent()==null)return null;
+        return new android.content.Intent(android.content.Intent.ACTION_VIEW,uri).setComponent(launcher.getComponent());
+    }
     static boolean isPlayStoreDetails(android.net.Uri uri) {
         return "https".equalsIgnoreCase(uri.getScheme())&&"play.google.com".equalsIgnoreCase(uri.getHost())
             &&uri.getPort()==-1&&"/store/apps/details".equals(uri.getPath())

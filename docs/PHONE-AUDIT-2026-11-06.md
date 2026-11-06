@@ -1,5 +1,7 @@
 # Physical phone shopping audit — 6 November 2026
 
+Further browsing, quota, snapshot and unsupported-price fixes are recorded in [the browser tuning checkpoint](BROWSER-TUNING-2026-11-06.md). The original outcomes below remain historical evidence.
+
 Tested by the assistant on the owner's Samsung Galaxy A71 (SM-A715F), Android 13, over USB. This is AI-operated development evidence. Owner acceptance and a completed sandbox capture are separate gates.
 
 ## Installed build and provider choice

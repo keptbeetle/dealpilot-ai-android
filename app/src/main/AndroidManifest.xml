@@ -23,6 +23,7 @@
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="com.android.chrome" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

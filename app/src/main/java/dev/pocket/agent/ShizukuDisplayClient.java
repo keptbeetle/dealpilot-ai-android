@@ -45,9 +45,17 @@ final class ShizukuDisplayClient implements AutoCloseable {
         this.disconnected=disconnected;
         this.removeServiceOnClose=removeServiceOnClose;
         args=new Shizuku.UserServiceArgs(new ComponentName(context,ShellDisplayService.class))
-            .daemon(false).tag("pocket-agent-displays").processNameSuffix("display").version(BuildConfig.VERSION_CODE);
+            .daemon(false).tag("pocket-agent-displays").processNameSuffix("display").version(installedServiceVersion(context));
         Shizuku.addBinderReceivedListenerSticky(received);
         Shizuku.addBinderDeadListener(died);
+    }
+    private static int installedServiceVersion(Context context) {
+        // Local APKs keep the same versionCode. Reinstalling changed Binder/service
+        // code must replace a still-running UserService from the previous APK.
+        try {
+            long updated=context.getPackageManager().getPackageInfo(context.getPackageName(),0).lastUpdateTime;
+            return (int)((updated^(updated>>>32)^BuildConfig.VERSION_CODE)&0x7fffffffL);
+        } catch(PackageManager.NameNotFoundException unavailable) {return BuildConfig.VERSION_CODE;}
     }
     private void loseService() {
         Log.w(TAG,"Shizuku UserService disconnected");
@@ -148,6 +156,11 @@ final class ShizukuDisplayClient implements AutoCloseable {
         try {if(!require().openUrl(displayId,url))
             throw new ControlException(ControlException.Code.ACTION_REJECTED,"No private URL session opened. Google Play app-detail links automatically use an idle background Store session; a visible Store or another worker's task cannot be taken over. Do not fall back to the physical screen without user authorization.");}
         catch(RemoteException e) {loseService();throw new ControlException(ControlException.Code.NOT_READY,"Virtual display backend disconnected");}
+    }
+    void openBrowserUrl(int displayId,String url) throws ControlException {
+        try {if(!require().openBrowserUrl(displayId,url))
+            throw new ControlException(ControlException.Code.ACTION_REJECTED,"Chrome could not open a private browser session. Existing personal tasks were preserved. Verify Chrome is installed and available.");
+        }catch(RemoteException e){loseService();throw new ControlException(ControlException.Code.NOT_READY,"Browser backend disconnected; start Shizuku and authorize Pocket.");}
     }
     String preview(int displayId) throws ControlException {
         try {return require().previewDisplay(displayId);}

@@ -8,6 +8,7 @@ import { completedGeneration,errorGeneration,interruptedGeneration,generationKey
 import { MobileSession } from './session.js';
 import { DisplayPool } from './display-pool.js';
 import {generateChatTitle} from './chat-title.js';
+import {browserReports,groundedShoppingResearch} from './shopping-evidence.js';
 import { nativeTools,subagentTool,sendMessageTool,requestVoiceConversationTool,clearNativeToolUiState } from './tools.js';
 import {memoryTools,recallBlock,MEMORY_GUIDANCE,MEMORY_TOOL_NAMES} from './memory.js';
 import { messageText } from './scripted.js';
@@ -108,6 +109,7 @@ export class PocketRuntime {
     this.autonomy=new AutonomyEngine(this);
     const phoneTools=[...nativeTools(this,'placeholder').map(x=>x.name),...MEMORY_TOOL_NAMES,'send_message','request_voice_conversation',...AUTONOMY_TOOL_NAMES.filter(name=>name!=='notify_user')];
     this.registry.agents.set('phone-operator',{name:'phone-operator',description:'Performs bounded Android workflows and verifies native outcomes.',source:'project',systemPrompt:WORKER_PROMPT,tools:[...phoneTools,'subagent']});
+    this.registry.agents.set('shopping-researcher',{name:'shopping-researcher',description:'Browses Chrome for products across categories, compares source-observed regular prices and conditional offers, and preserves shopper constraints. Inherits the selected model.',source:'project',systemPrompt:WORKER_PROMPT+' Return findings as your final answer for host delivery. Do not poll or send repeated progress messages.',tools:['phone_browser','phone_capabilities','phone_open_url','phone_observe','phone_act','phone_operation','phone_screen','phone_shell']});
     this.registry.agents.set('researcher',{name:'researcher',description:'Researches phone capabilities and app data, with the general on-phone shell available when useful.',source:'project',systemPrompt:'Research worker. Report evidence and uncertainty. General shell access is available for the assigned work.',tools:['phone_shell','phone_capabilities','phone_apps','phone_contacts','phone_calendars','phone_calendar_events','phone_notifications','phone_notification_read','phone_operation','memory_save','memory_search','memory_profile','history_search','history_read','skill','send_message','request_voice_conversation','subagent']});
     this.registry.agents.set('autonomy-worker',{name:'autonomy-worker',description:'A dedicated bounded autonomous run.',source:'project',systemPrompt:AUTONOMOUS_WORKER_PROMPT,tools:this.autonomousGrant([])});
     this.reloadCredentials();
@@ -261,7 +263,29 @@ export class PocketRuntime {
     const session=new MobileSession(owner,this.config,this.credentials,[],restored,systemPrompt,selectedModel,reasoning,supportedReasoning);
     this.configureSessionTools(session,parent);
     session.subscribe(event=>{
-      if(event.type==='message_end')this.coalesce();
+      if(event.type==='message_end'){
+        const message=event.message as any;
+        if(message.role==='assistant'&&message.stopReason==='stop'){
+          let shopping=parent?.definition?.name==='shopping-researcher';
+          let reports=browserReports(session.messages.slice(session.messages.findLastIndex((m:any)=>m.role==='user')));
+          if(owner==='main'){
+            const user=session.messages.findLast((m:any)=>m.role==='user');
+            const completed=messageText(user).match(/^\[Worker completion\] ([a-z0-9-]+) generation /)?.[1];
+            const completedShopping=Boolean(completed&&this.runtime.listConversations().some(c=>c.conversationId===completed&&c.agent.name==='shopping-researcher'));
+            shopping=completedShopping||reports.some(report=>report.prices.length>0||/\/(?:products?|dp|p)\//i.test(report.sourceUrl||''));
+            if(completedShopping){const worker=this.sessions.get(completed!);reports=worker?browserReports(worker.messages.slice(worker.messages.findLastIndex((m:any)=>m.role==='user'))):[];}
+            // A separately buyer-requested sandbox proposal follows its existing
+            // quote/review boundary; this guard formats research conclusions.
+            if(messageText(message).includes('POCKET_CHECKOUT'))shopping=false;
+          }
+          if(shopping){
+            message.researchDraft=messageText(message);
+            message.researchGrounded=true;
+            message.content=[{type:'text',text:groundedShoppingResearch(reports)}];
+          }
+        }
+        this.coalesce();
+      }
       if(event.type==='agent_end')session.dropPriorImages();
       if(event.type==='tool_execution_start')this.emit({type:'log',owner,tool:event.toolName,message:'Tool started'});
       if(event.type==='tool_execution_end')this.emit({type:'log',owner,tool:event.toolName,message:event.isError?'Tool failed':'Tool finished'});
@@ -289,7 +313,8 @@ export class PocketRuntime {
     finally {this.dropPriorImages(conversation.conversationId);this.releaseScreen(conversation.conversationId);this.save();this.publish();}
   };
   private injectMemory(session:MobileSession,owner:string,query:string):void {
-    const initial=owner==='main'?DEFAULT_MAIN_PROMPT:this.autonomyOwner(owner).startsWith('auto:')?AUTONOMOUS_WORKER_PROMPT:((session.agent.state.systemPrompt.startsWith('Read-only bounded worker')||session.agent.state.systemPrompt.startsWith('Research worker.'))?this.registry.agents.get('researcher')!.systemPrompt:WORKER_PROMPT);
+    const definition=this.runtime.listConversations().find(c=>String(c.conversationId)===owner)?.agent.name;
+    const initial=owner==='main'?DEFAULT_MAIN_PROMPT:this.autonomyOwner(owner).startsWith('auto:')?AUTONOMOUS_WORKER_PROMPT:(definition?this.registry.agents.get(definition)?.systemPrompt:undefined)??((session.agent.state.systemPrompt.startsWith('Read-only bounded worker')||session.agent.state.systemPrompt.startsWith('Research worker.'))?this.registry.agents.get('researcher')!.systemPrompt:WORKER_PROMPT);
     const messages=session.agent.state.messages;
     if(messages[0]?.role!=='system')throw Error('Memory injection requires a system transcript');
     const latestUser:any=messages.findLast((message:any)=>message.role==='user');

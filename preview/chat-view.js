@@ -1,3 +1,19 @@
+const renderedMessageText=new WeakMap();
+function messageText(body,text,linkify){
+  body.replaceChildren();
+  if(!linkify){body.textContent=text;return;}
+  const pattern=/\[([^\]\n]{1,120})\]\(<?(https:\/\/[^<>\s)]+)>?\)|https:\/\/[^\s<>()]+/g;
+  let offset=0;
+  for(const match of text.matchAll(pattern)){
+    body.append(document.createTextNode(text.slice(offset,match.index)));
+    const raw=(match[2]||match[0]).replace(/[.,;!]+$/,'');let url;
+    try{url=new URL(raw);if(url.protocol!=='https:'||url.username||url.password||raw.length>2048)url=null;}catch{}
+    if(url){const link=document.createElement('a');link.href=url.href;link.textContent=match[1]?match[1]+' ('+url.hostname+')':raw;link.rel='noopener noreferrer';link.target=globalThis.window?.PocketNative?'_self':'_blank';body.append(link);if(!match[2])body.append(document.createTextNode(match[0].slice(raw.length)));}
+    else body.append(document.createTextNode(match[0]));
+    offset=match.index+match[0].length;
+  }
+  body.append(document.createTextNode(text.slice(offset)));
+}
 export function reconcileMessages(parent,items,label='Assistant') {
   let changed=false;
   for(const child of [...parent.children])if(!child.matches('article.message')||!child.querySelector('.message-body')){child.remove();changed=true;}
@@ -7,7 +23,8 @@ export function reconcileMessages(parent,items,label='Assistant') {
     const role=item.role==='user'?'You':label,text=item.text||item.content||'';
     article.dataset.role=item.role;
     if(article.firstElementChild.textContent!==role)article.firstElementChild.textContent=role;
-    if(article.querySelector('.message-body').textContent!==text){article.querySelector('.message-body').textContent=text;changed=true;}
+    const body=article.querySelector('.message-body'),key=role+'\0'+text;
+    if(renderedMessageText.get(body)!==key){messageText(body,text,item.role!=='user');renderedMessageText.set(body,key);changed=true;}
   });
   while(parent.children.length>items.length){parent.lastElementChild.remove();changed=true;}
   return changed;

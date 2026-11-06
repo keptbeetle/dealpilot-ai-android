@@ -21,7 +21,20 @@ export class MobileSession {
       model:selected,systemPrompt:systemPrompt+(selected.provider==='openrouter'?'\nThis free provider shares a small request quota across main and workers. Use one browsing worker at a time. Prefer focused lookups and finish with verified observations or a clear access limitation. Do not repeatedly respawn workers after a quota error.':''),tools,messages,
     },toolExecution:'sequential',sessionId:owner,
       beforeToolCall:()=>{if(++this.calls>MOBILE_SESSION_BUDGET.toolCallsPerGeneration)throw new Error(`Mobile tool-call budget reached (${MOBILE_SESSION_BUDGET.toolCallsPerGeneration} per generation); saved context was retained`);return undefined;},
-      finishTurn:()=>{if(++this.turns>MOBILE_SESSION_BUDGET.turnsPerGeneration)throw new Error(`Mobile generation turn budget reached (${MOBILE_SESSION_BUDGET.turnsPerGeneration}); saved context was retained`);if(this.full())throw new Error('Mobile saved conversation context limit reached; saved context was retained');return undefined;},
+      finishTurn:(turn)=>{
+        if(++this.turns>MOBILE_SESSION_BUDGET.turnsPerGeneration)throw new Error(`Mobile generation turn budget reached (${MOBILE_SESSION_BUDGET.turnsPerGeneration}); saved context was retained`);
+        if(this.full())throw new Error('Mobile saved conversation context limit reached; saved context was retained');
+        // Async delegation is a host handoff. Do not spend inference requests
+        // asking a model to stop polling or repeatedly notifying the user.
+        if(owner==='main'&&turn?.toolResults.some(result=>{
+          if(result.toolName!=='subagent'||result.isError)return false;
+          try {
+            const value=JSON.parse(result.content.filter(p=>p.type==='text').map(p=>p.text).join('\n'));
+            return ['spawn','resume'].includes(value.action)&&value.results?.some((r:any)=>r.ok&&typeof r.conversationId==='string'&&Number.isInteger(r.generation));
+          } catch{return false;}
+        }))return {action:'end'};
+        return undefined;
+      },
     });
   }
   get messages():any[] {return this.agent.state.messages;}

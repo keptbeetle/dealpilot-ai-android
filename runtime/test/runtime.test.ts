@@ -8,6 +8,7 @@ import {toolResult,MobileSubagentParams,nativeTools} from '../src/tools.js';
 import {SubagentParams,parseSubagentInvocation} from '../vendor/pi9/schema.js';
 import {memoryTools} from '../src/memory.js';
 import {ensureCodexCredentials} from '../src/codex-auth.js';
+import {inspectBrowserObservation} from '../src/browser.js';
 
 class Bridge implements NativeBridge {
  state:any={};events:any[]=[];tools:any[]=[];credentials:any={authMode:'scripted'};
@@ -28,6 +29,27 @@ class Bridge implements NativeBridge {
 }
 async function until(fn:()=>any,timeout=4000):Promise<void>{const end=Date.now()+timeout;while(!fn()){if(Date.now()>end)throw new Error('Timed out');await delay(10);}}
 const command=(r:PocketRuntime,cmd:any)=>assert.equal(JSON.parse(r.dispatch(JSON.stringify(cmd))).ok,true);
+
+test('shopping completion and main delivery withhold unsupported drafts while retaining original development evidence and worker instructions',async()=>{
+ const bridge=new Bridge(),runtime=new PocketRuntime(bridge);
+ runtime.startTasks([{kind:'spawn',agent:'shopping-researcher',label:'Source-only research',prompt:'Read capabilities'}],{initiatedBy:'model'});
+ await until(()=>runtime.state().tasks[0]?.status==='completed'&&!runtime.state().active,8000);
+ const task=runtime.state().tasks[0],session=runtime.sessions.get(task.conversationId)!;
+ assert.match(task.output,/Research is incomplete/);
+ assert.ok(session.messages.some((m:any)=>m.researchGrounded&&m.researchDraft),'raw model draft stays in the private durable transcript');
+ assert.match(String(session.messages[0].content),/Return findings as your final answer/,'memory injection retains the registered worker instructions');
+ assert.ok(runtime.state().messages.some((m:any)=>m.role==='assistant'&&m.text.startsWith('Research is incomplete.')),'main completion is grounded too');
+});
+test('a quick main-chat product lookup cannot bypass source grounding or reuse older-turn listings',async()=>{
+ const runtime=new PocketRuntime(new Bridge());
+ const report=inspectBrowserObservation({package_name:'com.android.chrome',captured_at_ms:Date.now(),nodes:[{resource_id:'com.android.chrome:id/url_bar',text:'shop.example/products/stickers'},{text:'₹500.00'},{text:'In stock'},{text:'Price (excl. GST)'},{text:'₹424.00'},{text:'GST @ 18%'},{text:'+'},{text:'₹76.00'}]});
+ runtime.main.agent.state.messages.push({role:'user',content:[{type:'text',text:'Check the sticker price and taxes'}],timestamp:Date.now()}, {role:'toolResult',toolCallId:'observed',toolName:'phone_browser',content:[{type:'text',text:JSON.stringify(report)}],isError:false,timestamp:Date.now()} as any);
+ runtime.main.agent.streamFunction=((model:any)=>{const stream=new AssistantMessageEventStream();const message:any={role:'assistant',content:[{type:'text',text:'The price is ₹9999 and tax is not displayed.'}],api:model.api,provider:model.provider,model:model.id,timestamp:Date.now(),stopReason:'stop',usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};stream.push({type:'done',reason:'stop',message});stream.end(message);return stream;}) as any;
+ await runtime.main.continue();
+ const answer=messageText(runtime.main.messages.at(-1));assert.match(answer,/₹500.00/);assert.match(answer,/Displayed GST component: ₹76.00/);assert.ok(!answer.includes('9999'));
+ runtime.main.agent.state.messages.push({role:'user',content:[{type:'text',text:'What is two plus two?'}],timestamp:Date.now()});
+ await runtime.main.continue();assert.ok(!messageText(runtime.main.messages.at(-1)).includes('shop.example'),'an unrelated turn does not reuse old shopping evidence');
+});
 
 test('previous main chats reopen with their context and accept further messages',async()=>{
  class ChatBridge extends Bridge {

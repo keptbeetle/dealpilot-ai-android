@@ -1,4 +1,4 @@
-import {createHash} from 'node:crypto';
+import {providerLimits,providerLimitKey,waitForProvider} from './provider-limits.js';
 /** Selected Pi adapters. Agent loops and tool execution stay inside Android. */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Model } from '@earendil-works/pi-ai';
@@ -115,14 +115,6 @@ function failure(model: ProviderModel | undefined, text: string, aborted = false
   };
   stream.push({type:'error',reason:aborted ? 'aborted' : 'error',error:output});stream.end(output);return stream;
 }
-const openRouterNextRequest=new Map<string,number>();
-async function paceOpenRouter(headers:HeadersInit|undefined,signal:AbortSignal){
-  const key=createHash('sha256').update(new Headers(headers).get('authorization')||'').digest('hex');
-  const now=Date.now(),start=Math.max(now,openRouterNextRequest.get(key)||0);
-  openRouterNextRequest.set(key,start+4500);
-  if(start>now)await retryWait(start-now,signal);
-  if(signal.aborted)throw new Error('Request cancelled.');
-}
 function fixedCompletionsFetch(mode: string, fetcher: typeof fetch, requestSignal?: AbortSignal): typeof fetch {
   const expected = mode === 'opencode'
     ? OPENCODE_BASE_URL + '/chat/completions'
@@ -136,7 +128,6 @@ function fixedCompletionsFetch(mode: string, fetcher: typeof fetch, requestSigna
     // Keep both the wall-clock timeout and the original conversation signal
     // attached after response headers arrive so a stalled SSE body cannot hang.
     const signal = AbortSignal.any([timeout,...(init?.signal?[init.signal]:[]),...(requestSignal?[requestSignal]:[])]);
-    if(mode==='openrouter')await paceOpenRouter(init?.headers,signal);
     return fetcher(expected,{...init,redirect:'error',signal});
   }) as typeof fetch;
 }
@@ -171,6 +162,23 @@ export function geminiRetryDelay(reason: string): number | undefined {
   const match = reason.match(/retry in ([0-9.]+)s/i);
   const seconds = match && Number(match[1]);
   if (seconds && seconds > 0 && seconds <= 60) return Math.ceil(seconds * 1000) + 250;
+}
+async function* interruptibleEvents<T>(source:AsyncIterable<T>,signal?:AbortSignal):AsyncGenerator<T> {
+  const iterator=source[Symbol.asyncIterator]();let finished=false;
+  try {
+    while(true) {
+      const next=await new Promise<IteratorResult<T>>((resolve,reject)=>{
+        const abort=()=>reject(new Error('Provider stream interrupted.'));
+        if(signal?.aborted){abort();return;}
+        signal?.addEventListener('abort',abort,{once:true});
+        iterator.next().then(resolve,reject).finally(()=>signal?.removeEventListener('abort',abort));
+      });
+      if(next.done){finished=true;return;}
+      yield next.value;
+    }
+  } finally {
+    if(!finished)void iterator.return?.().catch(()=>{});
+  }
 }
 function retryWait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve,reject)=>{
@@ -274,6 +282,13 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
       else if (mode === 'nebius' && !apiKey?.trim()) return failure(model,'Configure a Nebius API key before sending.');
       else if (!apiKey?.trim()) return failure(model,'Configure a provider credential before sending.');
       if (options?.signal?.aborted) return failure(model,'Request cancelled.',true);
+      const metered=mode==='gemini'||mode==='openrouter';
+      const limitKey=providerLimitKey(mode,apiKey!);
+      const hold=metered?providerLimits.status(limitKey,model.id):undefined;
+      if(hold)return failure(model,hold.message);
+      if(metered)await waitForProvider(providerLimits.reserve(limitKey,mode==='gemini'?5000:4500),options?.signal);
+      const queuedHold=metered?providerLimits.status(limitKey,model.id):undefined;
+      if(queuedHold)return failure(model,queuedHold.message);
       const requestedReasoning = configurableReasoningMode(mode) && (owner === 'main' || reasoningOverride !== undefined)
         ? normalizeReasoningEffort(reasoningOverride ?? config.reasoningEffort)
         : DEFAULT_REASONING_EFFORT;
@@ -290,7 +305,9 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
         ? modelLevels.includes(DEFAULT_REASONING_EFFORT) ? DEFAULT_REASONING_EFFORT : modelLevels[0]
         : !manualModel && !modelLevels.length && (account || modelSource === 'catalog')
           ? DEFAULT_REASONING_EFFORT : requestedReasoning;
-      const shared = {...options,apiKey,transport:'sse' as const,maxRetries:0,timeoutMs:account?CODEX_STREAM_IDLE_TIMEOUT_MS:120000,reasoning};
+      const requestDeadline=metered?AbortSignal.timeout(65000):undefined;
+      const requestSignal=metered?AbortSignal.any([requestDeadline!,...(options?.signal?[options.signal]:[])]):options?.signal;
+      const shared = {...options,signal:requestSignal,apiKey,transport:'sse' as const,maxRetries:0,timeoutMs:account?CODEX_STREAM_IDLE_TIMEOUT_MS:120000,reasoning};
       const budget:{attempts:number;error?:string} = {attempts:0};
       // Credential refresh is deliberately outside this retry scope.
       const deadline = account ? AbortSignal.timeout(CODEX_REQUEST_TIMEOUT_MS) : undefined;
@@ -323,6 +340,7 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
       void(async()=>{
         let forwardedStart = false;
         let geminiRetried = false;
+        let unavailableRetried = false;
         try {
           while (true) {
             let retryableStreamFailure = false;
@@ -345,8 +363,8 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
               const code = event?.response?.error?.code ?? event?.error?.code ?? event?.code;
               retryableStreamFailure = typeof code === 'string' && RETRYABLE_CODEX_STREAM_ERRORS.has(code.toLowerCase());
             });
-            for await (const event of source) {
-              if ((account || mode === 'gemini') && event.type === 'start') {
+            for await (const event of metered?interruptibleEvents(source,requestSignal):source) {
+              if ((account || metered) && event.type === 'start') {
                 if (!forwardedStart) {
                   // Pi mutates its partial message when a later SSE failure arrives.
                   // Never expose the upstream object across a suppressed retry.
@@ -366,6 +384,10 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
                 geminiWait = geminiRetryDelay(event.error.errorMessage || '');
                 if (geminiWait !== undefined) { geminiRetried = true; restart = true; break; }
               }
+              if(metered&&event.type==='error'&&!unavailableRetried&&!emittedProgress&&!requestSignal?.aborted&&/UNAVAILABLE|high demand|\b503\b/i.test(event.error.errorMessage||'')){
+                unavailableRetried=true;restart=true;geminiWait=1500;break;
+              }
+              const providerHold=metered&&event.type==='error'?providerLimits.reject(limitKey,model!.id,event.error.errorMessage||''):undefined;
               if (event.type !== 'error') emittedProgress = true;
               if (event.type === 'error') {
                 if (account) {
@@ -376,6 +398,8 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
                 } else if (mode === 'gemini') {
                   const reason = event.error.errorMessage || '';
                   event.error.errorMessage = options?.signal?.aborted ? 'Request cancelled.'
+                    : providerHold ? providerHold.message
+                    : requestDeadline?.aborted ? 'The model request timed out. Progress was retained. Retry later.'
                     : /RESOURCE_EXHAUSTED|quota exceeded|\b429\b/i.test(reason) ? 'Gemini reached its request quota (HTTP 429). Retry when your quota is available.'
                     : /UNAVAILABLE|high demand|\b503\b/i.test(reason) ? 'Gemini is temporarily unavailable (HTTP 503). Retry this request later.'
                     : /API_KEY_INVALID|INVALID_API_KEY|UNAUTHENTICATED|PERMISSION_DENIED/i.test(reason) ? 'Gemini rejected this connection. Check the saved key and its access to the selected model.'
@@ -383,7 +407,7 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
                   delete event.error.diagnostics;
                 } else if(mode==='openrouter'){
                   const reason=event.error.errorMessage||'';
-                  event.error.errorMessage=/429|rate limit/i.test(reason)?'OpenRouter free-model request limit reached (HTTP 429). Wait for the quota to reset before continuing.'
+                  event.error.errorMessage=providerHold?providerHold.message:requestDeadline?.aborted?'The model request timed out. Progress was retained. Retry later.':/429|rate limit/i.test(reason)?'OpenRouter free-model request limit reached (HTTP 429). Wait for the quota to reset before continuing.'
                     : /402|credits|balance/i.test(reason)?'The selected free route is unavailable. No paid model was substituted.'
                     : redactProviderSecrets(reason||'OpenRouter request failed.',credentials).slice(0,512);
                 } else event.error.errorMessage = redactProviderSecrets(event.error.errorMessage || 'Provider request failed.',credentials).slice(0,512);
@@ -391,7 +415,7 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
               guarded.push(event);
             }
             if (!restart) break;
-            if (geminiWait !== undefined) await retryWait(geminiWait,options?.signal ?? AbortSignal.timeout(65000));
+            if (geminiWait !== undefined) await waitForProvider(Math.max(geminiWait,metered?providerLimits.reserve(limitKey,mode==='gemini'?5000:4500):0),requestSignal);
             else await retryWait(retryDelay(undefined,budget.attempts-1),retrySignal!);
           }
           // Terminal events carry the sanitized final message; do not replace it
@@ -399,7 +423,7 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
           guarded.end();
         } catch {
           const aborted = !!options?.signal?.aborted;
-          const terminal = await failure(model,aborted?'Request cancelled.':'Provider stream failed; no retry was attempted.',aborted).result();
+          const terminal = await failure(model,aborted?'Request cancelled.':requestDeadline?.aborted?'The model request timed out. Progress was retained. Retry later.':'Provider stream failed; progress was retained.',aborted).result();
           guarded.push({type:'error',reason:aborted?'aborted':'error',error:terminal});guarded.end(terminal);
         }
       })();

@@ -423,7 +423,9 @@ final class NativeTools implements AutoCloseable {
                     uri.getHost()==null || uri.getHost().trim().isEmpty() || uri.getUserInfo()!=null ||
                     raw.length()>2048 || raw.contains("\n") || raw.contains("\r"))
                     throw new ControlException(INVALID_ARGUMENT,"Provide an HTTP(S) URL without embedded credentials or control characters");
-                boolean physicalTarget=physical(a);displays.openUrl(owner,uri.toString(),physicalTarget,displayGeneration);
+                boolean physicalTarget=physical(a);
+                if(a.optString("browser","default").equals("chrome"))displays.openBrowserUrl(owner,uri.toString(),physicalTarget,displayGeneration);
+                else displays.openUrl(owner,uri.toString(),physicalTarget,displayGeneration);
                 return Json.tool(Json.obj("status","requested","display_target",displayTarget(a),"display_id",displays.display(owner,physicalTarget,displayGeneration),
                     "message",physicalTarget?"URL launch requested on the visible physical display; verify with phone_observe using display_target=physical.":"URL launch requested on the virtual display; verify in phone_observe."));
             }

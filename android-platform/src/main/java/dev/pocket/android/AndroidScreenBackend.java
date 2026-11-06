@@ -144,7 +144,17 @@ public final class AndroidScreenBackend implements ControlBackend {
             if (root != null) {
                 try {
                     pkg = String.valueOf(root.getPackageName()); window = root.getWindowId();
-                    if (maxNodes > 0) dump(root, nodes, maxNodes, 0, truncated);
+                    if (maxNodes > 0) {
+                        // Chrome may expose its entire document before its toolbar.
+                        // Keep the browser-owned address in a bounded observation so
+                        // product text cannot exhaust the budget and lose provenance.
+                        if ("com.android.chrome".equals(pkg)) {
+                            for (AccessibilityNodeInfo address : root.findAccessibilityNodeInfosByViewId("com.android.chrome:id/url_bar")) {
+                                try { dump(address,nodes,maxNodes,0,truncated); } finally { address.recycle(); }
+                            }
+                        }
+                        dump(root, nodes, maxNodes, 0, truncated);
+                    }
                 } finally { root.recycle(); }
             }
             return new Observation(UUID.randomUUID().toString(), System.currentTimeMillis(), pkg, window,

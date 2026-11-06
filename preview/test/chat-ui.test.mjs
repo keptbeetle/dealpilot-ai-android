@@ -19,6 +19,14 @@ test('archive controls are replaced when restoring the live conversation',async(
  assert.equal(list.children.length,2);assert.deepEqual([...list.querySelectorAll('.message-body')].map(n=>n.textContent),['Live question','Live answer']);
  assert.equal(list.querySelector('button'),null);
 });
+test('assistant source links are clickable with visible hosts, while HTML and unsafe addresses stay inert',async()=>{
+ const document=dom(),{reconcileMessages}=await import('../chat-view.js'),list=document.querySelector('#messages');
+ const text='[Open listing](<https://shop.example/products/headphones>)\nhttps://other.example/item.\n<script>alert(1)</script> [unsafe](javascript:alert(1)) https://secret@bad.example/product';
+ reconcileMessages(list,[{role:'assistant',text}]);
+ const links=[...list.querySelectorAll('a')];assert.equal(links.length,2);assert.equal(links[0].getAttribute('href'),'https://shop.example/products/headphones');assert.match(links[0].textContent,/shop.example/);assert.equal(links[0].target,'_self');
+ assert.equal(list.querySelector('script'),null);assert.ok(list.textContent.includes('<script>'));assert.equal(reconcileMessages(list,[{role:'assistant',text}]),false);
+ reconcileMessages(list,[{role:'user',text}]);assert.equal(list.querySelector('a'),null);
+});
 test('picker keeps a newer dialog open after an older save completes and retains preferred effort',async()=>{
  const document=dom(),{mountModelPicker}=await import('../model-picker.js');
  const gate=Promise.withResolvers(),saved=[];let config={provider:'codex-account',model:'limited',reasoning:'low',preferredReasoning:'high'};

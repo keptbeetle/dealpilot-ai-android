@@ -1,3 +1,4 @@
+import {browsePage} from './browser.js';
 import { Type } from 'typebox';
 import { randomUUID } from 'node:crypto';
 import schemas from '../../app/src/main/assets/tools.json';
@@ -172,6 +173,15 @@ export function nativeTools(host:any,owner:string,grant?:readonly string[]):any[
     parameters:Type.Unsafe(s.inputSchema),
     execute:async(_id:string,args:any,signal?:AbortSignal)=>{
       if(signal?.aborted) throw new Error('Cancelled before native dispatch');
+      if(s.name==='phone_browser'){
+        const primitives=nativeTools(host,owner,grant);
+        const execute=async(name:string,input:Record<string,unknown>)=>{
+          const tool=primitives.find(tool=>tool.name===name);
+          if(!tool)throw new Error('Browser research requires the granted '+name+' capability.');
+          return tool.execute(_id+'_'+name,input,signal);
+        };
+        return toolResult(await browsePage(execute,args,_id,signal));
+      }
       const authorize=()=>{
         host.authorizePhone?.(owner,s.name,args);
         if(s.name==='phone_batch')for(const call of args.calls??[])host.authorizePhone?.(owner,call.name,call.args);
@@ -210,7 +220,7 @@ export function nativeTools(host:any,owner:string,grant?:readonly string[]):any[
       if(s.name==='phone_batch')recordBatchUiState(host,owner,args,result);
       else if(!result?.isError) {
         if(s.name==='phone_open_app')markUiTransition(host,owner,args,args.package_name);
-        else if(s.name==='phone_open_url'||s.name==='phone_clock_screen')markUiTransition(host,owner,args);
+        else if(s.name==='phone_open_url'||s.name==='phone_clock_screen')markUiTransition(host,owner,args,s.name==='phone_open_url'&&args.browser==='chrome'?'com.android.chrome':undefined);
       }
       if(needsVirtualUi&&result?.isError&&result.code==='NOT_READY'&&
         /virtual display|no virtual display|shizuku backend|display service/i.test(String(result.message??''))) {

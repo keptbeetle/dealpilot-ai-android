@@ -191,6 +191,13 @@ final class AgentDisplayCoordinator implements AutoCloseable {
         int id=display(owner,generation);client().openUrl(id,url);
     }
 
+    synchronized void openBrowserUrl(String owner,String url,boolean physical,Object generation) throws ControlException {
+        Intent intent=ShellDisplayService.chromeBrowserIntent(context.getPackageManager(),Uri.parse(url));
+        if(intent==null||context.getPackageManager().resolveActivity(intent,0)==null)
+            throw new ControlException(UNSUPPORTED,"Chrome is not available. Install or enable Chrome to use browser-only shopping.");
+        if(physical){startPhysical(owner,intent);return;}
+        int id=display(owner,generation);client().openBrowserUrl(id,url);
+    }
     synchronized void showClock(String owner,String screen,boolean physical,Object generation) throws ControlException {
         if(physical) {
             String action=switch(screen) {
