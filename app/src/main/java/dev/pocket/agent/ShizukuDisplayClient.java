@@ -148,8 +148,10 @@ final class ShizukuDisplayClient implements AutoCloseable {
         return false;
     }
     void launch(int displayId,String componentName) throws ControlException {
+        ComponentName component=ComponentName.unflattenFromString(componentName);
+        boolean retailer=component!=null&&NativeStoreNavigation.packageKnown(component.getPackageName());
         try {if(!require().launchActivity(displayId,componentName))
-            throw new ControlException(ControlException.Code.ACTION_REJECTED,"No private app session opened. Play Store can transfer an idle background task automatically, but a visible Store or another worker's task cannot be taken over. Other personal tasks are preserved.");}
+            throw new ControlException(ControlException.Code.ACTION_REJECTED,retailer?"The retailer app cannot open a separate private session. Its existing personal or other worker session was preserved. No visible-screen takeover or browser fallback was used.":"No private app session opened. Play Store can transfer an idle background task automatically, but a visible Store or another worker's task cannot be taken over. Other personal tasks are preserved.");}
         catch(RemoteException e) {loseService();throw new ControlException(ControlException.Code.NOT_READY,"Virtual display backend disconnected");}
     }
     void openUrl(int displayId,String url) throws ControlException {
@@ -161,6 +163,10 @@ final class ShizukuDisplayClient implements AutoCloseable {
         try {if(!require().openBrowserUrl(displayId,url))
             throw new ControlException(ControlException.Code.ACTION_REJECTED,"Chrome could not open a private browser session. Existing personal tasks were preserved. Verify Chrome is installed and available.");
         }catch(RemoteException e){loseService();throw new ControlException(ControlException.Code.NOT_READY,"Browser backend disconnected; start Shizuku and authorize Pocket.");}
+    }
+    void openStoreUrl(int displayId,String url,String packageName) throws ControlException {
+        try {if(!require().openStoreUrl(displayId,url,packageName))throw new ControlException(ControlException.Code.ACTION_REJECTED,"The selected store app could not open a private listing. Personal tasks were preserved. No browser fallback was used.");}
+        catch(RemoteException e){loseService();throw new ControlException(ControlException.Code.NOT_READY,"Native store backend disconnected");}
     }
     String preview(int displayId) throws ControlException {
         try {return require().previewDisplay(displayId);}

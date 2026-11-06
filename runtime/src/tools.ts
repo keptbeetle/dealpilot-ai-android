@@ -1,4 +1,5 @@
 import {browsePage} from './browser.js';
+import {navigateStoreApp,type StoreContext} from './native-store.js';
 import { Type } from 'typebox';
 import { randomUUID } from 'node:crypto';
 import schemas from '../../app/src/main/assets/tools.json';
@@ -52,6 +53,7 @@ type ObservationState={packageName:string,windowId:number,signature:string};
 type UiTransition={startedAt:number,deadline:number,expectedPackage?:string,previous?:ObservationState};
 type OwnerUiState={last?:ObservationState,transition?:UiTransition};
 const uiStates=new WeakMap<object,Map<string,OwnerUiState>>();
+const storeContexts=new WeakMap<object,Map<string,StoreContext>>();
 type DisplayTarget='virtual'|'physical';
 function displayTarget(args:any):DisplayTarget {return args?.display_target==='physical'?'physical':'virtual';}
 function uiStateKey(owner:string,target:DisplayTarget):string{return owner+'\u0000'+target;}
@@ -173,14 +175,19 @@ export function nativeTools(host:any,owner:string,grant?:readonly string[]):any[
     parameters:Type.Unsafe(s.inputSchema),
     execute:async(_id:string,args:any,signal?:AbortSignal)=>{
       if(signal?.aborted) throw new Error('Cancelled before native dispatch');
-      if(s.name==='phone_browser'){
+      if(s.name==='phone_browser'||s.name==='phone_store_app'){
         const primitives=nativeTools(host,owner,grant);
         const execute=async(name:string,input:Record<string,unknown>)=>{
           const tool=primitives.find(tool=>tool.name===name);
-          if(!tool)throw new Error('Browser research requires the granted '+name+' capability.');
+          if(!tool)throw new Error('Shopping research requires the granted '+name+' capability.');
           return tool.execute(_id+'_'+name,input,signal);
         };
-        return toolResult(await browsePage(execute,args,_id,signal));
+        if(s.name==='phone_browser')return toolResult(await browsePage(execute,args,_id,signal));
+        let contexts=storeContexts.get(host);if(!contexts){contexts=new Map();storeContexts.set(host,contexts);}
+        const key=owner+'|'+(owner==='main'?host.state?.().mainThreadId??'main':owner)+'|'+displayTarget(args)+'|'+args.store;
+        let context=contexts.get(key);if(!context){context={};contexts.set(key,context);}
+        const result=await navigateStoreApp(execute,args,_id,signal,context);
+        return toolResult(result.isError?{...result,store:args.store,observedAt:Date.now()}:result);
       }
       const authorize=()=>{
         host.authorizePhone?.(owner,s.name,args);
@@ -220,7 +227,7 @@ export function nativeTools(host:any,owner:string,grant?:readonly string[]):any[
       if(s.name==='phone_batch')recordBatchUiState(host,owner,args,result);
       else if(!result?.isError) {
         if(s.name==='phone_open_app')markUiTransition(host,owner,args,args.package_name);
-        else if(s.name==='phone_open_url'||s.name==='phone_clock_screen')markUiTransition(host,owner,args,s.name==='phone_open_url'&&args.browser==='chrome'?'com.android.chrome':undefined);
+        else if(s.name==='phone_open_url'||s.name==='phone_clock_screen')markUiTransition(host,owner,args,s.name==='phone_open_url'?(args.app_package||(args.browser==='chrome'?'com.android.chrome':undefined)):undefined);
       }
       if(needsVirtualUi&&result?.isError&&result.code==='NOT_READY'&&
         /virtual display|no virtual display|shizuku backend|display service/i.test(String(result.message??''))) {

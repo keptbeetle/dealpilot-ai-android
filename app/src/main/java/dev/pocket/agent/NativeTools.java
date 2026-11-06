@@ -304,8 +304,12 @@ final class NativeTools implements AutoCloseable {
     static JSONObject boundedObservationNodes(List<ControlBackend.Node> source) {return boundedObservationNodes(source,OBSERVATION_TEXT_BUDGET);}
     private static boolean exceeds(String value,int max) {return value!=null&&value.length()>max;}
     static JSONObject boundedObservationNodes(List<ControlBackend.Node> source,int textBudget) {
+        return boundedObservationNodes(source,textBudget,false);
+    }
+    static JSONObject boundedObservationNodes(List<ControlBackend.Node> source,int textBudget,boolean compact) {
         JSONArray nodes=new JSONArray();int nodeCharacters=0;boolean outputTruncated=false;
         for(ControlBackend.Node n:source) {
+            if(compact&&(n.text()==null||n.text().isEmpty())&&(n.description()==null||n.description().isEmpty())&&!n.editable()&&!n.clickable()&&!n.scrollable())continue;
             outputTruncated|=exceeds(n.resourceId(),OBSERVATION_NODE_ID_LIMIT)||exceeds(n.text(),OBSERVATION_NODE_TEXT_LIMIT)
                 ||exceeds(n.description(),OBSERVATION_NODE_TEXT_LIMIT)||exceeds(n.role(),OBSERVATION_NODE_ROLE_LIMIT);
             JSONObject node=Json.obj("index",n.index(),"resource_id",clip(n.resourceId(),OBSERVATION_NODE_ID_LIMIT),
@@ -313,6 +317,11 @@ final class NativeTools implements AutoCloseable {
                 "role",clip(n.role(),OBSERVATION_NODE_ROLE_LIMIT),
                 "bounds",Json.obj("left",n.left(),"top",n.top(),"right",n.right(),"bottom",n.bottom()),"enabled",n.enabled(),"focused",n.focused(),
                 "editable",n.editable(),"clickable",n.clickable(),"long_clickable",n.longClickable(),"scrollable",n.scrollable());
+            if(compact){
+                for(String field:new String[]{"resource_id","text","description"})if(node.optString(field).isEmpty())node.remove(field);
+                for(String field:new String[]{"focused","editable","clickable","long_clickable","scrollable"})if(!node.optBoolean(field))node.remove(field);
+                if(n.enabled())node.remove("enabled");
+            }
             int next=node.toString().length()+1;
             if(nodeCharacters+next>textBudget) {outputTruncated=true;break;}
             nodes.put(node);nodeCharacters+=next;
@@ -322,7 +331,14 @@ final class NativeTools implements AutoCloseable {
     private JSONObject observation(JSONObject a,String owner) throws Exception {return observation(a,owner,OBSERVATION_TEXT_BUDGET);}
     private JSONObject observation(JSONObject a,String owner,int textBudget) throws Exception {
         ControlBackend.Observation o=screen(owner,a).observe(a.optBoolean("include_image",false),a.optInt("max_image_dimension",1280),a.optInt("max_nodes",DEFAULT_OBSERVATION_NODES));
-        JSONObject bounded=boundedObservationNodes(o.nodes(),textBudget);JSONArray nodes=bounded.getJSONArray("nodes");
+        List<ControlBackend.Node> observationNodes=o.nodes();
+        if(a.optBoolean("compact",false)) {
+            // Native WebViews can retain the full off-screen document. Keep the
+            // current viewport ahead of those nodes within the text budget.
+            observationNodes=new java.util.ArrayList<>(o.nodes());
+            observationNodes.sort(java.util.Comparator.comparingInt(n->n.right()>n.left()&&n.bottom()>n.top()&&n.right()>0&&n.bottom()>0&&n.left()<o.coordinateWidth()&&n.top()<o.coordinateHeight()?0:1));
+        }
+        JSONObject bounded=boundedObservationNodes(observationNodes,textBudget,a.optBoolean("compact",false));JSONArray nodes=bounded.getJSONArray("nodes");
         JSONObject data=Json.obj("snapshot_id",o.snapshotId(),"captured_at_ms",o.capturedAtMs(),"package_name",o.packageName(),"window_id",o.windowId(),"display_target",displayTarget(a),"display_id",displays.display(owner,physical(a),displayGeneration),"coordinate_width",o.coordinateWidth(),"coordinate_height",o.coordinateHeight(),"interactive",o.interactive(),"locked",o.locked(),"nodes",nodes,"nodes_truncated",o.nodesTruncated()||bounded.getBoolean("nodes_truncated"),"image_width",o.imageWidth(),"image_height",o.imageHeight());
         JSONObject result=Json.tool(data);byte[] image=o.image();if(image!=null) result.put("images",Json.arr(Json.obj("data",Base64.encodeToString(image,Base64.NO_WRAP),"mimeType",o.imageMime())));
         return result;
@@ -424,7 +440,15 @@ final class NativeTools implements AutoCloseable {
                     raw.length()>2048 || raw.contains("\n") || raw.contains("\r"))
                     throw new ControlException(INVALID_ARGUMENT,"Provide an HTTP(S) URL without embedded credentials or control characters");
                 boolean physicalTarget=physical(a);
-                if(a.optString("browser","default").equals("chrome"))displays.openBrowserUrl(owner,uri.toString(),physicalTarget,displayGeneration);
+                String store=NativeStoreNavigation.store(uri),storePackage=a.optString("app_package");
+                if(store!=null){
+                    if(a.optString("browser","default").equals("chrome"))throw new ControlException(UNSUPPORTED,"Use phone_store_app for Amazon and Flipkart; browser access was not dispatched");
+                    if(storePackage.isEmpty())storePackage=NativeStoreNavigation.installedPackage(context,store);
+                    if(storePackage==null)throw new ControlException(UNSUPPORTED,"Install the selected store app. No browser fallback was used.");
+                    displays.openStoreUrl(owner,uri.toString(),storePackage,physicalTarget,displayGeneration);
+                }
+                else if(!storePackage.isEmpty())throw new ControlException(INVALID_ARGUMENT,"The URL does not belong to the selected store app");
+                else if(a.optString("browser","default").equals("chrome"))displays.openBrowserUrl(owner,uri.toString(),physicalTarget,displayGeneration);
                 else displays.openUrl(owner,uri.toString(),physicalTarget,displayGeneration);
                 return Json.tool(Json.obj("status","requested","display_target",displayTarget(a),"display_id",displays.display(owner,physicalTarget,displayGeneration),
                     "message",physicalTarget?"URL launch requested on the visible physical display; verify with phone_observe using display_target=physical.":"URL launch requested on the virtual display; verify in phone_observe."));

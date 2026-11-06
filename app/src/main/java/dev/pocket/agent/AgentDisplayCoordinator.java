@@ -198,6 +198,12 @@ final class AgentDisplayCoordinator implements AutoCloseable {
         if(physical){startPhysical(owner,intent);return;}
         int id=display(owner,generation);client().openBrowserUrl(id,url);
     }
+    synchronized void openStoreUrl(String owner,String url,String pkg,boolean physical,Object generation) throws ControlException {
+        Intent intent=NativeStoreNavigation.intent(Uri.parse(url),pkg);
+        if(context.getPackageManager().resolveActivity(intent,0)==null)throw new ControlException(UNSUPPORTED,"The selected store app does not handle this link. No browser fallback was used.");
+        if(physical){startPhysical(owner,intent);return;}
+        int id=display(owner,generation);client().openStoreUrl(id,url,pkg);
+    }
     synchronized void showClock(String owner,String screen,boolean physical,Object generation) throws ControlException {
         if(physical) {
             String action=switch(screen) {

@@ -1,14 +1,15 @@
 import {createHash} from 'node:crypto';
+import {nativeStoreForUrl} from './store-policy.js';
 
-type Node={text?:string;description?:string;resource_id?:string;clickable?:boolean;scrollable?:boolean;enabled?:boolean;focused?:boolean};
-export type BrowserObservation={snapshot_id?:string;captured_at_ms?:number;package_name?:string;nodes?:Node[];nodes_truncated?:boolean};
+export type ObservationNode={text?:string;description?:string;resource_id?:string;clickable?:boolean;scrollable?:boolean;enabled?:boolean;focused?:boolean;editable?:boolean;role?:string;bounds?:{left:number;top:number;right:number;bottom:number}};
+export type BrowserObservation={snapshot_id?:string;captured_at_ms?:number;package_name?:string;nodes?:ObservationNode[];nodes_truncated?:boolean;coordinate_width?:number;coordinate_height?:number};
 export type ShoppingChecks={currency?:'USD'|'INR';budgetCents?:number;brand?:string;minimumRamGB?:number;minimumStorageGB?:number};
 type Price={amountCents:number;currency:'USD'|'INR'|'dollar-unspecified';kind:'conditional'|'reference'|'listed';evidence:string};
 const challenge=/verify (?:that )?you are human|unusual traffic|robot check|captcha|access denied|checking your browser|sign in to continue|log ?in to continue/i;
 const conditions=/bank|credit card|debit card|cashback|coupon|exchange|trade.?in|membership|subscribe|EMI|per month|\/mo\b/i;
 const references=/\bMRP\b|M\.R\.P\.?|list price|was price|original price|regularly|RRP|\bsave(?:d|s)?\b|\bsavings\b|shipping|delivery charge|\btax\b|\bGST\b|\bfee\b|starting price|from\s*$/i;
 
-function sourceAddress(nodes:Node[]):string|null{
+function sourceAddress(nodes:ObservationNode[]):string|null{
  const bar=nodes.find(node=>/url_bar|location_bar|omnibox/i.test(node.resource_id||''));
  const raw=bar?.text?.trim();
  if(!raw||bar?.focused||/\s/.test(raw))return null;
@@ -23,13 +24,23 @@ function capacity(text:string,attribute:'ram'|'storage'):number[]{
  const before=new RegExp(noun+'[ \\t]*[:=-]?[ \\t]*(\\d+(?:\\.\\d+)?)[ \\t]*(GB|TB)','gi');
  return [...new Set([...text.matchAll(after),...text.matchAll(before)].map(match=>Number(match[1])*(match[2].toUpperCase()==='TB'?1024:1)))];
 }
+export type ShoppingSourceContext={kind:'browser'|'android-app';bound:boolean;url:string|null;ref:string|null;label:string;pageKind:'page'|'search-results'|'product-page'|'unknown';holds:string[]};
 export function inspectBrowserObservation(observation:BrowserObservation,checks:ShoppingChecks={}){
+ const url=sourceAddress(observation.nodes||[]),chrome=observation.package_name==='com.android.chrome';
+ const nativeStore=url?nativeStoreForUrl(url):undefined;
+ const search=Boolean(url&&(/\/search(?:[/?]|$)|[?&](?:q|k)=/i.test(url)||new URL(url).hostname==='www.google.com'));
+ return inspectShoppingObservation(observation,checks,{kind:'browser',bound:chrome&&Boolean(url)&&!nativeStore,url,ref:url,label:'Chrome',pageKind:search?'search-results':'page',holds:[
+  ...(nativeStore?['Use the '+nativeStore+' Android app through phone_store_app. Website observations are not admitted for this retailer.']:[]),
+  ...(!chrome?['The page is outside Chrome. Reopen it with the browser tool.']:[]),
+  ...(!url?['The source address is not visible. Show the Chrome address bar before treating this as source-bound evidence.']:[]),
+ ]});
+}
+export function inspectShoppingObservation(observation:BrowserObservation,checks:ShoppingChecks,source:ShoppingSourceContext){
  const nodes=observation.nodes||[],seen=new Set<string>();
  const lines=nodes.map(n=>(n.text||n.description||'').trim()).filter(text=>text&&!seen.has(text)&&Boolean(seen.add(text)));
- const text=lines.join('\n').slice(0,10000),url=sourceAddress(nodes);
- const chrome=observation.package_name==='com.android.chrome';
+ const text=lines.join('\n').slice(0,10000),url=source.url;
  const prices:Price[]=[];
- const money=/(US\$|USD\s*|INR\s*|Rs\.?\s*|₹\s*|\$\s*)(\d[\d,]*(?:\.\d{1,2})?)/gi;
+ const money=/(US\$|\bUSD\s*|\bINR\s*|\bRs\.?\s*|₹\s*|\$\s*)(\d[\d,]*(?:\.\d{1,2})?)/gi;
  const priceLines=lines.map((line,index)=>{
   if(/^(?:₹|\$|US\$|USD|INR|Rs\.?)$/.test(line)&&/^\d[\d,]*(?:\.\d{1,2})?$/.test(lines[index+1]||'')){
    const suffix=conditions.test(lines[index+2]||'')?' '+lines[index+2]:'';
@@ -62,7 +73,7 @@ export function inspectBrowserObservation(observation:BrowserObservation,checks:
  }
  const listed=prices.filter(p=>p.kind==='listed');
  const regular=listed.length===1?listed[0]:null;
- const search=Boolean(url&&(/\/search(?:[/?]|$)|[?&](?:q|k)=/i.test(url)||new URL(url).hostname==='www.google.com'));
+ const search=source.pageKind==='search-results'||source.pageKind==='unknown';
  const unavailable=/out of stock|currently unavailable|sold out|not available/i.test(text);
  const available=/\bin stock\b|available for delivery/i.test(text);
  const stock=available&&unavailable?'conflict':unavailable?'unavailable':available?'available':'unknown';
@@ -74,10 +85,9 @@ export function inspectBrowserObservation(observation:BrowserObservation,checks:
   if(minimum!==undefined)results.push({attribute,outcome:values.length!==1||search?'unknown':values[0]>=minimum?'supported':'contradicted',evidence:values.length?values.join(', ')+' GB observed':'No explicit capacity in the visible text.'});
  }
  const blocked=challenge.test(text);
- if(!chrome||!url||blocked)for(const result of results)result.outcome='unknown';
+ if(!source.bound||blocked)for(const result of results)result.outcome='unknown';
  const holds=[
-  ...(!chrome?['The page is outside Chrome. Reopen it with the browser tool.']:[]),
-  ...(!url?['The source address is not visible. Show the Chrome address bar before treating this as source-bound evidence.']:[]),
+  ...source.holds,
   ...(blocked?['Access challenge or required sign-in. Stop and hand the page to the user.']:[]),
   ...(search?['Search results are discovery evidence. Open the exact product page to check its price and variant.']:[]),
   ...(stock==='conflict'||stock==='unavailable'?['Availability prevents a purchase recommendation.']:[]),
@@ -87,8 +97,8 @@ export function inspectBrowserObservation(observation:BrowserObservation,checks:
   ...results.filter(r=>r.outcome!=='supported').map(r=>r.attribute+' is '+r.outcome+'.'),
  ];
  const navigationTargets=nodes.filter(n=>n.clickable&&n.enabled!==false&&(n.text||n.description)).slice(0,20).map(n=>({selector:n.text?{text:n.text.slice(0,300)}:{description:n.description!.slice(0,300)}}));
- return {snapshot_id:observation.snapshot_id,observedAt:observation.captured_at_ms,sourceUrl:url,browser:observation.package_name,pageKind:search?'search-results':'page',navigationTargets,
-  sourceBound:chrome&&Boolean(url)&&!blocked,blocked,prices,regularPrice:search||!chrome||!url||blocked?null:regular,offers:lines.filter(line=>conditions.test(line)).slice(0,8).map(line=>line.slice(0,220)),
+ return {snapshot_id:observation.snapshot_id,observedAt:observation.captured_at_ms,sourceUrl:url,sourceRef:source.ref,sourceKind:source.kind,sourceLabel:source.label,sourcePackage:observation.package_name,browser:source.kind==='browser'?observation.package_name:undefined,pageKind:source.pageKind,navigationTargets,
+  sourceBound:source.bound&&!blocked,blocked,prices,regularPrice:search||!source.bound||blocked?null:regular,offers:lines.filter(line=>conditions.test(line)).slice(0,8).map(line=>line.slice(0,220)),
   stock,capacitiesGB:{ram,storage},checks:results,holds,visibleText:text,truncated:Boolean(observation.nodes_truncated)||lines.join('\n').length>10000,
   note:'Observed page evidence only. Offers require eligibility checks. Seller cart, delivered total and purchase availability are not verified.'};
 }
@@ -105,6 +115,7 @@ export async function browsePage(execute:Execute,args:{url?:string;action?:Brows
  let operationPrefix:string|undefined;
  let beforeAction:ReturnType<typeof inspectBrowserObservation>|undefined,actionReceipt:string|undefined;
  if(args.url&&args.action)throw Error('Choose a URL or a browser action in one call.');
+ if(args.url&&nativeStoreForUrl(args.url))return {isError:true,code:'NATIVE_STORE_REQUIRED',store:nativeStoreForUrl(args.url),message:'Use phone_store_app for Amazon and Flipkart. No browser navigation was dispatched.'};
  if(args.url||args.action){
   const capabilities=unwrap(await execute('phone_capabilities',{}));
   if(capabilities.isError)return capabilities;

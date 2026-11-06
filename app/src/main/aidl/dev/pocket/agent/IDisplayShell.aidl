@@ -12,5 +12,6 @@ interface IDisplayShell {
     String previewDisplay(int displayId) = 11;
     boolean injectText(int displayId, String text) = 12;
     boolean openBrowserUrl(int displayId, String url) = 13;
+    boolean openStoreUrl(int displayId, String url, String packageName) = 14;
     void destroy() = 16777114;
 }

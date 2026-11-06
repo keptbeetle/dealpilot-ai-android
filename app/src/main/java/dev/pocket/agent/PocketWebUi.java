@@ -52,8 +52,16 @@ final class PocketWebUi {
             @Override public boolean shouldOverrideUrlLoading(WebView web,WebResourceRequest request) {
                 Uri url=request.getUrl();
                 if("https".equals(url.getScheme())&&"pocket.local".equals(url.getHost()))return false;
+                if(isUserStoreNavigation(url,request.hasGesture(),request.isForMainFrame())) {
+                    String pkg=NativeStoreNavigation.installedPackage(activity,url.getHost());
+                    if(pkg==null)android.widget.Toast.makeText(activity,"Install the selected store app. No browser fallback was used.",android.widget.Toast.LENGTH_SHORT).show();
+                    else activity.startActivity(activity.getPackageManager().getLaunchIntentForPackage(pkg));
+                    return true;
+                }
                 if(isUserExternalNavigation(url,request.hasGesture(),request.isForMainFrame())) {
-                    Intent browser=ShellDisplayService.chromeBrowserIntent(activity.getPackageManager(),url);
+                    String store=NativeStoreNavigation.store(url),pkg=store==null?null:NativeStoreNavigation.installedPackage(activity,store);
+                    if(store!=null&&pkg==null){android.widget.Toast.makeText(activity,"Install the selected store app. No browser fallback was used.",android.widget.Toast.LENGTH_SHORT).show();return true;}
+                    Intent browser=store==null?ShellDisplayService.chromeBrowserIntent(activity.getPackageManager(),url):NativeStoreNavigation.intent(url,pkg);
                     try {activity.startActivity(browser!=null?browser:new Intent(Intent.ACTION_VIEW,url));}
                     catch(android.content.ActivityNotFoundException unavailable){android.widget.Toast.makeText(activity,"No browser can open this link",android.widget.Toast.LENGTH_SHORT).show();}
                 }
@@ -77,6 +85,10 @@ final class PocketWebUi {
     static boolean isUserExternalNavigation(Uri url,boolean gesture,boolean mainFrame) {
         return gesture&&mainFrame&&"https".equals(url.getScheme())&&url.getHost()!=null
             &&!"pocket.local".equals(url.getHost())&&url.getUserInfo()==null&&url.toString().length()<=2048;
+    }
+    static boolean isUserStoreNavigation(Uri url,boolean gesture,boolean mainFrame) {
+        return gesture&&mainFrame&&"pocket-store".equals(url.getScheme())&&url.getHost()!=null&&java.util.Set.of("amazon","flipkart").contains(url.getHost())
+            &&url.getUserInfo()==null&&url.getPort()==-1&&(url.getPath()==null||url.getPath().isEmpty())&&url.getQuery()==null&&url.getFragment()==null;
     }
     private static WebResourceResponse empty() { return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0])); }
     private void respond(String id,JSONObject value,String error) {

@@ -410,6 +410,7 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
         owned(id);
         android.content.ComponentName component=android.content.ComponentName.unflattenFromString(componentName);
         if(component==null || component.getPackageName().trim().isEmpty()) throw new IllegalArgumentException("Expected component name");
+        if(NativeStoreNavigation.packageKnown(component.getPackageName())&&!NativeStoreNavigation.privateSessionAllowed(component.getPackageName(),id,taskSnapshot()))return false;
         if(component.getPackageName().equals("com.android.vending")) {
             if(!acquireBackgroundStore(id))return false;
             if(taskSnapshot().packageOn("com.android.vending",id))return true;
@@ -452,6 +453,14 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
         android.content.Intent launcher=packages.getLaunchIntentForPackage("com.android.chrome");
         if(launcher==null||launcher.getComponent()==null)return null;
         return new android.content.Intent(android.content.Intent.ACTION_VIEW,uri).setComponent(launcher.getComponent());
+    }
+    @Override public synchronized boolean openStoreUrl(int id,String url,String packageName) {
+        owned(id);
+        if(!NativeStoreNavigation.privateSessionAllowed(packageName,id,taskSnapshot()))return false;
+        android.content.Intent intent=NativeStoreNavigation.intent(android.net.Uri.parse(url),packageName);
+        if(!canLaunchSeparately(id,intent))return false;
+        return launchTrackedForPackage(id,packageName,"/system/bin/am","start","--display",String.valueOf(id),"-f",WORKER_ACTIVITY_FLAGS,
+            "-a",android.content.Intent.ACTION_VIEW,"-d",url,"-p",packageName);
     }
     static boolean isPlayStoreDetails(android.net.Uri uri) {
         return "https".equalsIgnoreCase(uri.getScheme())&&"play.google.com".equalsIgnoreCase(uri.getHost())

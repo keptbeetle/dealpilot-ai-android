@@ -42,6 +42,14 @@ test('picker keeps a newer dialog open after an older save completes and retains
  assert.equal(dialog.querySelector('input').getAttribute('aria-valuetext'),'high');
  picker.close();assert.equal(trigger.getAttribute('aria-expanded'),'false');
 });
+
+test('native retailer handoffs accept only exact app destinations and never invent a website fallback',async()=>{
+ const document=dom(),{reconcileMessages}=await import('../chat-view.js'),list=document.querySelector('#messages');
+ const text='[Amazon app](pocket-store://amazon) [Flipkart app](pocket-store://flipkart) [wrong](pocket-store://amazon/checkout) [wrong](pocket-store://secret@amazon) [wrong](pocket-store://amazon?pay=1) [wrong](pocket-store://evil)';
+ reconcileMessages(list,[{role:'assistant',text}]);
+ assert.deepEqual([...list.querySelectorAll('a')].map(a=>a.getAttribute('href')),['pocket-store://amazon','pocket-store://flipkart']);
+ window.PocketNative=null;reconcileMessages(list,[{role:'assistant',text:text+' desktop'}]);assert.equal(list.querySelector('a'),null);
+});
 test('canonical titles clean prefix-wrapped quotes and both Markdown edges',()=>{
  assert.equal(shortTitle('Title: "Weekly meal planning."'),'Weekly meal planning');
  assert.equal(shortTitle('**Weekly planning**'),'Weekly planning');

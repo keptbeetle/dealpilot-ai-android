@@ -33,6 +33,12 @@ test('plain dollar symbol never silently becomes USD',()=>{
  assert.equal(result.regularPrice?.currency,'dollar-unspecified');assert.equal(result.checks[0].outcome,'unknown');
  assert.equal(inspect(page(['Sensor','US$250.00','In stock'])).regularPrice?.currency,'USD');
 });
+
+test('rating stars and review counts cannot be mistaken for an Rs price',()=>{
+ const result=inspect(page(['Sony headphones','4.2 out of 5 stars 32,409 Reviews','In stock']));
+ assert.deepEqual(result.prices,[]);assert.equal(result.regularPrice,null);
+ assert.equal(inspect(page(['Headphones','Rs 2,989.00','In stock'])).regularPrice?.amountCents,298900);
+});
 test('inline MRP, regular price and bank labels do not leak onto adjacent amounts',()=>{
  const result=inspect(page(['ASUS laptop','MRP ₹94,990 Price ₹82,281 Bank offer ₹76,531','In stock']));
  assert.equal(result.regularPrice?.amountCents,8228100);
@@ -104,7 +110,7 @@ test('focused shopping worker retains navigation prerequisites and model inherit
  const definition=runtime.registry.agents.get('shopping-researcher');assert.ok(definition);
  const session=(runtime as any).createSession('shopping-check',{definition,requestedConfig:{}});
  const names=session.agent.state.tools.map((t:any)=>t.name);
- for(const required of ['phone_browser','phone_open_url','phone_observe','phone_act','phone_capabilities'])assert.ok(names.includes(required));
+ for(const required of ['phone_store_app','phone_apps','phone_open_app','phone_browser','phone_open_url','phone_observe','phone_act','phone_capabilities'])assert.ok(names.includes(required));
  assert.ok(!names.includes('phone_sms'));assert.ok(runtime.main.agent.state.tools.some((t:any)=>t.name==='phone_sms'));
  assert.ok(runtime.registry.agents.has('phone-operator'));assert.equal(session.agent.state.model.id,runtime.main.agent.state.model.id);
 });

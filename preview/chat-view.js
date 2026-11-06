@@ -2,12 +2,12 @@ const renderedMessageText=new WeakMap();
 function messageText(body,text,linkify){
   body.replaceChildren();
   if(!linkify){body.textContent=text;return;}
-  const pattern=/\[([^\]\n]{1,120})\]\(<?(https:\/\/[^<>\s)]+)>?\)|https:\/\/[^\s<>()]+/g;
+  const pattern=/\[([^\]\n]{1,120})\]\(<?((?:https|pocket-store):\/\/[^<>\s)]+)>?\)|(?:https|pocket-store):\/\/[^\s<>()]+/g;
   let offset=0;
   for(const match of text.matchAll(pattern)){
     body.append(document.createTextNode(text.slice(offset,match.index)));
     const raw=(match[2]||match[0]).replace(/[.,;!]+$/,'');let url;
-    try{url=new URL(raw);if(url.protocol!=='https:'||url.username||url.password||raw.length>2048)url=null;}catch{}
+    try{url=new URL(raw);const native=globalThis.window?.PocketNative&&url.protocol==='pocket-store:'&&['amazon','flipkart'].includes(url.hostname)&&!url.pathname&&!url.search&&!url.hash&&!url.port;if((url.protocol!=='https:'&&!native)||url.username||url.password||raw.length>2048)url=null;}catch{}
     if(url){const link=document.createElement('a');link.href=url.href;link.textContent=match[1]?match[1]+' ('+url.hostname+')':raw;link.rel='noopener noreferrer';link.target=globalThis.window?.PocketNative?'_self':'_blank';body.append(link);if(!match[2])body.append(document.createTextNode(match[0].slice(raw.length)));}
     else body.append(document.createTextNode(match[0]));
     offset=match.index+match[0].length;
