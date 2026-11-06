@@ -56,7 +56,7 @@ APK SHA-256: `1fef6991607acbb76686c762cfb4641db9befd0b29f7bb1808479d574801820b`.
 - [Local ARM64 APK](../artifacts/native-store-20261106/Pocket-Agent-Test-arm64.apk)
 - Private evidence directory: `artifacts/native-store-20261106/`, including original failures, actual observations, source-time replay, selected-model transcript, screenshot hashes and test/build logs.
 
-After the successful final installation/model run, Android changed USB status to **unauthorized**. Subsequent device reads were refused; they are not counted as successful tests. The owner was asked to restore Android USB authorization so the temporary USB screen-awake override can be returned to its saved original value, **0**. No global ADB/Shizuku shutdown, wireless connection or authorization bypass was attempted.
+After the successful final installation/model run, Android briefly changed USB status to **unauthorized**. Those refused reads are not counted as successful tests. The owner restored USB authorization; the installed APK hash then matched the artifact above, the temporary USB screen-awake override was returned to its saved original value **0**, Pocket Agent Test was reopened, and only the task's CDP forward was removed. Cleanup evidence is saved privately in `final-cleanup.json`. No global ADB/Shizuku shutdown, wireless connection or authorization bypass was attempted.
 
 No merchant cart, real order, new sandbox payment, remote push or publication occurred. The existing owner-approved USD250 PayPal sandbox receipt remains separate evidence; native INR observations are not converted into USD checkout. Full seller/variant verification, broad device/store acceptance and the completed constraint-qualified comparison remain open. Phase 3 and its preserved stash stay paused.
 
