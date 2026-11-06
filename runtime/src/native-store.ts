@@ -5,9 +5,9 @@ export {STORE_APPS} from './store-policy.js';
 export type {StoreName} from './store-policy.js';
 
 type Selector={resource_id?:string;text?:string;description?:string;bounds?:{left:number;top:number;right:number;bottom:number}};
-type StoreAction={kind:'click';selector:Selector}|{kind:'scroll';direction:'up'|'down'}|{kind:'back'};
+type StoreAction={kind:'click';selector?:Selector;target_id?:string}|{kind:'scroll';direction:'up'|'down'}|{kind:'back'};
 export type StoreArgs={store:StoreName;query?:string;url?:string;action?:StoreAction;checks?:ShoppingChecks;display_target?:'virtual'|'physical'};
-export type StoreContext={query?:string;selectedLabel?:string;selectedFromSnapshot?:string;evidenceChain?:string;productPage?:{label:string;at:number;snapshot:string}};
+export type StoreContext={query?:string;selectedLabel?:string;selectedFromSnapshot?:string;evidenceChain?:string;targets?:Record<string,Selector>;productPage?:{label:string;at:number;snapshot:string}};
 type Execute=(name:string,args:Record<string,unknown>)=>Promise<any>;
 const forbidden=/add to (?:cart|bag|basket)|buy now|place order|pay now|checkout|purchase|subscribe and save|subscribe & save|^cart$|^orders$|^your account$|^sign in$|^log ?in$/i;
 const searchLabel=/search|rs_search|search_src|search_box|search_edit/i;
@@ -58,6 +58,16 @@ function explicitProductTitle(nodes:ObservationNode[],selected?:string){
  const scored=nodes.map(nodeLabel).map(titleLabel).filter(t=>t.length>10&&t.length<=400&&!forbidden.test(t)).map(text=>({text,score:words.filter(w=>text.toLowerCase().includes(w)).length})).sort((a,b)=>b.score-a.score||a.text.length-b.text.length);
  return words.length>=2&&scored[0]?.score>=Math.min(4,words.length)?scored[0].text:undefined;
 }
+export function classifyStoreScreen(observation:BrowserObservation,store:StoreName){
+ if(!(STORE_APPS[store].packages as readonly string[]).includes(observation.package_name||''))return 'wrong-app';
+ const text=(observation.nodes||[]).map(nodeLabel).join('\n');
+ if(/captcha|verify you are human|access denied|sign in to continue/i.test(text))return 'challenge';
+ if((observation.nodes||[]).some(n=>n.editable&&n.focused))return 'search-input';
+ if(/(?:^|\n)(?:add to cart|buy now)(?:$|\n)/i.test(text))return 'product-details';
+ if(/(?:^|\n)(?:filters?|sort & filter|all filters icon)(?:$|\n)/i.test(text))return 'search-results';
+ if(searchControl(observation,store))return 'home-or-search';
+ return 'unknown';
+}
 export function inspectStoreObservation(observation:BrowserObservation,store:StoreName,context:StoreContext={},checks:ShoppingChecks={}){
  const definition=STORE_APPS[store],nodes=(observation.nodes||[]).filter(node=>{
   const b=node.bounds,w=observation.coordinate_width,h=observation.coordinate_height;
@@ -91,6 +101,13 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  if(signal?.aborted)throw Error('Store navigation cancelled.');
  if(!Object.hasOwn(STORE_APPS,args.store))throw Error('Choose the installed Amazon or Flipkart app.');
  if(args.action&&!['click','scroll','back'].includes(args.action.kind))throw Error('Unsupported native store action.');
+ if(args.action?.kind==='click'&&args.action.target_id){
+  const selector=context.targets?.[args.action.target_id];
+  if(!selector||args.query&&args.query.trim()!==context.query)return {isError:true,code:'APP_TARGET_EXPIRED',store:args.store,message:'This target is not in the current observed store context. Inspect the current screen and choose a returned target_id.'};
+  if(args.action.selector)throw Error('Choose target_id or selector, not both.');
+  args={...args,action:{kind:'click',selector}};
+ }
+ context.targets={};
  // Only an explicit scroll can continue an already observed product identity.
  // New navigation, searches and unrelated inspections must prove identity again.
  if(args.action?.kind!=='scroll')context.productPage=undefined;
@@ -117,6 +134,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
    const meaningful=(current.nodes||[]).filter((n:ObservationNode)=>nodeLabel(n).length>2&&!/placeholder/i.test(nodeLabel(n))).length;
    const body=report.visibleText.split('\n').filter(t=>t.length>2&&!/^(?:back|search(?: amazon\.in)?|scan it|home(?: tab.*)?|your amazon\.com tab.*|you|wallet(?: tab.*)?|cart(?: \d.*)?|browse menu tab.*|menu)$/i.test(t));
    const searchReady=requireEditor?Boolean(searchControl(current,args.store,true)):!requireSearch||Boolean(searchControl(current,args.store))||(current.nodes||[]).some((n:ObservationNode)=>/^skip sign in$|^skip for now$/i.test(nodeLabel(n)));
+   if(requireSearch&&classifyStoreScreen(current,args.store)==='product-details')return current;
    if(current.package_name===pkg&&(requireEditor||requireSearch&&searchControl(current,args.store,true)||meaningful>=4)&&searchReady&&(!requirePageContent||body.length>=3))return current;
    await wait(500,signal);
   }
@@ -164,6 +182,12 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  if(current.package_name!==pkg)return reportError('The observed screen did not match the requested store and display.','PRIVATE_STORE_SESSION_UNAVAILABLE');
  if(inspectStoreObservation(current,args.store,context,args.checks).blocked)return inspectStoreObservation(current,args.store,context,args.checks);
  if(args.query){
+  if(!searchControl(current,args.store)&&classifyStoreScreen(current,args.store)==='product-details'){
+   const back=await act(current,{kind:'key',key:'back'});if(back.isError)return back;
+   context.selectedLabel=undefined;context.selectedFromSnapshot=undefined;context.productPage=undefined;
+   await wait(400,signal);current=await read(false,true);if(current.isError)return current;
+   if(current.package_name!==pkg)return reportError('Search recovery left the selected store.','PRIVATE_STORE_SESSION_UNAVAILABLE');
+  }
   // Only an explicit guest affordance can dismiss optional sign-in. Never enter credentials.
   const skip=current.nodes?.find((n:ObservationNode)=>n.clickable&&/^skip sign in$|^skip for now$/i.test(nodeLabel(n)));
   if(skip){const result=await act(current,{kind:'click',selector:selectorFor(skip,current.nodes)});if(result.isError)return result;await wait(600,signal);current=await read();}
@@ -219,5 +243,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  if(report.pageKind==='product-page'&&report.listingTitle&&report.sourceBound&&!context.productPage)context.productPage={label:report.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id};
  if(report.pageKind!=='product-page')context.productPage=undefined;
  if(!context.evidenceChain)context.evidenceChain=base;
- return {...report,...target,continuity:{chainId:context.evidenceChain},operation_prefix:caps.operation_prefix,preDispatchRecoveries:recoveries};
+ const navigationTargets=report.navigationTargets.map(t=>({...t,target_id:'target_'+createHash('sha256').update(pkg+'|'+current.snapshot_id+'|'+JSON.stringify(t.selector)).digest('hex').slice(0,18)}));
+ context.targets=Object.fromEntries(navigationTargets.map(t=>[t.target_id,t.selector]));
+ return {...report,navigationTargets,screenState:classifyStoreScreen(current,args.store),...target,continuity:{chainId:context.evidenceChain},operation_prefix:caps.operation_prefix,preDispatchRecoveries:recoveries};
 }

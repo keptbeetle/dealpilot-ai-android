@@ -1,7 +1,5 @@
 const renderedMessageText=new WeakMap();
-function messageText(body,text,linkify){
-  body.replaceChildren();
-  if(!linkify){body.textContent=text;return;}
+function appendLinks(body,text){
   const pattern=/\[([^\]\n]{1,120})\]\(<?((?:https|pocket-store):\/\/[^<>\s)]+)>?\)|(?:https|pocket-store):\/\/[^\s<>()]+/g;
   let offset=0;
   for(const match of text.matchAll(pattern)){
@@ -14,12 +12,25 @@ function messageText(body,text,linkify){
   }
   body.append(document.createTextNode(text.slice(offset)));
 }
+function messageText(body,text,linkify){
+  body.replaceChildren();if(!linkify){body.textContent=text;return;}
+  const lines=text.split('\n'),cells=line=>line.trim().replace(/^\||\|$/g,'').split(/(?<!\\)\|/).map(s=>s.trim().replace(/\\([|<>\[\]*_`])/g,'$1'));
+  let plain=[];const flush=()=>{if(plain.length){appendLinks(body,plain.join('\n')+'\n');plain=[];}};
+  for(let i=0;i<lines.length;i++){
+    if(lines[i].startsWith('|')&&/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(lines[i+1]||'')){
+      flush();const wrap=document.createElement('div');wrap.className='comparison-table-scroll';const table=document.createElement('table');table.setAttribute('aria-label','Product comparison');
+      const head=document.createElement('thead'),tr=document.createElement('tr');for(const value of cells(lines[i]).slice(0,6)){const th=document.createElement('th');th.textContent=value;tr.append(th);}head.append(tr);table.append(head);const tbody=document.createElement('tbody');i+=2;let count=0;
+      for(;i<lines.length&&lines[i].startsWith('|')&&count<30;i++,count++){const row=document.createElement('tr');for(const value of cells(lines[i]).slice(0,6)){const td=document.createElement('td');td.textContent=value;row.append(td);}tbody.append(row);}i--;table.append(tbody);wrap.append(table);body.append(wrap);
+    }else plain.push(lines[i]);
+  }
+  if(plain.length)appendLinks(body,plain.join('\n'));
+}
 export function reconcileMessages(parent,items,label='Assistant') {
   let changed=false;
   for(const child of [...parent.children])if(!child.matches('article.message')||!child.querySelector('.message-body')){child.remove();changed=true;}
   items.forEach((item,index)=>{
     let article=parent.children[index];
-    if(!article){article=document.createElement('article');article.className='message';const role=document.createElement('h2');role.className='message-label sr-only';const body=document.createElement('p');body.className='message-body';article.append(role,body);parent.append(article);changed=true;}
+    if(!article){article=document.createElement('article');article.className='message';const role=document.createElement('h2');role.className='message-label sr-only';const body=document.createElement('div');body.className='message-body';article.append(role,body);parent.append(article);changed=true;}
     const role=item.role==='user'?'You':label,text=item.text||item.content||'';
     article.dataset.role=item.role;
     if(article.firstElementChild.textContent!==role)article.firstElementChild.textContent=role;

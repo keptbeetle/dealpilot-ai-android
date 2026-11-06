@@ -1144,6 +1144,12 @@
                 "up",
                 "down"
               ]
+            },
+            "target_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "Exact host-issued navigationTargets target_id. Preferred to reconstructing selectors."
             }
           },
           "required": [

@@ -27,6 +27,13 @@ test('assistant source links are clickable with visible hosts, while HTML and un
  assert.equal(list.querySelector('script'),null);assert.ok(list.textContent.includes('<script>'));assert.equal(reconcileMessages(list,[{role:'assistant',text}]),false);
  reconcileMessages(list,[{role:'user',text}]);assert.equal(list.querySelector('a'),null);
 });
+
+test('source comparison Markdown renders a bounded table with inert product text and literal user messages',async()=>{
+ const document=dom(),{reconcileMessages}=await import('../chat-view.js'),list=document.querySelector('#messages');
+ const text='Observed comparison\n| Product | Listed price |\n| --- | --- |\n| Sony <script>x</script> | INR 2999 |\n| JBL | Unknown |\nDelivery unknown.';
+ reconcileMessages(list,[{role:'assistant',text}]);assert.equal(list.querySelectorAll('table tbody tr').length,2);assert.equal(list.querySelector('script'),null);assert.match(list.textContent,/Sony <script>/);assert.equal(list.querySelector('table').getAttribute('aria-label'),'Product comparison');assert.equal(reconcileMessages(list,[{role:'assistant',text}]),false);
+ reconcileMessages(list,[{role:'user',text}]);assert.equal(list.querySelector('table'),null);
+});
 test('picker keeps a newer dialog open after an older save completes and retains preferred effort',async()=>{
  const document=dom(),{mountModelPicker}=await import('../model-picker.js');
  const gate=Promise.withResolvers(),saved=[];let config={provider:'codex-account',model:'limited',reasoning:'low',preferredReasoning:'high'};
