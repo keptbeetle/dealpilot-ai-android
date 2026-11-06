@@ -99,6 +99,7 @@ export function inspectStoreObservation(observation:BrowserObservation,store:Sto
 }
 
 export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:string,signal?:AbortSignal,context:StoreContext={}){
+ let ownedTarget:Selector|undefined;
  if(signal?.aborted)throw Error('Store navigation cancelled.');
  if(!Object.hasOwn(STORE_APPS,args.store))throw Error('Choose the installed Amazon or Flipkart app.');
  if(args.action&&!['click','scroll','back'].includes(args.action.kind))throw Error('Unsupported native store action.');
@@ -106,6 +107,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   const selector=context.targets?.[args.action.target_id];
   if(!selector||args.query&&args.query.trim()!==context.query)return {isError:true,code:'APP_TARGET_EXPIRED',store:args.store,message:'This target is not in the current observed store context. Inspect the current screen and choose a returned target_id.'};
   if(args.action.selector)throw Error('Choose target_id or selector, not both.');
+  ownedTarget=selector;
   args={...args,action:{kind:'click',selector}};
  }
  context.targets={};
@@ -220,8 +222,19 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   const before=inspectStoreObservation(current,args.store,context,args.checks);if(!before.sourceBound)return before;
   let action:Record<string,unknown>;
   if(args.action.kind==='click'){
-   const selector=args.action.selector||{},matchesFound:ObservationNode[]=(current.nodes||[]).filter((n:ObservationNode)=>matches(n,selector));
-   const samePosition=args.action.selector?.bounds&&matchesFound.length>1&&matchesFound.every(n=>nodeLabel(n)===nodeLabel(matchesFound[0]));
+   let selector=args.action.selector||{},matchesFound:ObservationNode[]=(current.nodes||[]).filter((n:ObservationNode)=>matches(n,selector));
+   // Dynamic ads can move a previously observed product. Only a host-issued
+   // target may rebind, using the complete unchanged label on this fresh screen.
+   // Duplicate accessibility nodes are one target only at identical bounds.
+   if(ownedTarget?.bounds&&matchesFound.length===0){
+    const {bounds:previousBounds,...identity}=ownedTarget;
+    const candidates:ObservationNode[]=(current.nodes||[]).filter((n:ObservationNode)=>matches(n,identity));
+    if(candidates.length&&candidates.every(n=>nodeLabel(n)===nodeLabel(candidates[0])&&sameBounds(n.bounds,candidates[0].bounds))){
+     const freshSelector=selectorFor(candidates[0],current.nodes||[]);
+     if(Object.keys(freshSelector).length){selector=freshSelector;matchesFound=candidates;}
+    }
+   }
+   const samePosition=selector.bounds&&matchesFound.length>1&&matchesFound.every(n=>nodeLabel(n)===nodeLabel(matchesFound[0])&&sameBounds(n.bounds,matchesFound[0].bounds));
    if(matchesFound.length!==1&&!samePosition)return reportError('The observed app target must match exactly one current node or one identical label at the same position.','APP_TARGET_AMBIGUOUS');
    const node=matchesFound[0],label=nodeLabel(node);if(!label||forbidden.test(label))return reportError('Store research cannot operate purchase or account controls.','RESEARCH_ACTION_BLOCKED');
    if(before.pageKind!=='product-page'){context.selectedLabel=label;context.selectedFromSnapshot=current.snapshot_id;}
@@ -252,7 +265,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  if(report.pageKind==='product-page'&&report.listingTitle&&report.sourceBound&&!context.productPage)context.productPage={label:report.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id};
  if(report.pageKind!=='product-page')context.productPage=undefined;
  if(!context.evidenceChain)context.evidenceChain=base;
- const navigationTargets=report.navigationTargets.map(t=>({...t,target_id:'target_'+createHash('sha256').update(pkg+'|'+current.snapshot_id+'|'+JSON.stringify(t.selector)).digest('hex').slice(0,18)}));
+ const navigationTargets=[...new Map<string,{label:string;selector:Selector}>(report.navigationTargets.map(t=>[JSON.stringify(t.selector),t])).values()].map(t=>({...t,target_id:'target_'+createHash('sha256').update(pkg+'|'+current.snapshot_id+'|'+JSON.stringify(t.selector)).digest('hex').slice(0,18)}));
  context.targets=Object.fromEntries(navigationTargets.map(t=>[t.target_id,t.selector]));
  return {...report,navigationTargets,screenState:classifyStoreScreen(current,args.store),...target,continuity:{chainId:context.evidenceChain},operation_prefix:caps.operation_prefix,preDispatchRecoveries:recoveries};
 }
