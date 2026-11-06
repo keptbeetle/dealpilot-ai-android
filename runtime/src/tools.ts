@@ -170,11 +170,13 @@ function recordBatchUiState(host:any,owner:string,args:any,result:any):void {
 }
 
 export function nativeTools(host:any,owner:string,grant?:readonly string[]):any[] {
+  const privateResearch=Boolean(host.privateDisplayResearch?.(owner));
   return schemas.filter(s=>s.name==='phone_shell' || !grant || grant.includes(s.name)).map(s=>({
-    name:s.name,label:s.name,description:s.description,
-    parameters:Type.Unsafe(s.inputSchema),
+    name:s.name,label:s.name,description:privateResearch&&s.name==='phone_shell'?'Focused shopping shell context only: context, acquire, release, own-private-display capture, poll and stop. Arbitrary commands, file images and external display IDs are disabled for this worker. Use phone_store_app for Amazon/Flipkart and report source/session holds.':privateResearch&&s.name==='phone_browser'?'Private-display browser for other supported stores. For Amazon and Flipkart use phone_store_app directly, never Google or a website fallback. Visible-screen fallback is disabled. '+s.description:s.description,
+    parameters:Type.Unsafe(privateResearch?{...s.inputSchema,properties:{...s.inputSchema.properties,...(Object.hasOwn(s.inputSchema.properties??{},'display_target')?{display_target:{type:'string',enum:['virtual'],default:'virtual'}}:{}),...(s.name==='phone_shell'?{action:{type:'string',enum:['context','acquire','release','capture','poll','stop']}}:{})}}:s.inputSchema),
     execute:async(_id:string,args:any,signal?:AbortSignal)=>{
       if(signal?.aborted) throw new Error('Cancelled before native dispatch');
+      if(privateResearch)host.authorizePhone?.(owner,s.name,args);
       if(s.name==='phone_browser'||s.name==='phone_store_app'){
         const primitives=nativeTools(host,owner,grant);
         const execute=async(name:string,input:Record<string,unknown>)=>{

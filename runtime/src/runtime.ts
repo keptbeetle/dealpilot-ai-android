@@ -76,6 +76,7 @@ export class PocketRuntime {
   private mainThreadId:string;
   private readonly workerHistoryOwners=new Map<string,string>();
   private readonly workerMainThreads=new Map<string,string>();
+  private readonly privateResearchOwners=new Set<string>();
   private personalInstructions='';
   private titleRequest?:AbortController;
   private readonly credentialHistory=new Set<any>();
@@ -229,6 +230,8 @@ export class PocketRuntime {
     return pending;
   }
   private configureSessionTools(session:MobileSession,parent?:any):void {
+    if(parent?.definition?.name==='shopping-researcher')this.privateResearchOwners.add(session.owner);
+    else this.privateResearchOwners.delete(session.owner);
     const grant=parent?.requestedConfig.tools??parent?.definition.tools;
     const remote=(!grant||this.mcp.toolNames.some(name=>grant.includes(name)))?this.mcp.tools.filter(tool=>!grant||grant.includes(tool.name)):[];
     session.agent.state.tools=[...autonomyTools(this,session.owner,grant).filter(tool=>tool.name!=='notify_user'||this.autonomyOwner(session.owner).startsWith('auto:')),...nativeTools(this,session.owner,grant),...memoryTools(this,session.owner,grant),...(!grant||grant.includes('send_message')?[sendMessageTool(this,session.owner)]:[]),...(!grant||grant.includes('request_voice_conversation')?[requestVoiceConversationTool(this,session.owner)]:[]),...(!grant||grant.includes('subagent')?[subagentTool(this,parent)]:[]),...remote];
@@ -251,7 +254,8 @@ export class PocketRuntime {
     if(owner!=='main'&&!this.workerMainThreads.has(owner))this.workerMainThreads.set(owner,this.mainThreadId);
     if(owner!=='main'&&!this.workerHistoryOwners.has(owner))this.workerHistoryOwners.set(owner,owner+'@'+randomUUID());
     const systemPrompt=composePrompt(parent?.definition?.systemPrompt??(owner==='main'?DEFAULT_MAIN_PROMPT:WORKER_PROMPT),this.personalInstructions)+'\n'+MEMORY_GUIDANCE+'\nDisplay readiness: virtual backend idle means ready on demand, not unavailable. Read available/status and attempt allocation before reporting a blocker. To install an app, open its https://play.google.com/store/apps/details?id=PACKAGE link on the virtual display, observe the listing, tap Install, and verify the installed package using phone_apps; a dispatched tap is not completion. Idle background Play Store tasks transfer automatically into the private session and close when it is released. A visible Store or another worker\'s Store task cannot be taken over. Preserve other personal tasks and never fall back to the physical screen unless the user explicitly authorizes visible-screen work. Background-only work must remain background-only.';
-    const restored=messages[0]?.role==='system'?[{...messages[0],content:systemPrompt},...messages.slice(1)]:messages;
+    const scopedPrompt=parent?.definition?.name==='shopping-researcher'?systemPrompt+'\nShopping research display policy: this worker is private-display only. Never request display_target=physical, physical screenshots, or a shell command/image fallback. The general shell guidance above applies to general phone workers; this focused research worker can use only shell context/acquire/release/own-display capture/poll/stop. Use phone_store_app first for Amazon and Flipkart, not Google or Chrome. A private-session or source restriction is a hold, not permission to switch surfaces.':systemPrompt;
+    const restored=messages[0]?.role==='system'?[{...messages[0],content:scopedPrompt},...messages.slice(1)]:messages;
     const selectedModel=parent?.requestedConfig?.model;
     const currentModel=modelFor(this.config,this.credentials);
     const selectedModelId=selectedModel===`${currentModel.provider}/${currentModel.id}`?currentModel.id:selectedModel?modelFor(this.config,this.credentials,selectedModel).id:currentModel.id;
@@ -260,7 +264,7 @@ export class PocketRuntime {
     const savedProof=this.workerReasoningProofs.get(owner);
     const supportedReasoning=catalogReasoning??(savedProof?.model===selectedModelId?savedProof.levels:undefined);
     const reasoning=normalizeReasoningEffort(parent?.requestedConfig?.thinking??this.config.reasoningEffort);
-    const session=new MobileSession(owner,this.config,this.credentials,[],restored,systemPrompt,selectedModel,reasoning,supportedReasoning);
+    const session=new MobileSession(owner,this.config,this.credentials,[],restored,scopedPrompt,selectedModel,reasoning,supportedReasoning);
     this.configureSessionTools(session,parent);
     session.subscribe(event=>{
       if(event.type==='message_end'){
@@ -542,6 +546,10 @@ export class PocketRuntime {
     return this.runtime?.listConversations().some(c=>c.conversationId===owner&&c.agent.name==='autonomy-worker')?'auto:'+owner:owner;
   }
   authorizePhone(owner:string,name:string,args:any):void {
+    if(this.privateDisplayResearch(owner)){
+      if(args?.display_target==='physical')throw Error('Shopping research is private-display only. The physical screen was not accessed; report a private-session hold.');
+      if(name==='phone_shell'&&(!['context','acquire','release','capture','poll','stop'].includes(args?.action)||args?.display_id!==undefined))throw Error('Focused shopping research cannot use unrestricted shell or external-display images. Use the native app or private browser tools; report a hold when unavailable.');
+    }
     if(!this.autonomyOwner(owner).startsWith('auto:'))return;
     const state=this.autonomy.snapshot(),run=state.runs.find((r:any)=>r.conversationId===owner),task=state.tasks.find((t:any)=>t.id===run?.taskId);
     if(this.call('autonomy.status',{})?.enabled===false)throw Error('Autonomous work is paused');
@@ -553,6 +561,7 @@ export class PocketRuntime {
     if(spec?.annotations?.readOnlyHint===true)return;
     if(task.status!=='active'||!run.approvedTools?.includes(name)||!(run.approvalExpiresAt>Date.now()))throw Error('This phone action needs a current user approval for this task');
   }
+  privateDisplayResearch(owner:string):boolean {return this.privateResearchOwners.has(owner);}
   authorizeAutonomy(owner:string,name:string,args:any):void {
     if(name==='request_decision'&&args.tools?.some((name:string)=>!phoneSchemas.some(s=>s.name===name)||name==='phone_batch'))throw Error('Request exact known phone tools, not batch access');
     if(!this.autonomyOwner(owner).startsWith('auto:'))return;
