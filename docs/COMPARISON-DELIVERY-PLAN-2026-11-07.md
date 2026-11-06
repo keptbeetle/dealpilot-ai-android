@@ -16,7 +16,7 @@ Each stage must preserve its failing expectations, pass focused tests and the fu
 ## Progress
 
 - [x]1 Comparison readiness and attribute comparison. Five new contracts,301runtime tests and bundle pass. Unknown delivered costs do not prevent a matching listed-price comparison; checkout flags remain false. Different-model attribute table is separate from same-product identifier equivalence. Original missing-module baseline retained privately.
-- [ ]2 Offer evidence continuity and persistence.
+- [x]2 Offer evidence continuity and persistence. Six new ledger/host-checkpoint contracts,307runtime tests/bundle pass. Per-field snapshots retain original time, only explicit native continuity joins facts; variant/seller/location changes clear them, conflicting facts remain held, persisted evidence expires normally. Extra typing retains16baseline diagnostics with none in the new modules.
 - [ ]3 Native state/target navigation.
 - [ ]4 Screenshot OCR extraction and stability.
 - [ ]5 Selected-offer review and simulation boundary.

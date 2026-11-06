@@ -7,7 +7,7 @@ export type {StoreName} from './store-policy.js';
 type Selector={resource_id?:string;text?:string;description?:string;bounds?:{left:number;top:number;right:number;bottom:number}};
 type StoreAction={kind:'click';selector:Selector}|{kind:'scroll';direction:'up'|'down'}|{kind:'back'};
 export type StoreArgs={store:StoreName;query?:string;url?:string;action?:StoreAction;checks?:ShoppingChecks;display_target?:'virtual'|'physical'};
-export type StoreContext={query?:string;selectedLabel?:string;selectedFromSnapshot?:string;productPage?:{label:string;at:number;snapshot:string}};
+export type StoreContext={query?:string;selectedLabel?:string;selectedFromSnapshot?:string;evidenceChain?:string;productPage?:{label:string;at:number;snapshot:string}};
 type Execute=(name:string,args:Record<string,unknown>)=>Promise<any>;
 const forbidden=/add to (?:cart|bag|basket)|buy now|place order|pay now|checkout|purchase|subscribe and save|subscribe & save|^cart$|^orders$|^your account$|^sign in$|^log ?in$/i;
 const searchLabel=/search|rs_search|search_src|search_box|search_edit/i;
@@ -155,6 +155,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   if(!observed.isError&&observed.package_name===pkg){current=observed;args={...args,query:undefined};continuedQuery=true;}
  }
  if(args.query||args.url){
+  context.evidenceChain=base;
   context.query=args.query?.trim();context.selectedLabel=undefined;context.selectedFromSnapshot=undefined;
   const opened=unwrap(await execute(args.url?'phone_open_url':'phone_open_app',{...target,...(args.url?{url:args.url,app_package:pkg}:{package_name:pkg}),operation_id:operation()}));if(opened.isError)return opened;
   current=await read(false,Boolean(args.query));
@@ -190,6 +191,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   await wait(750,signal);current=await read(true);
  }
  if(args.action){
+  if(args.action.kind!=='scroll')context.evidenceChain=base+'_'+step;
   const before=inspectStoreObservation(current,args.store,context,args.checks);if(!before.sourceBound)return before;
   let action:Record<string,unknown>;
   if(args.action.kind==='click'){
@@ -216,5 +218,6 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  const report=inspectStoreObservation(current,args.store,context,args.checks);
  if(report.pageKind==='product-page'&&report.listingTitle&&report.sourceBound&&!context.productPage)context.productPage={label:report.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id};
  if(report.pageKind!=='product-page')context.productPage=undefined;
- return {...report,...target,operation_prefix:caps.operation_prefix,preDispatchRecoveries:recoveries};
+ if(!context.evidenceChain)context.evidenceChain=base;
+ return {...report,...target,continuity:{chainId:context.evidenceChain},operation_prefix:caps.operation_prefix,preDispatchRecoveries:recoveries};
 }

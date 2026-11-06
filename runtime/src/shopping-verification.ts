@@ -7,7 +7,8 @@ import type {ShoppingRequest} from './shopping-request.js';
 type Result={attribute:string;outcome:'supported'|'contradicted'|'unknown';evidence:string};
 /** Native observations are an adapter input, never manufactured HTML/catalogue evidence. */
 export function verifyShoppingReport(report:any,request?:ShoppingRequest,now=Date.now()){
- const timestamp=Number.isFinite(report.observedAt)?new Date(report.observedAt).toISOString():null;
+ const evidenceTime=Number.isFinite(report.evidenceObservedAt)?Math.min(report.observedAt,report.evidenceObservedAt):report.observedAt;
+ const timestamp=Number.isFinite(evidenceTime)?new Date(evidenceTime).toISOString():null;
  const freshness=assessObservationFreshness({observedAt:timestamp},new Date(now),.25);
  const product=report.sourceBound&&!report.blocked&&report.pageKind==='product-page';
  const usable=Boolean(product&&freshness.status==='recent');
@@ -23,7 +24,7 @@ export function verifyShoppingReport(report:any,request?:ShoppingRequest,now=Dat
  const identity=assessSourceIdentity({title:selected,brand},{title,model:model?normalizePartNumber(model):null,gtin});
  const seller=text.match(/\b(?:Sold by\s*[:\n]?\s*|Seller\s*[:\n]\s*)([^\n]{2,100})/i)?.[1]?.trim()||null;
  const explicitCondition=text.match(/\b(?:Item condition|Condition)\s*[:\n]\s*(new|used|renewed|refurbished|open box)\b/i)?.[1]?.toLowerCase();
- const condition=explicitCondition||(/\b(?:renewed|refurbished|pre-owned|used phone|open box)\b/i.test(title)?'non-new':'unknown');
+ const condition=report.conditionConflict?'conflict':explicitCondition||(/\b(?:renewed|refurbished|pre-owned|used phone|open box)\b/i.test(title)?'non-new':'unknown');
  const price=report.regularPrice;
  const checks:Result[]=[];
  const add=(attribute:string,supported:boolean|undefined,evidence:string)=>checks.push({attribute,outcome:!usable||supported===undefined?'unknown':supported?'supported':'contradicted',evidence});
@@ -38,7 +39,7 @@ export function verifyShoppingReport(report:any,request?:ShoppingRequest,now=Dat
  const currency=price?.currency==='INR'||price?.currency==='USD'?price.currency:null;
  const cost=currency?evaluateReportedCost({priceCents:price.amountCents,currency,costClaims:{shippingCents:/\bfree delivery\b|\bfree shipping\b/i.test(text)?0:null,taxCents:/inclusive of all taxes|all taxes included/i.test(text)?0:null,mandatoryFeeCents:null,membershipRequired:'unknown',shipsToUS:'unknown',shipsToIN:'unknown'}}):null;
  const reasons=[...(request?.issues||[]),...(!product?['Individual product-page provenance is not established.']:[]),...(freshness.status!=='recent'?[freshness.explanation]:[]),...(!price?['No unique unconditional product price.']:[]),...(report.stock!=='available'?['Stock is '+(report.stock||'unknown')+'.']:[]),...(!seller?['Seller identity is not reported in this observation.']:[]),...checks.filter(c=>c.outcome!=='supported').map(c=>c.attribute+' is '+c.outcome+'.'),...(identity.status!=='model-compatible'||identity.variantUnresolved?identity.reasons:[]),...(!selected?['Search selection and product identity have not been independently linked.']:[]),...(gtinText&&!gtin?['Reported GTIN has an invalid checksum.']:[]),...(cost?cost.status==='reported-estimate'?[]:cost.reasons:['Delivered cost cannot be evaluated without an explicit currency and price.']),...(report.truncated?['Observation is truncated.']:[])];
- const contradicted=checks.some(c=>c.outcome==='contradicted')||['conflict','unavailable'].includes(report.stock)||identity.status==='conflict'||Boolean(request?.issues.length)||Boolean(gtinText&&!gtin);
+ const contradicted=checks.some(c=>c.outcome==='contradicted')||['conflict','unavailable'].includes(report.stock)||identity.status==='conflict'||Boolean(request?.issues.length)||Boolean(gtinText&&!gtin)||Boolean(report.conditionConflict);
  const exactSelectedTitle=Boolean(selected&&report.selectedFrom?.snapshot_id&&title.trim().toLowerCase()===selected.trim().toLowerCase());
  const identityLinked=identity.status==='model-compatible'&&!identity.variantUnresolved||exactSelectedTitle&&identity.status!=='conflict';
  const comparisonReasons=[...(!usable?['Fresh product-page evidence is required.']:[]),...(!title||!identityLinked?['The selected product identity is unresolved.']:[]),...(!price||!['USD','INR'].includes(price.currency)||!Number.isSafeInteger(price.amountCents)||price.amountCents<1?['A complete unconditional price and currency are required.']:[]),...(report.truncated?['The observation is truncated.']:[]),...(contradicted?['Source facts contradict the request or listing identity.']:[])];

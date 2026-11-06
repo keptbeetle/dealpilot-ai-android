@@ -11,6 +11,7 @@ import {generateChatTitle} from './chat-title.js';
 import {browserReports,groundedShoppingResearch} from './shopping-evidence.js';
 import {verifyShoppingReport} from './shopping-verification.js';
 import {updateShoppingRequest,restoreShoppingRequest,type ShoppingRequest} from './shopping-request.js';
+import {OfferEvidenceLedger} from './offer-evidence.js';
 import { nativeTools,subagentTool,sendMessageTool,requestVoiceConversationTool,clearNativeToolUiState } from './tools.js';
 import {memoryTools,recallBlock,MEMORY_GUIDANCE,MEMORY_TOOL_NAMES} from './memory.js';
 import { messageText } from './scripted.js';
@@ -80,6 +81,7 @@ export class PocketRuntime {
   private readonly workerMainThreads=new Map<string,string>();
   private readonly focusedResearchOwners=new Set<string>();
   private readonly shoppingRequests=new Map<string,ShoppingRequest>();
+  private readonly offerEvidence=new Map<string,OfferEvidenceLedger>();
   private personalInstructions='';
   private titleRequest?:AbortController;
   private readonly credentialHistory=new Set<any>();
@@ -126,6 +128,7 @@ export class PocketRuntime {
       ?'00000000-0000-4000-8000-000000000000':randomUUID();
     this.personalInstructions=migratePersonal(saved);
     for(const [key,value] of Object.entries(saved.shoppingRequests??{})){const request=restoreShoppingRequest(value);if(request&&key.length<180)this.shoppingRequests.set(key,request);}
+    for(const [key,value] of Object.entries(saved.offerEvidence??{}).slice(-8))if(key.length<180)this.offerEvidence.set(key,new OfferEvidenceLedger(value));
     if(!this.shoppingRequests.has('thread:'+this.mainThreadId)){
       let request:ShoppingRequest|undefined;
       for(const message of saved.mainMessages??[])if(message.role==='user'&&!/^\[Worker completion\]|^\[Autonomous run/.test(messageText(message)))request=updateShoppingRequest(request,messageText(message));
@@ -581,6 +584,12 @@ export class PocketRuntime {
     if(owner==='main'&&!this.shoppingRequests.has(key)&&this.main){let request:ShoppingRequest|undefined;for(const message of this.main.messages)if(message.role==='user'&&!/^\[Worker completion\]|^\[Autonomous run/.test(messageText(message)))request=updateShoppingRequest(request,messageText(message));if(request)this.shoppingRequests.set(key,request);}
     const value=this.shoppingRequests.get(key);return value?structuredClone(value):undefined;
   }
+  recordShoppingEvidence(owner:string,report:any):any {
+    const key=owner==='main'?'thread:'+this.mainThreadId:'worker:'+owner;
+    let ledger=this.offerEvidence.get(key);if(!ledger){ledger=new OfferEvidenceLedger();this.offerEvidence.set(key,ledger);}
+    const result=ledger.record(report);while(this.offerEvidence.size>8)this.offerEvidence.delete(this.offerEvidence.keys().next().value!);
+    if(!this.save())throw Error('Could not durably retain source evidence; no comparison approval was issued');return result;
+  }
   authorizeAutonomy(owner:string,name:string,args:any):void {
     if(name==='request_decision'&&args.tools?.some((name:string)=>!phoneSchemas.some(s=>s.name===name)||name==='phone_batch'))throw Error('Request exact known phone tools, not batch access');
     if(!this.autonomyOwner(owner).startsWith('auto:'))return;
@@ -914,6 +923,7 @@ export class PocketRuntime {
       for(const worker of workers)if(!this.workerHistoryOwners.has(worker.conversationId))
         this.workerHistoryOwners.set(worker.conversationId,worker.conversationId+'@'+randomUUID());
       let state:any={version:1,mainThreadId:this.mainThreadId,workerHistoryOwners:Object.fromEntries(this.workerHistoryOwners),workerMainThreads:Object.fromEntries(this.workerMainThreads),config:this.config,providerRevision:this.credentials.providerRevision,busy:this.busy,lastError:this.lastError,mainPaused:this.mainPaused,totalStarts:this.totalStarts,personalInstructions:this.personalInstructions,mainMessages:stripImages(this.main.messages),workers,workerMessages,workerReasoningProofs:Object.fromEntries(this.workerReasoningProofs),shoppingRequests:Object.fromEntries(this.shoppingRequests),inbox:this.inbox,delivered:[...this.delivered],mainTurns:this.mainTurns,observationPending:this.observationPending};
+      state.offerEvidence=Object.fromEntries([...this.offerEvidence].map(([key,ledger])=>[key,ledger.snapshot()]));
       let serialized=this.redactCheckpoint(state);
       if(utf8Bytes(serialized)>MAX_DURABLE_CHECKPOINT_BYTES) {
         const compactWorkers:any={};
