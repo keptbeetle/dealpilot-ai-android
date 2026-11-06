@@ -1,7 +1,8 @@
 import type {inspectBrowserObservation} from './browser.js';
 import {STORE_APPS,nativeStoreForPackage,nativeStoreForUrl,type StoreName} from './store-policy.js';
-import {verifyShoppingReport,compareVerifiedListings} from './shopping-verification.js';
+import {verifyShoppingReport} from './shopping-verification.js';
 import type {ShoppingRequest} from './shopping-request.js';
+import {comparisonMarkdown} from './shopping-comparison.js';
 
 type Report=ReturnType<typeof inspectBrowserObservation>&{store?:string;listingTitle?:string;query?:string;identityObservation?:{snapshot_id:string;observedAt:number};accessHold?:boolean};
 function native(report:Report){return report.sourceKind==='android-app'&&Boolean(report.sourcePackage&&nativeStoreForPackage(report.sourcePackage))&&report.sourceRef?.startsWith('android-app://'+report.sourcePackage+'/observations/');}
@@ -78,6 +79,6 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now(),request
   for(const reason of verification.reasons.slice(0,8))lines.push('- Verification hold: '+reason);
   return lines.join('\n');
  });
- const equivalence=products.length>1?'\n\nCross-listing identity: '+compareVerifiedListings(products[0],products[1]).reason:'';
- return 'Source-observed listing evidence follows. This is not a verified purchase recommendation.\n\n'+sections.join('\n\n')+equivalence+accessText+'\n\nConditional offers require eligibility checks. Exact variant, seller, shipping, taxes and delivered total still require review. This evidence does not establish a cart, payment or merchant order.';
+ const comparison=comparisonMarkdown(products,request,now);
+ return 'Source-observed listing evidence follows. This is not a verified purchase recommendation.\n\n'+(comparison?comparison+'\n\n':'')+sections.join('\n\n')+accessText+'\n\nConditional offers require eligibility checks. Exact variant, seller, shipping, taxes and delivered total still require review. This evidence does not establish a cart, payment or merchant order.';
 }

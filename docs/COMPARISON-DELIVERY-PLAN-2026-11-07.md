@@ -1,0 +1,25 @@
+# Sequential comparison and review implementation
+
+Owner instruction,7November2026: implement the proposed navigation/evidence/comparison/review improvements sequentially, testing each completed stage before proceeding. Baseline Pocket9e6938a;296runtime/50UI(+1skip)/28Python tests,10native checks,3ABI APK/lint0errors128warnings;16existing general typing diagnostics. Historical phase scores remain50/50+40/40+3/10=93/100 (+0); Phase3/stash remain paused.
+
+Each stage must preserve its failing expectations, pass focused tests and the full runtime suite/build, and receive a local commit before the next stage. Device/OCR and full journey acceptance remain separately identified; synthetic cases never establish retailer accuracy. No remote push, automatic actual merchant cart/order, challenge bypass, silent currency conversion, paid provider fallback or new payer transaction is authorized by this plan.
+
+| Order | Deliverable | Required gate |
+| --- | --- | --- |
+|1|Separate comparison eligibility from checkout costs; attribute comparison across different models; exact-product equivalence reported separately; source-only chat comparison table.|Two distinct products with known hard requirements/prices can be compared despite unknown shipping; stale/search/contradictory/ambiguous required facts cannot be ranked as matching; no checkout/payment readiness implied.|
+|2|Persistent per-offer, per-field evidence with source snapshot/time and selected product/variant/seller/location continuity.|Same explicitly linked scroll chain can combine complementary facts; conflicting prices/specs stay ambiguous; navigation, variants/seller/location changes invalidate affected facts; checkpoint restore cannot refresh expired evidence.|
+|3|Native screen classification, host-issued target IDs, bounded state-aware search recovery and actionable source handoffs.|Malformed/invented/stale targets cannot dispatch; supported home/editor/results/detail transitions recover without exiting the selected app; unknown dispatch never retries; source/current constraints preserved.|
+|4|On-device screenshot OCR fallback for inaccessible text, with image/snapshot provenance and stable complete-price confirmation.|Official SDK/license checked, Android build/device OCR tests pass; real archived digit-wheel screenshot is read as pixel evidence without admitting partial digits or inferred totals; native tree/OCR contradictions hold.|
+|5|Read-only selected-offer review and labelled simulated cart arithmetic; dynamic completeness for seller/condition/stock/destination/costs; separate sandbox-demo eligibility.|Item-only source subtotal stays distinct from incomplete merchant total; positive complete reported review and negative missing/changed facts tested; existing explicit USD sandbox approval/idempotency/reconciliation retained; native listings without an observed compatible payment-source link hand off rather than inventing one.|
+|6|Transfer, build, installed-phone and end-to-end verification.|Headphone/phone/laptop contracts, source replay, real no-SKU request→comparison→refinement→selection/review or precise hold, restore/cancel/source handoff, injected sandbox success/unknown/restore; final APK signature/payload/installed hash, device settings cleanup and captioned report. Genuine new payer approval is separate and never fabricated.|
+
+## Progress
+
+- [x]1 Comparison readiness and attribute comparison. Five new contracts,301runtime tests and bundle pass. Unknown delivered costs do not prevent a matching listed-price comparison; checkout flags remain false. Different-model attribute table is separate from same-product identifier equivalence. Original missing-module baseline retained privately.
+- [ ]2 Offer evidence continuity and persistence.
+- [ ]3 Native state/target navigation.
+- [ ]4 Screenshot OCR extraction and stability.
+- [ ]5 Selected-offer review and simulation boundary.
+- [ ]6 Transfer/actual-device acceptance and final packaging.
+
+First implementation target: two different observed headphones, a source-attributed side-by-side comparison, unknown delivery costs disclosed and no purchase-ready claim. Hard user requirements remain mandatory for a matching recommendation. The final acceptance test may still report a hold when a retailer or device does not expose the required evidence; that does not count as a successful comparison.
