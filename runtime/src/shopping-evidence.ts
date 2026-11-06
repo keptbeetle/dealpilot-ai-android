@@ -37,9 +37,15 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now(),request
  const accessHolds=reports.filter(report=>report.accessHold&&report.store&&Object.hasOwn(STORE_APPS,report.store)&&report.observedAt&&now-report.observedAt<=15*60000&&report.observedAt<=now+5000);
  const accessText=accessHolds.length?'\n\nNative app session holds:\n'+[...new Map(accessHolds.map(report=>[report.store,report])).values()].map(report=>'- ['+report.sourceLabel+' — manual app handoff](pocket-store://'+report.store+')\n  '+report.holds.join(' ')).join('\n'):'';
  const unique=new Map<string,Report>();
+ const earlierNative=new Map<string,Report[]>();
  for(const report of reports){
   if((!report.sourceBound&&!(report.blocked&&(report.browser==='com.android.chrome'||native(report))))||!report.observedAt||now-report.observedAt>15*60000||report.observedAt>now+5000)continue;
-  if(native(report)){unique.set(report.pageKind==='product-page'&&report.listingTitle?report.sourcePackage+'|'+report.listingTitle:report.sourceRef!,report);continue;}
+  if(native(report)){
+   const key=report.pageKind==='product-page'&&report.listingTitle?report.sourcePackage+'|'+report.listingTitle:report.sourceRef!;
+   const prior=unique.get(key);
+   if(prior&&prior.snapshot_id!==report.snapshot_id){const frames=earlierNative.get(key)||[];frames.push(prior);earlierNative.set(key,frames.slice(-4));}
+   unique.set(key,report);continue;
+  }
   if(!report.sourceUrl||nativeStoreForUrl(report.sourceUrl))continue;
   try{const url=new URL(report.sourceUrl);if(url.protocol!=='https:'||url.username||url.password)continue;unique.set(url.href,report);}catch{}
  }
@@ -56,6 +62,13 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now(),request
   if(native(report)&&report.identityObservation)lines.push('Product identity retained from native observation '+report.identityObservation.snapshot_id+' at '+new Date(report.identityObservation.observedAt).toISOString()+'.');
   if(report.prices.length)for(const price of report.prices.slice(0,8))lines.push('- '+priceLabel(price)+': '+amount(price));
   else lines.push('- Price was not established.');
+  if(native(report)&&!report.regularPrice){
+   const earlier=earlierNative.get(report.sourcePackage+'|'+report.listingTitle)?.filter(frame=>frame.prices.length).at(-1);
+   if(earlier){
+    lines.push('Earlier source frame '+earlier.snapshot_id+' at '+new Date(earlier.observedAt!).toISOString()+' (not merged with current eligibility checks):');
+    for(const price of earlier.prices.slice(0,4))lines.push('- '+priceLabel(price)+': '+amount(price));
+   }
+  }
   lines.push('- Availability reported by page: '+report.stock+'.');
   if(report.holds.length)lines.push('- Hold: '+report.holds.slice(0,4).join(' '));
   const verification=verifyShoppingReport(report,request,now);

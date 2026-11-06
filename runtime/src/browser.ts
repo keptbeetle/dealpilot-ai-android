@@ -39,10 +39,11 @@ export function inspectShoppingObservation(observation:BrowserObservation,checks
  const nodes=observation.nodes||[],seen=new Set<string>();
  const lines=nodes.map(n=>(n.text||n.description||'').trim()).filter(text=>text&&!seen.has(text)&&Boolean(seen.add(text)));
  const text=lines.join('\n').slice(0,10000),url=source.url;
+ const animatedDigits=lines.some(line=>/\b0,\s*1,\s*2,\s*3,\s*4,\s*5,\s*6,\s*7,\s*8,\s*9\b/.test(line));
  const prices:Price[]=[];
  const money=/(US\$|\bUSD\s*|\bINR\s*|\bRs\.?\s*|₹\s*|\$\s*)(\d[\d,]*(?:\.\d{1,2})?)/gi;
  const priceLines=lines.map((line,index)=>{
-  if(/^(?:₹|\$|US\$|USD|INR|Rs\.?)$/.test(line)&&/^\d[\d,]*(?:\.\d{1,2})?$/.test(lines[index+1]||'')){
+  if(!animatedDigits&&/^(?:₹|\$|US\$|USD|INR|Rs\.?)$/.test(line)&&/^\d[\d,]*(?:\.\d{1,2})?$/.test(lines[index+1]||'')){
    const suffix=conditions.test(lines[index+2]||'')?' '+lines[index+2]:'';
    const prefix=references.test(lines[index-1]||'')||conditions.test(lines[index-1]||'')?lines[index-1]+' ':'';
    return prefix+line+' '+lines[index+1]+suffix;
@@ -94,6 +95,7 @@ export function inspectShoppingObservation(observation:BrowserObservation,checks
   ...(stock==='unknown'?['Availability was not established by the visible page.']:[]),
   ...(observation.nodes_truncated?['The page observation was truncated. Inspect the selected product details before a purchase recommendation.']:[]),
   ...(listed.length>1?['Several unconditional amounts are visible. Confirm the selected product and variant.']:[]),
+  ...(animatedDigits?['Animated digit-wheel fragments were excluded; inspect a stable complete price.']:[]),
   ...results.filter(r=>r.outcome!=='supported').map(r=>r.attribute+' is '+r.outcome+'.'),
  ];
  const navigationTargets=nodes.filter(n=>n.clickable&&n.enabled!==false&&(n.text||n.description)).slice(0,20).map(n=>({selector:n.text?{text:n.text.slice(0,300)}:{description:n.description!.slice(0,300)}}));

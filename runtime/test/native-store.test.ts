@@ -25,6 +25,16 @@ test('retailer hosts are exact and both regional Amazon packages are supported',
  assert.equal(inspectStoreObservation(product(),'amazon').sourceBound,true);
  assert.equal(inspectStoreObservation({...product(),package_name:STORE_APPS.amazon.packages[1]},'amazon').sourceBound,true);
 });
+
+test('selected native detail title establishes a product while purchase controls are offscreen',()=>{
+ const title='JBL Tune 510BT wireless headphones';
+ const r=inspectStoreObservation(screen([{resource_id:'productTitle',text:title},{text:'4.1 stars'},{text:'Customer reviews'}]),'amazon',{selectedLabel:title,selectedFromSnapshot:'search'});
+ assert.equal(r.pageKind,'product-page');assert.equal(r.regularPrice,null);
+});
+test('escaped ampersand does not break an otherwise identical native scroll identity',()=>{
+ const r=inspectStoreObservation(screen([{resource_id:'productTitle',text:'JBL X100 &amp; Voice Assistant'},{text:'INR 2999'}]),'amazon',{productPage:{label:'JBL X100 & Voice Assistant',at:now-1000,snapshot:'identity'}});
+ assert.equal(r.listingTitle,'JBL X100 & Voice Assistant');assert.equal(r.identityObservation?.snapshot_id,'identity');
+});
 test('browser calls cannot navigate to Amazon or Flipkart or bind their website prices',async()=>{
  for(const url of ['https://www.amazon.in/dp/example','https://www.flipkart.com/example/p/id']){
   const result=await browsePage(async()=>{throw Error('No browser primitive permitted');},{url},'blocked');
@@ -50,6 +60,58 @@ test('native product links use the installed package on a private display and re
  const launch=host.calls.find(c=>c.name==='phone_open_url');assert.equal(launch.args.app_package,pkg);assert.equal(launch.args.browser,undefined);
  assert.ok(host.calls.filter(c=>!['phone_apps','phone_capabilities'].includes(c.name)).every(c=>c.args.display_target==='virtual'));
  assert.equal(report.sourceKind,'android-app');assert.equal(report.sourceUrl,null);assert.match(report.sourceRef,/^android-app:\/\//);
+});
+
+test('read-only stale observations are reobserved before a native listing is discarded',async()=>{
+ const host=bridge([{isError:true,code:'STALE_OBSERVATION',message:'Screen changed during observation'} as any,product()]);
+ const result=await navigateStoreApp(host.execute,{store:'amazon',url:'https://www.amazon.in/dp/example'},'stale-read');
+ assert.equal(result.pageKind,'product-page');assert.equal(result.sourceBound,true);assert.equal(host.calls.filter(c=>c.name==='phone_observe').length,2);
+});
+
+test('Flipkart rotating search placeholder and single unlabelled editor can complete a native search',async()=>{
+ const fp=STORE_APPS.flipkart.packages[0],query='wireless headphones';
+ const frames=[
+  screen([{text:'For You'},{text:'Fashion'},{text:'Mobiles'},{text:'Electronics'},{description:'watches',role:'android.view.ViewGroup',clickable:true,bounds:{left:108,top:220,right:540,bottom:262}},{text:'watches',bounds:{left:108,top:220,right:540,bottom:262}}],{package_name:fp}),
+  screen([{text:'For You'},{text:'Fashion'},{text:'Mobiles'},{text:'Electronics'}],{package_name:fp}),
+  screen([{role:'android.widget.EditText',editable:true,focused:true,text:''},{text:'Recent searches'},{text:'Clear history'},{text:'Back'},{text:'Popular searches'}],{package_name:fp}),
+  screen([{role:'android.widget.EditText',editable:true,text:query}],{package_name:fp}),
+  screen([{text:'Filters'},{text:'Headphone results'},{text:'JBL'},{text:'Sony'}],{package_name:fp})
+ ];let index=0;const actions:any[]=[];
+ const result=await navigateStoreApp(async(name,args)=>wrap(name==='phone_capabilities'?{operation_prefix:'own'}:name==='phone_apps'?{apps:[{package_name:fp}]}:name==='phone_observe'?frames[Math.min(index++,frames.length-1)]:(actions.push(args),{})),{store:'flipkart',query},'flipkart-dynamic');
+ assert.equal(result.pageKind,'search-results');assert.ok(actions.some(a=>a.kind==='type'&&a.text===query));
+});
+
+test('not-dispatched rotating search can rebind only the same freshly observed search rectangle',async()=>{
+ const fp=STORE_APPS.flipkart.packages[0],query='headphones',b={left:108,top:220,right:540,bottom:262};
+ const home=(word:string)=>screen([{text:'For You'},{text:'Fashion'},{text:'Mobiles'},{text:'Electronics'},{description:word,clickable:true,bounds:b}],{package_name:fp});
+ const frames=[home('watches'),{isError:true,code:'STALE_OBSERVATION'},home('mobiles'),screen([{text:'Search products',resource_id:'search_edit',editable:true},{text:'Recent'},{text:'Popular'},{text:'Cancel'}],{package_name:fp}),screen([{text:query,resource_id:'search_edit',editable:true}],{package_name:fp}),screen([{text:'Filters'},{text:'Results'},{text:'Sony'},{text:'JBL'}],{package_name:fp})];
+ let frame=0,clicks=0;const actions:any[]=[];
+ const r=await navigateStoreApp(async(name,args)=>{
+  if(name==='phone_capabilities')return wrap({operation_prefix:'own'});if(name==='phone_apps')return wrap({apps:[{package_name:fp}]});if(name==='phone_observe')return wrap(frames[Math.min(frame++,frames.length-1)]);
+  if(name==='phone_act'){actions.push(args);if(args.kind==='click'&&++clicks===1)return wrap({isError:true,code:'STALE_OBSERVATION',dispatch_status:'not_dispatched'});}return wrap({});
+ },{store:'flipkart',query},'rotating-safe-retry');
+ assert.equal(r.pageKind,'search-results');assert.equal(r.preDispatchRecoveries.length,1);assert.deepEqual(actions.slice(0,2).map(a=>a.selector.description),['watches','mobiles']);assert.notEqual(actions[0].operation_id,actions[1].operation_id);
+});
+
+test('resuming Flipkart with an already focused unlabelled editor replaces the old query directly',async()=>{
+ const fp=STORE_APPS.flipkart.packages[0],query='wireless headphones',frames=[
+  screen([{text:'tv',editable:true,focused:true},{text:'Recent Searches'},{text:'Edit'},{text:'Recommended Stores'}],{package_name:fp}),
+  screen([{text:query,editable:true,focused:true},{text:query}],{package_name:fp}),
+  screen([{text:'Filters'},{text:'Results'},{text:'Sony'},{text:'JBL'}],{package_name:fp})
+ ];let i=0;const acts:any[]=[];
+ const r=await navigateStoreApp(async(name,args)=>wrap(name==='phone_capabilities'?{operation_prefix:'own'}:name==='phone_apps'?{apps:[{package_name:fp}]}:name==='phone_observe'?frames[Math.min(i++,frames.length-1)]:(acts.push(args),{})),{store:'flipkart',query},'warm-editor');
+ assert.equal(r.pageKind,'search-results');assert.deepEqual(acts.filter(a=>a.kind).map(a=>a.kind),['type','key']);assert.equal(acts.find(a=>a.kind==='type').text,query);assert.equal(acts.find(a=>a.kind==='key').selector,undefined);
+});
+
+test('Flipkart result-header query can be reopened without mistaking filter controls for search',async()=>{
+ const fp=STORE_APPS.flipkart.packages[0],query='wireless headphones',frames=[
+  screen([{text:'Sort & Filter'},{text:'Top Rated'},{text:'Fast Charging'},{text:'Headphones',description:'Headphones',clickable:true,bounds:{left:98,top:65,right:615,bottom:121}}],{package_name:fp}),
+  screen([{text:'Headphones',editable:true,focused:true},{text:'Recent Searches'},{text:'Edit'},{text:'Recommended Stores'}],{package_name:fp}),
+  screen([{text:query,editable:true,focused:true}],{package_name:fp}),
+  screen([{text:'Filters'},{text:'Results'},{text:'Sony'},{text:'JBL'}],{package_name:fp})
+ ];let i=0;const acts:any[]=[];
+ const r=await navigateStoreApp(async(name,args)=>wrap(name==='phone_capabilities'?{operation_prefix:'own'}:name==='phone_apps'?{apps:[{package_name:fp}]}:name==='phone_observe'?frames[Math.min(i++,frames.length-1)]:(acts.push(args),{})),{store:'flipkart',query},'result-editor');
+ assert.equal(r.pageKind,'search-results');assert.equal(acts.find(a=>a.kind==='click').selector.description,'Headphones');
 });
 test('no-SKU search plus scroll confirms native input and observes actual results before acting',async()=>{
  const query='Sony JBL wireless headphones';const host=bridge([

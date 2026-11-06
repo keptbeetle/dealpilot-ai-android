@@ -335,7 +335,7 @@ export class PocketRuntime {
     const latestUser:any=messages.findLast((message:any)=>message.role==='user');
     const sourceLabel=owner==='main'&&latestUser?.inputSource?'\nCurrent user input source: '+latestUser.inputSource+'. Voice input is transcribed speech; typed input was written by the user.':'';
     const request=this.shoppingRequest(owner);
-    const prompt=composePrompt(initial,this.personalInstructions)+'\n'+MEMORY_GUIDANCE+(owner==='main'?this.responsePreferenceGuidance():'')+sourceLabel+(request?'\nCanonical user shopping request (host-owned; always preserve these constraints): '+JSON.stringify(request):'');
+    const prompt=composePrompt(initial,this.personalInstructions)+'\n'+MEMORY_GUIDANCE+(owner==='main'?this.responsePreferenceGuidance():'')+sourceLabel+(request?'\nCanonical user shopping request (host-owned; always preserve these constraints): '+JSON.stringify(request)+'\nA new direct user request to search again, inspect a product, or check its current price requires fresh source research. A previous hold is not a reason to skip the requested lookup. Start one focused research worker or perform the short native lookup; only a current provider/session/access blocker justifies no attempt. Do not treat this guidance as permission to buy or pay. Inspect a returned product target and scroll its details when search cards do not establish the requested facts.':'');
     session.agent.state.messages=[{...messages[0],content:prompt+recallBlock(this,owner,query,session.agent.state.tools.map((tool:any)=>tool.name))},...messages.slice(1)];
   }
   private responsePreferenceGuidance():string {
@@ -647,7 +647,7 @@ export class PocketRuntime {
         try{this.call('autonomy.pause',{});this.autonomyPausePending=false;}catch(error){this.reportError(error);}
         void this.stopAll().catch(this.reportError).finally(()=>this.tickAutonomy());
       }
-      else if(cmd.action==='cancel_worker')void this.runtime.cancelSubagent(cmd.conversationId,this.hostCaller(cmd.conversationId)).catch(this.reportError);
+      else if(cmd.action==='cancel_worker')void this.cancelWorker(cmd.conversationId).catch(this.reportError);
       else if(cmd.action==='steer_worker')void this.steer(cmd.conversationId,cmd.text,this.hostCaller(cmd.conversationId),'user').catch(this.reportError);
       else if(cmd.action==='inspect_worker') {
         const snapshot=this.runtime.conversation(cmd.conversationId);
@@ -808,6 +808,19 @@ export class PocketRuntime {
   private hostCaller(id:string):any {
     const parentId=this.runtime.conversation(id).parentConversationId;
     return parentId?this.runtime.generationCaller({conversationId:parentId,generation:this.runtime.conversation(parentId).generations.at(-1)!.generation}):undefined;
+  }
+  private async cancelWorker(id:string):Promise<void> {
+    const snapshot=this.runtime.conversation(id),generation=snapshot.generations.at(-1)!;
+    const key=generationKey({conversationId:id as any,generation:generation.generation});
+    const priorDelivered=this.delivered.has(key),priorInbox=this.inbox;
+    // The user's cancellation is terminal for this generation. Suppress its
+    // completion before aborting so main cannot interpret it as a retry request.
+    this.delivered.add(key);this.inbox=this.inbox.filter(item=>item.key!==key);
+    if(!this.save()){if(!priorDelivered)this.delivered.delete(key);this.inbox=priorInbox;throw Error('Could not persist worker cancellation; retry after storage recovery');}
+    await this.runtime.cancelSubagent(id as any,this.hostCaller(id));
+    const current=this.runtime.generationCaller({conversationId:id as any,generation:generation.generation});
+    if(current.generation.state.kind==='done'&&generation.modelSubscribed)current.conversation.markCollected(current.generation,'model');
+    this.save();this.publish();
   }
   cleanupRemoved():void {
     const retained=new Set(this.runtime.listConversations().map(c=>c.conversationId));

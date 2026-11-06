@@ -28,8 +28,29 @@ function selectorFor(node:ObservationNode,nodes:ObservationNode[]):Selector{
  return {};
 }
 function matches(node:ObservationNode,selector:Selector){return Object.entries(selector).length>0&&Object.entries(selector).every(([key,value])=>value&&(key==='bounds'?sameBounds(node.bounds,value as Selector['bounds']):node[key as keyof Selector]===value));}
+function searchControl(observation:BrowserObservation,store:StoreName,editorOnly=false){
+ const nodes=observation.nodes||[];
+ const named=nodes.find(n=>n.enabled!==false&&(!editorOnly||n.editable)&&searchLabel.test([n.resource_id,n.text,n.description].join(' '))&&!/voice|camera|barcode|image/i.test([n.text,n.description].join(' '))&&(n.clickable||n.editable));
+ if(named)return named;
+ if(store!=='flipkart')return;
+ const editors=nodes.filter(n=>n.editable&&n.enabled!==false);
+ const focused=editors.length===1&&editors[0].focused?editors[0]:undefined;
+ if(editorOnly||focused)return focused;
+ // Observed Flipkart home exposes its rotating placeholder, not "Search".
+ // Require the native home landmarks and one bounded, wide labelled control;
+ // never invent a label or tap a fixed coordinate from an earlier screenshot.
+ const labels=nodes.map(nodeLabel),w=observation.coordinate_width,h=observation.coordinate_height;
+ const home=['For You','Fashion','Mobiles','Electronics'].every(label=>labels.includes(label));
+ const results=labels.some(label=>/^(?:Sort & Filter|Filter & Sort)$/i.test(label));
+ if(!w||!h||!home&&!results)return;
+ const targets=nodes.filter(n=>{
+  const b=n.bounds,label=nodeLabel(n);
+  return n.clickable&&n.enabled!==false&&label.length>1&&label.length<80&&!forbidden.test(label)&&b&&b.left>=0&&b.right<=w&&b.top>h*(home ? .15 : .04)&&b.bottom<h*(home ? .27 : .15)&&b.right-b.left>w*.45&&b.bottom-b.top<h*.07;
+ });
+ return targets.length===1?targets[0]:undefined;
+}
 function explicitProductTitle(nodes:ObservationNode[],selected?:string){
- const titleLabel=(text:string)=>text.replace(/\.?\s*View media content in full screen\.?$/i,'').trim();
+ const titleLabel=(text:string)=>text.replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/\.?\s*View media content in full screen\.?$/i,'').trim();
  const candidates=nodes.filter(n=>/product.?title|product.?name|pdp.?title/i.test(n.resource_id||'')).map(nodeLabel).map(titleLabel).filter(t=>t.length>8);
  if(candidates.length)return candidates[0].slice(0,400);
  if(!selected)return undefined;
@@ -51,7 +72,8 @@ export function inspectStoreObservation(observation:BrowserObservation,store:Sto
  const continued=Boolean(prior&&observation.captured_at_ms&&observation.captured_at_ms>=prior.at&&observation.captured_at_ms-prior.at<=15*60000&&(!freshTitle||freshTitle===prior.label));
  const title=freshTitle||(continued?prior?.label:undefined);
  const productDetails=texts.some(t=>/^(?:visit the .+ store|about this item|product details|buy new)$/i.test(t));
- const product=Boolean(title&&(productControls||productDetails||continued)&&!searchResults);
+ const selectedDetailTitle=Boolean(context.selectedLabel&&freshTitle&&nodes.some(n=>/product.?title|product.?name|pdp.?title/i.test(n.resource_id||'')));
+ const product=Boolean(title&&(productControls||productDetails||continued||selectedDetailTitle)&&!searchResults);
  const pageKind=product?'product-page':searchResults?'search-results':context.selectedLabel?'unknown':context.query?'search-results':'unknown';
  const proof=Boolean(packageAccepted&&observation.snapshot_id&&observation.captured_at_ms);
  const ref=proof?'android-app://'+observation.package_name+'/observations/'+encodeURIComponent(observation.snapshot_id!):null;
@@ -85,33 +107,41 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  const base=createHash('sha256').update(callId).digest('hex').slice(0,16);let step=0;
  const operation=()=>caps.operation_prefix+'_store_'+base+'_'+(++step);
  const observe=async()=>unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false}));
- const read=async(requirePageContent=false,requireSearch=false)=>{
+ const read=async(requirePageContent=false,requireSearch=false,requireEditor=false)=>{
   let current:any;
   const attempts=requireSearch?32:16;
   for(let attempt=0;attempt<attempts;attempt++){
-   current=await observe();if(current.isError){if(current.code==='NOT_READY'&&attempt<attempts-1){await wait(500,signal);continue;}return current;}
+   current=await observe();if(current.isError){if(['NOT_READY','STALE_OBSERVATION'].includes(current.code)&&attempt<attempts-1){await wait(500,signal);continue;}return current;}
    const report=inspectStoreObservation(current,args.store,context,args.checks);
    if(report.blocked)return current;
    const meaningful=(current.nodes||[]).filter((n:ObservationNode)=>nodeLabel(n).length>2&&!/placeholder/i.test(nodeLabel(n))).length;
    const body=report.visibleText.split('\n').filter(t=>t.length>2&&!/^(?:back|search(?: amazon\.in)?|scan it|home(?: tab.*)?|your amazon\.com tab.*|you|wallet(?: tab.*)?|cart(?: \d.*)?|browse menu tab.*|menu)$/i.test(t));
-   const searchReady=!requireSearch||(current.nodes||[]).some((n:ObservationNode)=>n.enabled!==false&&(n.clickable||n.editable)&&searchLabel.test([n.resource_id,n.text,n.description].join(' ')))||(current.nodes||[]).some((n:ObservationNode)=>/^skip sign in$|^skip for now$/i.test(nodeLabel(n)));
-   if(current.package_name===pkg&&meaningful>=4&&searchReady&&(!requirePageContent||body.length>=3))return current;
+   const searchReady=requireEditor?Boolean(searchControl(current,args.store,true)):!requireSearch||Boolean(searchControl(current,args.store))||(current.nodes||[]).some((n:ObservationNode)=>/^skip sign in$|^skip for now$/i.test(nodeLabel(n)));
+   if(current.package_name===pkg&&(requireEditor||requireSearch&&searchControl(current,args.store,true)||meaningful>=4)&&searchReady&&(!requirePageContent||body.length>=3))return current;
    await wait(500,signal);
   }
   return current;
  };
  const recoveries:Array<{failedOperation:string;recoveryOperation:string}>=[];
- const act=async(observation:BrowserObservation,action:Record<string,unknown>)=>{
+ const act=async(observation:BrowserObservation,action:Record<string,unknown>,searchRetry=false)=>{
   if(signal?.aborted)throw Error('Store navigation cancelled.');
   if(action.selector&&Object.keys(action.selector).length===0)return {isError:true,code:'APP_TARGET_AMBIGUOUS',message:'No unique complete native selector was observed. Truncated or duplicate labels cannot be clicked.'};
   const op=operation();let result=unwrap(await execute('phone_act',{...target,...action,snapshot_id:observation.snapshot_id,operation_id:op}));
   if(result.isError&&result.code==='STALE_OBSERVATION'&&result.dispatch_status==='not_dispatched'){
-   const fresh=await observe();
-   const uniqueSelector=action.selector&&(fresh.nodes||[]).filter((n:ObservationNode)=>matches(n,action.selector as Selector)).length===1;
+   const fresh=await read();
+   let recoveryAction=action;
+   let uniqueSelector=Boolean(action.selector&&(fresh.nodes||[]).filter((n:ObservationNode)=>matches(n,action.selector as Selector)).length===1);
+   if(searchRetry&&!uniqueSelector){
+    const before=searchControl(observation,args.store),after=searchControl(fresh,args.store);
+    if(before&&after&&sameBounds(before.bounds,after.bounds)){
+     const selector=selectorFor(after,fresh.nodes||[]);
+     if(Object.keys(selector).length&&(fresh.nodes||[]).filter((n:ObservationNode)=>matches(n,selector)).length===1){recoveryAction={...action,selector};uniqueSelector=true;}
+    }
+   }
    const sameViewport=action.kind==='swipe'&&fresh.coordinate_width===observation.coordinate_width&&fresh.coordinate_height===observation.coordinate_height;
    if(!fresh.isError&&fresh.package_name===pkg&&!inspectStoreObservation(fresh,args.store,context,args.checks).blocked&&(uniqueSelector||sameViewport)){
     const recovery=operation();recoveries.push({failedOperation:op,recoveryOperation:recovery});
-    result=unwrap(await execute('phone_act',{...target,...action,snapshot_id:fresh.snapshot_id,operation_id:recovery}));
+    result=unwrap(await execute('phone_act',{...target,...recoveryAction,snapshot_id:fresh.snapshot_id,operation_id:recovery}));
     return result.isError?{...result,operation_id:recovery}:result;
    }
   }
@@ -139,21 +169,24 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   if(current.isError)return current;
   if(current.package_name!==pkg)return reportError('Optional guest navigation left the selected app.');
   let nodes:ObservationNode[]=current.nodes||[];
-  const search=nodes.find(n=>n.enabled!==false&&searchLabel.test([n.resource_id,n.text,n.description].join(' '))&&!/voice|camera|barcode|image/i.test([n.text,n.description].join(' '))&&(n.clickable||n.editable));
+  const search=searchControl(current,args.store);
   if(!search)return reportError('The app search control is not exposed. Sign-in, onboarding or an app-layout change may require user attention.','APP_SEARCH_UNAVAILABLE');
-  const clicked=await act(current,{kind:'click',selector:selectorFor(search,nodes)});if(clicked.isError)return clicked;
-  await wait(350,signal);current=await read();if(current.isError)return current;
+  if(!search.editable||!search.focused){
+   const clicked=await act(current,{kind:'click',selector:selectorFor(search,nodes)},true);if(clicked.isError)return clicked;
+   await wait(350,signal);current=await read(false,false,true);if(current.isError)return current;
+  }
   if(current.package_name!==pkg)return reportError('Search opened outside the selected app.');
   nodes=current.nodes||[];
-  const field=nodes.find(n=>n.editable&&n.enabled!==false&&searchLabel.test([n.resource_id,n.text,n.description].join(' ')));
+  const field=searchControl(current,args.store,true);
   if(!field)return reportError('An editable store search field was not observed.','APP_SEARCH_UNAVAILABLE');
   const fieldSelector=selectorFor(field,nodes);
-  const typed=await act(current,{kind:'type',selector:fieldSelector,text:context.query,replace:true});if(typed.isError)return typed;
+  const typed=await act(current,{kind:'type',...(Object.keys(fieldSelector).length?{selector:fieldSelector}:field.focused?{}:{selector:{}}),text:context.query,replace:true});if(typed.isError)return typed;
   current=await observe();if(current.isError)return current;
   if(current.package_name!==pkg)return reportError('The app changed while typing the search.');
   const input=(current.nodes||[]).find((n:ObservationNode)=>n.editable&&n.text===context.query);
   if(!input)return reportError('The search text was not confirmed in the app. No submission was attempted.');
-  const submitted=await act(current,{kind:'key',key:'enter',selector:selectorFor(input,current.nodes)});if(submitted.isError)return submitted;
+  const inputSelector=selectorFor(input,current.nodes);
+  const submitted=await act(current,{kind:'key',key:'enter',...(Object.keys(inputSelector).length?{selector:inputSelector}:input.focused?{}:{selector:{}})});if(submitted.isError)return submitted;
   await wait(750,signal);current=await read(true);
  }
  if(args.action){

@@ -2,8 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {inspectBrowserObservation} from '../src/browser.js';
 import {browserReports,groundedShoppingResearch} from '../src/shopping-evidence.js';
+import {inspectStoreObservation} from '../src/native-store.js';
 const now=1793948000000;
 const observation=(url:string,text:string[])=>inspectBrowserObservation({package_name:'com.android.chrome',snapshot_id:'fixture',captured_at_ms:now,nodes:[{resource_id:'com.android.chrome:id/url_bar',text:url},...text.map(text=>({text}))]});
+
+test('scrolling to specifications does not erase earlier price evidence or silently merge eligibility',()=>{
+ const frame=(id:string,lines:string[])=>inspectStoreObservation({package_name:'in.amazon.mShop.android.shopping',snapshot_id:id,captured_at_ms:now,nodes:[{resource_id:'product_title',text:'Sony wireless headphones X100'},{text:'About this item'},...lines.map(text=>({text}))]},'amazon');
+ const answer=groundedShoppingResearch([frame('price',['INR 2999','INR 3999 MRP']),frame('details',['Condition: New','Bluetooth'])],now);
+ assert.match(answer,/₹2999.00/);assert.match(answer,/Earlier source frame/);assert.match(answer,/not merged.*eligibility/);assert.match(answer,/Price was not established/);
+});
 test('search results cannot become verified products or invented typical prices',()=>{
  const report=observation('www.google.com/search?q=Sony+JBL',['Sony headphones','₹3490','In stock']);
  const answer=groundedShoppingResearch([report],now);

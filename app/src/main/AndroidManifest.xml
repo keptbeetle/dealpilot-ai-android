@@ -71,7 +71,7 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started conversational agent completing explicitly requested background phone tasks, with ongoing notification and Stop all control" />
         </service>
         <service android:name=".AgentAccessibility" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true"
-            android:process=":accessibility" android:label="Pocket Agent phone tools">
+            android:process=":accessibility" android:label="@string/pocket_tools_service_label">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service" />
         </service>

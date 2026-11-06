@@ -335,6 +335,18 @@ test('stop current main leaves worker running; cancel worker and stop all are di
  command(r,{action:'stop_all'});await until(()=>!r.state().active);
  assert.equal(r.state().tasks[1].status,'cancelled');
 });
+
+test('explicit worker cancellation cannot deliver an automatic retry request to main or after restore',async()=>{
+ const bridge=new Bridge(),r=new PocketRuntime(bridge);
+ command(r,{action:'send',text:'delegate fixture delay=30000'});
+ await until(()=>r.state().tasks[0]?.status==='running'&&!r.state().busy);
+ const turns=r.state().mainTurns;
+ command(r,{action:'cancel_worker',conversationId:r.state().tasks[0].conversationId});
+ await until(()=>!r.state().active);await delay(40);
+ assert.equal(r.state().mainTurns,turns,'user-cancelled completion must not trigger another main inference');
+ const restored=new PocketRuntime(bridge);await delay(40);
+ assert.equal(restored.state().mainTurns,turns);assert.equal(restored.state().busy,false);assert.equal(restored.state().tasks[0].status,'cancelled');
+});
 test('recursive tool grants intersect with the parent and survive durable restore',async()=>{
  const bridge=new Bridge(),r=new PocketRuntime(bridge,{maxExecuting:1,maxConversations:12});
  const handle=r.startTasks([{kind:'spawn',agent:'researcher',label:'Read only parent',prompt:'nested task'}],{initiatedBy:'model'});

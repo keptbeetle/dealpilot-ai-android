@@ -33,6 +33,7 @@ export function verifyShoppingReport(report:any,request?:ShoppingRequest,now=Dat
   const minimum=request?.checks[field];if(minimum!==undefined)add(attribute,values?.length===1?values[0]>=minimum:undefined,values?.length?values.join(', ')+' GB source claims':'No unique capacity claim.');
  }
  if(request?.checks.brand)add('required brand',brand?brand.toLowerCase()===request.checks.brand.toLowerCase():undefined,brand||'Manufacturer unknown.');
+ if(request?.requiredBrands?.length)add('allowed brands',brand?request.requiredBrands.some(value=>value.toLowerCase()===brand.toLowerCase()):undefined,brand||'Manufacturer unknown.');
  if(request?.newOnly)add('new condition',condition==='unknown'?undefined:condition==='new',condition==='unknown'?'No explicit selected-item condition.':condition);
  const currency=price?.currency==='INR'||price?.currency==='USD'?price.currency:null;
  const cost=currency?evaluateReportedCost({priceCents:price.amountCents,currency,costClaims:{shippingCents:/\bfree delivery\b|\bfree shipping\b/i.test(text)?0:null,taxCents:/inclusive of all taxes|all taxes included/i.test(text)?0:null,mandatoryFeeCents:null,membershipRequired:'unknown',shipsToUS:'unknown',shipsToIN:'unknown'}}):null;
