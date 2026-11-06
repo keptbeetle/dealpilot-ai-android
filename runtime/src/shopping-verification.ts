@@ -3,6 +3,7 @@ import {evaluateReportedCost} from '../vendor/dealpilot/purchase-cost.js';
 import {assessObservationFreshness} from '../vendor/dealpilot/source-freshness.js';
 import {canonicalGtin,normalizePartNumber} from '../vendor/dealpilot/product-identifiers.js';
 import type {ShoppingRequest} from './shopping-request.js';
+import {reportedCostClaims} from './reported-costs.js';
 
 type Result={attribute:string;outcome:'supported'|'contradicted'|'unknown';evidence:string};
 /** Native observations are an adapter input, never manufactured HTML/catalogue evidence. */
@@ -37,15 +38,18 @@ export function verifyShoppingReport(report:any,request?:ShoppingRequest,now=Dat
  if(request?.requiredBrands?.length)add('allowed brands',brand?request.requiredBrands.some(value=>value.toLowerCase()===brand.toLowerCase()):undefined,brand||'Manufacturer unknown.');
  if(request?.newOnly)add('new condition',condition==='unknown'?undefined:condition==='new',condition==='unknown'?'No explicit selected-item condition.':condition);
  const currency=price?.currency==='INR'||price?.currency==='USD'?price.currency:null;
- const cost=currency?evaluateReportedCost({priceCents:price.amountCents,currency,costClaims:{shippingCents:/\bfree delivery\b|\bfree shipping\b/i.test(text)?0:null,taxCents:/inclusive of all taxes|all taxes included/i.test(text)?0:null,mandatoryFeeCents:null,membershipRequired:'unknown',shipsToUS:'unknown',shipsToIN:'unknown'}}):null;
+ const reported=currency?reportedCostClaims(text,currency):null;
+ const cost=currency&&reported?evaluateReportedCost({priceCents:price.amountCents,currency,costClaims:reported.claims}):null;
  const reasons=[...(request?.issues||[]),...(!product?['Individual product-page provenance is not established.']:[]),...(freshness.status!=='recent'?[freshness.explanation]:[]),...(!price?['No unique unconditional product price.']:[]),...(report.stock!=='available'?['Stock is '+(report.stock||'unknown')+'.']:[]),...(!seller?['Seller identity is not reported in this observation.']:[]),...checks.filter(c=>c.outcome!=='supported').map(c=>c.attribute+' is '+c.outcome+'.'),...(identity.status!=='model-compatible'||identity.variantUnresolved?identity.reasons:[]),...(!selected?['Search selection and product identity have not been independently linked.']:[]),...(gtinText&&!gtin?['Reported GTIN has an invalid checksum.']:[]),...(cost?cost.status==='reported-estimate'?[]:cost.reasons:['Delivered cost cannot be evaluated without an explicit currency and price.']),...(report.truncated?['Observation is truncated.']:[])];
- const contradicted=checks.some(c=>c.outcome==='contradicted')||['conflict','unavailable'].includes(report.stock)||identity.status==='conflict'||Boolean(request?.issues.length)||Boolean(gtinText&&!gtin)||Boolean(report.conditionConflict)||Boolean(report.ocrConflict);
+ if(reported?.conflict)reasons.push('Source-reported cost or eligibility assertions conflict.');
+ const sourceContradicted=checks.some(c=>c.outcome==='contradicted')||['conflict','unavailable'].includes(report.stock)||identity.status==='conflict'||Boolean(request?.issues.length)||Boolean(gtinText&&!gtin)||Boolean(report.conditionConflict)||Boolean(report.ocrConflict);
+ const contradicted=sourceContradicted||Boolean(reported?.conflict);
  const exactSelectedTitle=Boolean(selected&&report.selectedFrom?.snapshot_id&&title.trim().toLowerCase()===selected.trim().toLowerCase());
  const identityLinked=identity.status==='model-compatible'&&!identity.variantUnresolved||exactSelectedTitle&&identity.status!=='conflict';
- const comparisonReasons=[...(!usable?['Fresh product-page evidence is required.']:[]),...(!title||!identityLinked?['The selected product identity is unresolved.']:[]),...(!price||!['USD','INR'].includes(price.currency)||!Number.isSafeInteger(price.amountCents)||price.amountCents<1?['A complete unconditional price and currency are required.']:[]),...(report.truncated?['The observation is truncated.']:[]),...(contradicted?['Source facts contradict the request or listing identity.']:[])];
+ const comparisonReasons=[...(!usable?['Fresh product-page evidence is required.']:[]),...(!title||!identityLinked?['The selected product identity is unresolved.']:[]),...(!price||!['USD','INR'].includes(price.currency)||!Number.isSafeInteger(price.amountCents)||price.amountCents<1?['A complete unconditional price and currency are required.']:[]),...(sourceContradicted?['Source facts contradict the request or listing identity.']:[])];
  const comparable=comparisonReasons.length===0;
- const comparison={eligible:comparable,matchesRequirements:comparable&&checks.every(c=>c.outcome==='supported'),rankable:comparable&&checks.every(c=>c.outcome==='supported')&&report.stock==='available',reasons:comparisonReasons};
- return {engine:'dealpilot-pure-modules',status:contradicted?'contradicted':reasons.length?'held':'source-supported',requestRevision:request?.revision??null,appliedChecks:request?.checks??null,newOnly:request?.newOnly??false,checks,freshness,identity,cost,seller,condition,identifiers:{gtin,mpn:model?normalizePartNumber(model):null},comparison,reasons:[...new Set(reasons)],checkoutVerified:false,purchaseReady:false,independentVerification:false};
+ const comparison={eligible:comparable,matchesRequirements:comparable&&checks.every(c=>c.outcome==='supported'),rankable:comparable&&checks.every(c=>c.outcome==='supported')&&report.stock==='available',partialObservation:Boolean(report.truncated),reasons:comparisonReasons};
+ return {engine:'dealpilot-pure-modules',status:contradicted?'contradicted':reasons.length?'held':'source-supported',requestRevision:request?.revision??null,appliedChecks:request?.checks??null,newOnly:request?.newOnly??false,checks,freshness,identity,cost,costClaims:reported?.claims,costConflict:reported?.conflict??false,seller,condition,identifiers:{gtin,mpn:model?normalizePartNumber(model):null},comparison,reasons:[...new Set(reasons)],checkoutVerified:false,purchaseReady:false,independentVerification:false};
 }
 export function compareVerifiedListings(left:any,right:any){
  const a=left.verification,b=right.verification;

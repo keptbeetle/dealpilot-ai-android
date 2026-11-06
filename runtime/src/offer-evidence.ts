@@ -1,21 +1,25 @@
 import {nativeStoreForPackage} from './store-policy.js';
+import {createHash} from 'node:crypto';
 const fields=['snapshot_id','observedAt','sourceBound','sourceKind','sourcePackage','sourceRef','sourceUrl','sourceLabel','store','pageKind','listingTitle','selectedFrom','prices','regularPrice','capacitiesGB','stock','visibleText','truncated','blocked','continuity','priceEvidenceType','ocrEvidence','ocrConflict'] as const;
 const sourceTime=(r:any)=>Math.min(r.observedAt,...(Array.isArray(r.ocrEvidence?.snapshots)?r.ocrEvidence.snapshots:[]).filter((s:any)=>Number.isSafeInteger(s?.observedAt)).map((s:any)=>s.observedAt));
 function valid(r:any){return r&&r.sourceBound===true&&!r.blocked&&r.sourceKind==='android-app'&&nativeStoreForPackage(r.sourcePackage)&&r.pageKind==='product-page'&&typeof r.listingTitle==='string'&&r.listingTitle.length>3&&r.listingTitle.length<=400&&typeof r.snapshot_id==='string'&&r.snapshot_id.length<=200&&r.sourceRef==='android-app://'+r.sourcePackage+'/observations/'+encodeURIComponent(r.snapshot_id)&&Number.isSafeInteger(r.observedAt)&&typeof r.continuity?.chainId==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(r.continuity.chainId);}
 const scope=(r:any)=>r.sourcePackage+'|'+r.continuity.chainId+'|'+r.listingTitle;
+const offerId=(key:string,revision=0)=>'offer_'+createHash('sha256').update(key+'|'+revision).digest('hex').slice(0,20);
 function dimensions(r:any){const t=String(r.visibleText||'');return {colour:t.match(/Selected Colou?r\s*(?:is|:)?\s*([^\n.]{1,100})/i)?.[1]?.trim(),size:t.match(/Selected (?:Size|Capacity)\s*(?:is|:)?\s*([^\n.]{1,100})/i)?.[1]?.trim(),seller:t.match(/\bSold by\s*:?\s*([^\n]{2,100})/i)?.[1]?.trim(),location:t.match(/\bDeliver(?:ing)? to\s*:?\s*([^\n]{2,100})/i)?.[1]?.trim()};}
 function clean(r:any){const copy:any={};for(const f of fields)if(r[f]!==undefined)copy[f]=structuredClone(r[f]);if(String(copy.visibleText||'').length>4000){copy.visibleText=copy.visibleText.slice(0,4000);copy.truncated=true;}copy.prices=(Array.isArray(copy.prices)?copy.prices:[]).filter((p:any)=>p&&Number.isSafeInteger(p.amountCents)&&p.amountCents>0&&p.amountCents<=200000000&&['INR','USD','dollar-unspecified'].includes(p.currency)&&['listed','reference','conditional'].includes(p.kind)).slice(0,20).map((p:any)=>({...p,evidence:String(p.evidence||'').slice(0,240)}));return copy;}
 /** Host-owned continuity only. Names alone never join unrelated visits. */
 export class OfferEvidenceLedger {
  private entries=new Map<string,any[]>();
- constructor(saved?:any){if(saved?.version===1&&Array.isArray(saved.entries))for(const entry of saved.entries.slice(-12)){if(typeof entry?.scope==='string'&&Array.isArray(entry.frames)&&entry.frames.length&&entry.frames.every((r:any)=>valid(r)&&scope(r)===entry.scope))this.entries.set(entry.scope,entry.frames.slice(-4).map(clean));}}
- snapshot(){return {version:1,entries:[...this.entries].map(([scope,frames])=>({scope,frames:structuredClone(frames)}))};}
+ private revisions=new Map<string,number>();
+ constructor(saved?:any){if(saved?.version===1&&Array.isArray(saved.entries))for(const entry of saved.entries.slice(-12)){if(typeof entry?.scope==='string'&&Array.isArray(entry.frames)&&entry.frames.length&&(entry.revision===undefined||Number.isSafeInteger(entry.revision)&&entry.revision>=0)&&entry.frames.every((r:any)=>valid(r)&&scope(r)===entry.scope)){this.entries.set(entry.scope,entry.frames.slice(-4).map(clean));this.revisions.set(entry.scope,entry.revision??0);}}}
+ snapshot(){return {version:1,entries:[...this.entries].map(([scope,frames])=>({scope,revision:this.revisions.get(scope)??0,frames:structuredClone(frames)}))};}
+ read(id:string,now=Date.now()):any|null {for(const [key,frames] of this.entries)if(offerId(key,this.revisions.get(key)??0)===id){const last=frames.at(-1);return last&&now-sourceTime(last)<=15*60000?this.record(last,now):null;}return null;}
  record(report:any,now=Date.now()):any {
   if(!valid(report)||report.observedAt>now+5000||now-report.observedAt>15*60000)return report;
   const key=scope(report),current=clean(report);let frames=(this.entries.get(key)||[]).filter(f=>now-sourceTime(f)<=15*60000&&f.observedAt<=now+5000&&f.snapshot_id!==report.snapshot_id);
   const next=dimensions(current),previous=Object.assign({},...frames.map(dimensions));
-  if(Object.entries(next).some(([field,value])=>value&&previous[field]&&previous[field]!==value))frames=[];
-  frames=[...frames,current].slice(-4);this.entries.delete(key);this.entries.set(key,frames);while(this.entries.size>12)this.entries.delete(this.entries.keys().next().value!);
+  if(Object.entries(next).some(([field,value])=>value&&previous[field]&&previous[field]!==value)){frames=[];this.revisions.set(key,(this.revisions.get(key)??0)+1);}
+  frames=[...frames,current].slice(-4);this.entries.delete(key);this.entries.set(key,frames);while(this.entries.size>12){const oldest=this.entries.keys().next().value!;this.entries.delete(oldest);this.revisions.delete(oldest);}
   const prices=[...new Map(frames.flatMap(f=>f.prices||[]).map(p=>[p.currency+'|'+p.amountCents+'|'+p.kind,p])).values()];
   const ocrConflict=frames.some(f=>f.ocrConflict),listed=prices.filter((p:any)=>p.kind==='listed'),regularPrice=listed.length===1&&!ocrConflict?listed[0]:null;
   const priceFrame=regularPrice?frames.find(f=>f.regularPrice?.amountCents===regularPrice.amountCents&&f.regularPrice?.currency===regularPrice.currency):undefined;
@@ -24,6 +28,6 @@ export class OfferEvidenceLedger {
   const conditions=new Set(frames.map(f=>String(f.visibleText||'').match(/\b(?:Item condition|Condition)\s*[:\n]\s*(new|used|renewed|refurbished|open box)\b/i)?.[1]?.toLowerCase()).filter(Boolean));
   const evidenceFields:any={};for(const field of ['regularPrice','stock','capacitiesGB','visibleText'])evidenceFields[field]=frames.filter(f=>field==='regularPrice'?f.regularPrice:field==='stock'?f.stock!=='unknown':Boolean(f[field])).map(f=>({snapshotId:f.snapshot_id,observedAt:f.observedAt,sourceRef:f.sourceRef}));
   const text=frames.map(f=>f.visibleText||'').join('\n');
-  return {...report,prices,regularPrice,stock,ocrConflict,priceEvidenceType:priceFrame?.priceEvidenceType,ocrEvidence:priceFrame?.ocrEvidence,conditionConflict:conditions.size>1,capacitiesGB:{ram:[...new Set(frames.flatMap(f=>f.capacitiesGB?.ram||[]))],storage:[...new Set(frames.flatMap(f=>f.capacitiesGB?.storage||[]))]},visibleText:text.slice(0,8000),truncated:frames.some(f=>f.truncated)||text.length>8000,evidenceFields,evidenceObservedAt:Math.min(...frames.map(sourceTime)),evidenceFrameCount:frames.length};
+  return structuredClone({...report,offer_id:offerId(key,this.revisions.get(key)??0),prices,regularPrice,stock,ocrConflict,priceEvidenceType:priceFrame?.priceEvidenceType,ocrEvidence:priceFrame?.ocrEvidence,conditionConflict:conditions.size>1,capacitiesGB:{ram:[...new Set(frames.flatMap(f=>f.capacitiesGB?.ram||[]))],storage:[...new Set(frames.flatMap(f=>f.capacitiesGB?.storage||[]))]},visibleText:text.slice(0,8000),truncated:frames.some(f=>f.truncated)||text.length>8000,evidenceFields,evidenceObservedAt:Math.min(...frames.map(sourceTime)),evidenceFrameCount:frames.length});
  }
 }

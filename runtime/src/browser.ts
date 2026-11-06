@@ -7,7 +7,7 @@ export type ShoppingChecks={currency?:'USD'|'INR';budgetCents?:number;brand?:str
 type Price={amountCents:number;currency:'USD'|'INR'|'dollar-unspecified';kind:'conditional'|'reference'|'listed';evidence:string};
 const challenge=/verify (?:that )?you are human|unusual traffic|robot check|captcha|access denied|checking your browser|sign in to continue|log ?in to continue/i;
 const conditions=/bank|credit card|debit card|cashback|coupon|exchange|trade.?in|membership|subscribe|EMI|per month|\/mo\b/i;
-const references=/\bMRP\b|M\.R\.P\.?|list price|was price|original price|regularly|RRP|\bsave(?:d|s)?\b|\bsavings\b|shipping|delivery charge|\btax\b|\bGST\b|\bfee\b|starting price|from\s*$/i;
+const references=/\bMRP\b|M\.R\.P\.?|list price|was price|price was|original price|regularly|RRP|\bsave(?:d|s)?\b|\bsavings\b|shipping|delivery charge|\btax(?:es)?\b|\bGST\b|\bfees?\b|order total|grand total|subtotal|starting price|from\s*$/i;
 
 function sourceAddress(nodes:ObservationNode[]):string|null{
  const bar=nodes.find(node=>/url_bar|location_bar|omnibox/i.test(node.resource_id||''));

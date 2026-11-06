@@ -30,3 +30,8 @@ test('chat shows an attributed comparison table and distinguishes lowest listed 
  const s=groundedShoppingResearch([product('Sony X100 headphones'),product('JBL X200 headphones',2499)],now,req());
  assert.match(s,/\| Product \|/);assert.match(s,/Lowest listed price among matching observed offers/);assert.match(s,/Delivery costs remain unknown/);assert.match(s,/JBL X200/);assert.ok(!s.includes('cheapest delivered'));
 });
+test('partial page observations may compare explicit known facts while missing required specs still hold',()=>{
+ const a={...product('Sony X100 headphones'),truncated:true},b={...product('JBL X200 headphones'),truncated:true};
+ assert.equal(compareShoppingCandidates([a,b],req(),now).status,'comparable-listed-prices');
+ assert.equal(compareShoppingCandidates([a,b],{...req(),checks:{...req().checks,minimumRamGB:16}},now).status,'insufficient');
+});

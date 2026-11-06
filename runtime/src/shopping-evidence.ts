@@ -4,7 +4,7 @@ import {verifyShoppingReport} from './shopping-verification.js';
 import type {ShoppingRequest} from './shopping-request.js';
 import {comparisonMarkdown} from './shopping-comparison.js';
 
-type Report=ReturnType<typeof inspectBrowserObservation>&{store?:string;listingTitle?:string;query?:string;identityObservation?:{snapshot_id:string;observedAt:number};accessHold?:boolean;evidenceObservedAt?:number;evidenceFields?:Record<string,Array<{snapshotId:string;observedAt:number}>>};
+type Report=ReturnType<typeof inspectBrowserObservation>&{store?:string;listingTitle?:string;query?:string;identityObservation?:{snapshot_id:string;observedAt:number};accessHold?:boolean;evidenceObservedAt?:number;offer_id?:string;evidenceFields?:Record<string,Array<{snapshotId:string;observedAt:number}>>};
 function native(report:Report){return report.sourceKind==='android-app'&&Boolean(report.sourcePackage&&nativeStoreForPackage(report.sourcePackage))&&report.sourceRef?.startsWith('android-app://'+report.sourcePackage+'/observations/');}
 export function browserReports(messages:any[]):Report[]{
  const reports:Report[]=[];
@@ -61,6 +61,7 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now(),request
  const sections=products.map(report=>{
   const lines=native(report)?['['+report.sourceLabel+'](pocket-store://'+nativeStoreForPackage(report.sourcePackage!)+')','Observed product label: '+report.listingTitle,'App package: '+report.sourcePackage,'Native observation: '+report.snapshot_id]:['[Open observed listing](<'+report.sourceUrl+'>)'];
   lines.push('Observed '+new Date(report.observedAt!).toISOString());
+  if(report.offer_id)lines.push('Offer ID for a later selected-offer review: '+report.offer_id+'.');
   if(report.evidenceFields)lines.push('Retained fact snapshots: '+[...new Set(Object.values(report.evidenceFields).flat().map(f=>f.snapshotId+' at '+new Date(f.observedAt).toISOString()))].join('; ')+'.');
   if(native(report)&&report.identityObservation)lines.push('Product identity retained from native observation '+report.identityObservation.snapshot_id+' at '+new Date(report.identityObservation.observedAt).toISOString()+'.');
   if(report.prices.length)for(const price of report.prices.slice(0,8))lines.push('- '+priceLabel(price)+': '+amount(price));

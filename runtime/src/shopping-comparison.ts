@@ -18,7 +18,7 @@ const cell=(text:unknown)=>String(text??'Unknown').replace(/[\r\n]+/g,' ').repla
 export function comparisonMarkdown(reports:any[],request?:ShoppingRequest,now=Date.now()){
  const comparison=compareShoppingCandidates(reports,request,now);if(comparison.rows.length<2)return '';
  const lines=['Source-backed product comparison (different models compared on observed attributes):','| Product | Listed price | Requirements | Availability | Source snapshot |','| --- | --- | --- | --- | --- |'];
- for(const row of comparison.rows)lines.push('| '+[row.title,row.priceCents===null?'Unknown':row.currency+' '+(row.priceCents/100).toFixed(2),row.matchesRequirements?'Supported':'Unknown or contradicted',row.availability,row.snapshotId||row.sourceRef].map(cell).join(' | ')+' |');
+ for(const row of comparison.rows)lines.push('| '+[row.title,row.priceCents===null?'Unknown':row.currency+' '+(row.priceCents/100).toFixed(2),row.matchesRequirements?(row.verification.comparison.partialObservation?'Supported in partial observation':'Supported'):'Unknown or contradicted',row.availability,row.snapshotId||row.sourceRef].map(cell).join(' | ')+' |');
  if(comparison.lowestListedPriceCents!==null)lines.push('Lowest listed price among matching observed offers: '+comparison.currency+' '+(comparison.lowestListedPriceCents/100).toFixed(2)+'. This ranks listed prices only.');
  else lines.push('There are not yet two matching, available offers with comparable listed prices.');
  lines.push('Delivery costs remain unknown unless separately established. This table does not approve checkout or payment.');

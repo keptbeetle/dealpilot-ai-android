@@ -39,3 +39,6 @@ test('OCR image provenance persists with its original earliest time and conflict
  const restored=new OfferEvidenceLedger(l.snapshot()),r=restored.record(frame('details',['Condition: New']),now);assert.equal(r.ocrEvidence.snapshots[0].snapshotId,'pixels-one');assert.equal(r.evidenceObservedAt,now-700);
  const held=restored.record({...frame('conflict',['INR 999']),ocrConflict:true,regularPrice:null},now);assert.equal(held.regularPrice,null);assert.equal(verifyShoppingReport(held,undefined,now).status,'contradicted');
 });
+test('variant or seller changes expire the previous offer selection ID, including after restore',()=>{
+ const l=new OfferEvidenceLedger(),a=l.record(frame('one',['INR 899','Selected Color: Black']),now),b=l.record(frame('two',['INR 899','Selected Color: White']),now);assert.notEqual(a.offer_id,b.offer_id);assert.equal(l.read(a.offer_id,now),null);assert.equal(new OfferEvidenceLedger(l.snapshot()).read(a.offer_id,now),null);assert.equal(new OfferEvidenceLedger(l.snapshot()).read(b.offer_id,now).regularPrice.amountCents,89900);
+});

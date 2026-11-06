@@ -12,6 +12,7 @@ import {browserReports,groundedShoppingResearch} from './shopping-evidence.js';
 import {verifyShoppingReport} from './shopping-verification.js';
 import {updateShoppingRequest,restoreShoppingRequest,type ShoppingRequest} from './shopping-request.js';
 import {OfferEvidenceLedger} from './offer-evidence.js';
+import {buildOfferReview,reviewMarkdown,observedSandboxProposal} from './offer-review.js';
 import { nativeTools,subagentTool,sendMessageTool,requestVoiceConversationTool,clearNativeToolUiState } from './tools.js';
 import {memoryTools,recallBlock,MEMORY_GUIDANCE,MEMORY_TOOL_NAMES} from './memory.js';
 import { messageText } from './scripted.js';
@@ -296,7 +297,22 @@ export class PocketRuntime {
             // quote/review boundary; this guard formats research conclusions.
             if(messageText(message).includes('POCKET_CHECKOUT'))shopping=this.shoppingRequest('main')?.checks.currency==='INR'||reports.some(report=>verifyShoppingReport(report,this.shoppingRequest('main')).status==='contradicted');
           }
-          if(shopping){
+          let reviewHandled=false;
+          if(owner==='main'){
+            const draft=messageText(message),selection=session.messages.findLast((m:any)=>m.role==='user'&&m.inputSource),userText=selection?messageText(selection):'';
+            const selected=/\b(?:choose|select|finali[sz]e|go with|take this|take the|prepare checkout|review checkout|buy this|buy the|purchase this|want to buy)\b/i.test(userText)&&!/(?:do not|don't)\s+(?:choose|select|prepare|review)/i.test(userText);
+            const marker=draft.match(/(?:^|\n)POCKET_REVIEW\s+(\{[^\n]{1,600}\})\s*$/);
+            if(marker){
+              let rendered='Selected-offer review requires a current explicit selection and a known offer ID.';
+              try{const p=JSON.parse(marker[1]);if(selected){const review=this.reviewShoppingOffer(p.offerId,p.quantity??1);rendered=review?reviewMarkdown(review):'The selected offer is missing, expired or belongs to another chat. Research it again before review.';}}catch{}
+              message.researchDraft=draft;message.researchGrounded=true;message.content=[{type:'text',text:rendered}];reviewHandled=true;
+            }else if(draft.includes('POCKET_CHECKOUT')){
+              const p=draft.match(/POCKET_CHECKOUT\s+(\{[^\n]+\})/);let allowed=false;
+              try{const all=[...browserReports(session.messages),...[...this.sessions].filter(([id])=>this.workerMainThreads.get(id)===this.mainThreadId).flatMap(([,s])=>browserReports(s.messages))];allowed=selected&&observedSandboxProposal(JSON.parse(p?.[1]||''),all,this.shoppingRequest('main'));}catch{}
+              if(!allowed){message.researchDraft=draft;message.researchGrounded=true;message.content=[{type:'text',text:'Sandbox review is held: a current explicit selection and matching fresh USD product evidence are required. No payment was prepared.'}];reviewHandled=true;}
+            }
+          }
+          if(shopping&&!reviewHandled){
             message.researchDraft=messageText(message);
             message.researchGrounded=true;
             message.content=[{type:'text',text:groundedShoppingResearch(reports,Date.now(),this.shoppingRequest(owner))}];
@@ -589,6 +605,11 @@ export class PocketRuntime {
     let ledger=this.offerEvidence.get(key);if(!ledger){ledger=new OfferEvidenceLedger();this.offerEvidence.set(key,ledger);}
     const result=ledger.record(report);while(this.offerEvidence.size>8)this.offerEvidence.delete(this.offerEvidence.keys().next().value!);
     if(!this.save())throw Error('Could not durably retain source evidence; no comparison approval was issued');return result;
+  }
+  reviewShoppingOffer(id:string,quantity=1):ReturnType<typeof buildOfferReview>|null {
+    if(typeof id!=='string'||!/^offer_[a-f0-9]{20}$/.test(id))return null;
+    for(const [scope,ledger] of this.offerEvidence){const permitted=scope==='thread:'+this.mainThreadId||scope.startsWith('worker:')&&this.workerMainThreads.get(scope.slice(7))===this.mainThreadId;if(permitted){const report=ledger.read(id);if(report)return buildOfferReview(report,this.shoppingRequest('main'),quantity);}}
+    return null;
   }
   authorizeAutonomy(owner:string,name:string,args:any):void {
     if(name==='request_decision'&&args.tools?.some((name:string)=>!phoneSchemas.some(s=>s.name===name)||name==='phone_batch'))throw Error('Request exact known phone tools, not batch access');
