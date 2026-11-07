@@ -134,8 +134,9 @@ final class AgentDisplayCoordinator implements AutoCloseable {
         int id=display(owner,physical,generation);
         AccessibilityProxyBackend backend=new AccessibilityProxyBackend(context,id);
         AccessibilityProxyBackend.ConnectionState state=AccessibilityProxyBackend.connectionState(context);
+        if(state==AccessibilityProxyBackend.ConnectionState.CONNECTED)return backend;
         if(state==AccessibilityProxyBackend.ConnectionState.UNKNOWN)
-            throw new ControlException(NOT_READY,"Accessibility bridge is busy; retry after the in-flight operation completes");
+            throw new ControlException(NOT_READY,"Accessibility bridge is busy; retry after the in-flight operation completes",true);
         if(state==AccessibilityProxyBackend.ConnectionState.DISCONNECTED)recoverAccessibility();
         state=AccessibilityProxyBackend.connectionState(context);
         if(state!=AccessibilityProxyBackend.ConnectionState.CONNECTED)

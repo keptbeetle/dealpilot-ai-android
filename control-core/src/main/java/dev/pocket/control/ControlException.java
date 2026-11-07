@@ -6,5 +6,11 @@ public final class ControlException extends Exception {
         INVALID_ARGUMENT, UNSUPPORTED, AMBIGUOUS_TARGET, ACTION_REJECTED, RESULT_UNKNOWN
     }
     public final Code code;
-    public ControlException(Code code, String message) { super(message); this.code = code; }
+    public final boolean notDispatched;
+    public ControlException(Code code, String message) { this(code,message,false); }
+    public ControlException(Code code, String message, boolean notDispatched) {
+        super(message);
+        this.code=code;
+        this.notDispatched=notDispatched;
+    }
 }

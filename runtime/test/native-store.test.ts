@@ -14,6 +14,28 @@ function screen(nodes:any[],extra:Partial<BrowserObservation>={}):BrowserObserva
 }
 const product=()=>screen([{resource_id:'product_title',text:'Sony wireless headphones WH-EXAMPLE'},{text:'INR 4999'},{text:'INR 3999 with bank credit card'},{text:'In stock'},{text:'Add to Cart',clickable:true}]);
 const wrap=(value:any)=>({content:[{type:'text',text:JSON.stringify(value)}]});
+
+test('busy and stale native gestures retry only when dispatch was explicitly prevented',async()=>{
+ for(const mode of ['busy','stale-twice','unknown','window-changed']){
+  let reads=0,acts=0;
+  const result=await navigateStoreApp(async(name,args)=>{
+   if(name==='phone_capabilities')return wrap({operation_prefix:'owned'});
+   if(name==='phone_apps')return wrap({apps:[{package_name:pkg}]});
+   if(name==='phone_observe'){
+    reads++;
+    return wrap({...product(),snapshot_id:'fresh-'+reads,window_id:mode==='window-changed'&&reads>1?2:1});
+   }
+   if(name==='phone_act'){
+    acts++;
+    if(mode==='unknown')return wrap({isError:true,code:'RESULT_UNKNOWN'});
+    if(acts<=(mode==='stale-twice'?2:1))return wrap({isError:true,code:mode==='busy'?'NOT_READY':'STALE_OBSERVATION',dispatch_status:'not_dispatched'});
+   }
+   return wrap({status:'dispatched'});
+  },{store:'amazon',action:{kind:'scroll',direction:'down'}},'retry-'+mode);
+  assert.equal(acts,mode==='busy'?2:mode==='stale-twice'?3:1);
+  assert.equal(Boolean(result.isError),mode==='unknown'||mode==='window-changed');
+ }
+});
 function bridge(observations:BrowserObservation[],error?:any){
  const calls:any[]=[];let index=0;
  return {calls,execute:async(name:string,args:any)=>{calls.push({name,args});return wrap(name==='phone_capabilities'?{operation_prefix:'owned'}:name==='phone_apps'?{apps:[{package_name:pkg}]}:name==='phone_observe'?observations[Math.min(index++,observations.length-1)]:error||{status:'requested'});}};

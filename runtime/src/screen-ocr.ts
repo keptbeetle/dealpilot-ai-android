@@ -40,10 +40,14 @@ function variantStock(observation:any,report:any,now:number){
  const chosen=labels.filter((line:any)=>line.text.trim().toLowerCase()===colour.toLowerCase()&&labels.some((peer:any)=>peer!==line&&Math.abs(peer.bounds.top-line.bounds.top)<=pixels.height*.025&&Math.abs(peer.bounds.left-line.bounds.left)>=pixels.width*.20));
  if(chosen.length!==1)return null;
  const card=chosen[0].bounds;
- const claims=pixels.lines.filter((line:any)=>stockText.test(line.text.trim())&&line.bounds.top>=card.bottom&&line.bounds.top-card.bottom<=pixels.height*.18&&Math.abs(line.bounds.left-card.left)<=pixels.width*.09&&line.bounds.right-line.bounds.left<=pixels.width*.34);
- if(claims.length!==1)return null;
- const claim=claims[0].text.trim();
- return {colour,claim,stock:/^(?:out of stock|currently unavailable|sold out)/i.test(claim)?'unavailable':'available',snapshotId:pixels.snapshotId,observedAt:pixels.capturedAt,imageSha256:pixels.imageSha256};
+ const column=pixels.lines.filter((line:any)=>line.bounds.top>=card.bottom&&line.bounds.top-card.bottom<=pixels.height*.18&&Math.abs(line.bounds.left-card.left)<=pixels.width*.09&&line.bounds.right-line.bounds.left<=pixels.width*.34);
+ const claims:string[]=column.map((line:any)=>line.text.trim()).filter((text:string)=>stockText.test(text));
+ // The selected card can split the explicit availability phrase across
+ // two lines. Preserve the phrase without interpreting its clipped lead time.
+ if(column.some((line:any)=>/^available to ship\b/i.test(line.text.trim())||/^available to$/i.test(line.text.trim())&&column.some((next:any)=>/^ship\b/i.test(next.text.trim())&&next.bounds.top>=line.bounds.bottom&&next.bounds.top-line.bounds.bottom<=pixels.height*.035)))claims.push('Available to ship');
+ const states=new Set(claims.map(claim=>/^(?:out of stock|currently unavailable|sold out)/i.test(claim)?'unavailable':'available'));
+ if(states.size!==1)return null;
+ return {colour,claim:claims.join(' '),stock:[...states][0],snapshotId:pixels.snapshotId,observedAt:pixels.capturedAt,imageSha256:pixels.imageSha256};
 }
 export function applyStableVariantStock(report:any,first:any,second:any,now=Date.now()):any{
  if(report.store!=='amazon'||!report.sourceBound||report.blocked||report.pageKind!=='product-page'||report.stock!=='unknown')return report;

@@ -78,7 +78,7 @@ final class OperationStore extends SQLiteOpenHelper {
             result=Json.failure(e.code.name(),e.getMessage());
             // Screen backend raises STALE_OBSERVATION only before any action dispatch.
             // The recorded request remains stale; a fresh observation requires a new ID.
-            if(tool.equals("phone_act") && e.code==dev.pocket.control.ControlException.Code.STALE_OBSERVATION)
+            if(e.notDispatched || tool.equals("phone_act") && e.code==dev.pocket.control.ControlException.Code.STALE_OBSERVATION)
                 result.put("dispatch_status","not_dispatched");
         }
         catch(SecurityException e) {result=Json.failure("PERMISSION_REQUIRED","Android denied the operation; inspect before repeating");}

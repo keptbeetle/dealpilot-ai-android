@@ -33,4 +33,10 @@ test('two screenshots report stock for the selected colour card only',()=>{
  assert.equal(applyStableVariantStock(report(),first,make('two',now+700,'White'),now+700).stock,'unknown');
  assert.equal(applyStableVariantStock(report(),first,make('two',now+700,'Black',''),now+700).stock,'unknown');
  assert.equal(applyStableVariantStock(report(),first,make('two',now+700,'Black','Out of stock'),now+700).stock,'unknown');
+ const wrapped=(id:string,at:number)=>{
+  const frame=make(id,at,'Black','Available to');
+  frame.ocr.lines.push({text:'ship in 1-...',bounds:{left:36,top:845,right:177,bottom:880}});
+  return frame;
+ };
+ assert.equal(applyStableVariantStock(report(),wrapped('one',now),wrapped('two',now+700),now+700).stockOcrEvidence.claim,'Available to ship');
 });

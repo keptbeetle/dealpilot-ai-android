@@ -4,7 +4,7 @@ import {verifyShoppingReport} from './shopping-verification.js';
 import type {ShoppingRequest} from './shopping-request.js';
 import {comparisonMarkdown} from './shopping-comparison.js';
 
-type Report=ReturnType<typeof inspectBrowserObservation>&{store?:string;listingTitle?:string;query?:string;identityObservation?:{snapshot_id:string;observedAt:number};accessHold?:boolean;evidenceObservedAt?:number;offer_id?:string;evidenceFields?:Record<string,Array<{snapshotId:string;observedAt:number}>>};
+type Report=ReturnType<typeof inspectBrowserObservation>&{store?:string;listingTitle?:string;query?:string;identityObservation?:{snapshot_id:string;observedAt:number};accessHold?:boolean;evidenceObservedAt?:number;offer_id?:string;stockOcrEvidence?:{colour:string;claim:string};evidenceFields?:Record<string,Array<{snapshotId:string;observedAt:number}>>};
 function native(report:Report){return report.sourceKind==='android-app'&&Boolean(report.sourcePackage&&nativeStoreForPackage(report.sourcePackage))&&report.sourceRef?.startsWith('android-app://'+report.sourcePackage+'/observations/');}
 export function browserReports(messages:any[]):Report[]{
  const reports:Report[]=[];
@@ -74,6 +74,7 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now(),request
    }
   }
   lines.push('- Availability reported by page: '+report.stock+'.');
+  if(report.stockOcrEvidence)lines.push('- Selected colour '+report.stockOcrEvidence.colour+' availability on screen: '+report.stockOcrEvidence.claim+'.');
   if(report.holds.length)lines.push('- Hold: '+report.holds.slice(0,4).join(' '));
   const verification=verifyShoppingReport(report,request,now);
   lines.push('- DealPilot checks: '+verification.status+'.');

@@ -152,8 +152,10 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  const read=async(requirePageContent=false,requireSearch=false,requireEditor=false)=>{
   let current:any;
   const attempts=requireSearch?32:16;
+  const deadline=Date.now()+(requireSearch?12000:8000);
   for(let attempt=0;attempt<attempts;attempt++){
-   current=await observe();if(current.isError){if(['NOT_READY','STALE_OBSERVATION'].includes(current.code)&&attempt<attempts-1){await wait(500,signal);continue;}return current;}
+   if(signal?.aborted)throw Error('Store navigation cancelled.');
+   current=await observe();if(current.isError){if(['NOT_READY','STALE_OBSERVATION','RESULT_UNKNOWN'].includes(current.code)&&attempt<attempts-1&&Date.now()<deadline){await wait(400,signal);continue;}return current;}
    const report=inspectStoreObservation(current,args.store,context,args.checks);
    if(report.blocked)return current;
    const meaningful=(current.nodes||[]).filter((n:ObservationNode)=>nodeLabel(n).length>2&&!/placeholder/i.test(nodeLabel(n))).length;
@@ -161,19 +163,29 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
    const searchReady=requireEditor?Boolean(searchControl(current,args.store,true)):!requireSearch||Boolean(searchControl(current,args.store))||(current.nodes||[]).some((n:ObservationNode)=>/^skip sign in$|^skip for now$/i.test(nodeLabel(n)));
    if(requireSearch&&classifyStoreScreen(current,args.store)==='product-details')return current;
    if(current.package_name===pkg&&(requireEditor||requireSearch&&searchControl(current,args.store,true)||meaningful>=4)&&searchReady&&(!requirePageContent||body.length>=3))return current;
-   await wait(500,signal);
+   if(Date.now()>=deadline)break;
+   await wait(400,signal);
   }
   return current;
  };
  const recoveries:Array<{failedOperation:string;recoveryOperation:string}>=[];
- const act=async(observation:BrowserObservation,action:Record<string,unknown>,searchRetry=false)=>{
+ const act=async(observation:BrowserObservation&{window_id?:number},action:Record<string,unknown>,searchRetry=false,coordinateSelector?:Selector)=>{
   if(signal?.aborted)throw Error('Store navigation cancelled.');
   if(action.selector&&Object.keys(action.selector).length===0)return {isError:true,code:'APP_TARGET_AMBIGUOUS',message:'No unique complete native selector was observed. Truncated or duplicate labels cannot be clicked.'};
-  const op=operation();let result=unwrap(await execute('phone_act',{...target,...action,snapshot_id:observation.snapshot_id,operation_id:op}));
-  if(result.isError&&result.code==='STALE_OBSERVATION'&&result.dispatch_status==='not_dispatched'){
+  let op=operation();
+  for(let retries=0;;retries++){
+   if(signal?.aborted)throw Error('Store navigation cancelled.');
+   const result=unwrap(await execute('phone_act',{...target,...action,snapshot_id:observation.snapshot_id,operation_id:op}));
+   if(!result.isError)return result;
+   const failure={...result,operation_id:op};
+   if(retries>=2||!['STALE_OBSERVATION','NOT_READY'].includes(result.code)||result.dispatch_status!=='not_dispatched')return failure;
+   await wait(120*(retries+1),signal);
    const fresh=await read();
+   if(fresh.isError||fresh.package_name!==pkg||fresh.window_id!==observation.window_id||inspectStoreObservation(fresh,args.store,context,args.checks).blocked)return failure;
    let recoveryAction=action;
-   let uniqueSelector=Boolean(action.selector&&(fresh.nodes||[]).filter((n:ObservationNode)=>matches(n,action.selector as Selector)).length===1);
+   const beforeNode=observation.nodes?.find(n=>matches(n,action.selector as Selector||{}));
+   const matching:ObservationNode[]=(fresh.nodes||[]).filter((n:ObservationNode)=>matches(n,action.selector as Selector||{}));
+   let uniqueSelector=matching.length===1&&Boolean(beforeNode)&&nodeLabel(matching[0])===nodeLabel(beforeNode!)&&!forbidden.test(nodeLabel(matching[0]));
    if(searchRetry&&!uniqueSelector){
     const before=searchControl(observation,args.store),after=searchControl(fresh,args.store);
     if(before&&after&&sameBounds(before.bounds,after.bounds)){
@@ -181,14 +193,15 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
      if(Object.keys(selector).length&&(fresh.nodes||[]).filter((n:ObservationNode)=>matches(n,selector)).length===1){recoveryAction={...action,selector};uniqueSelector=true;}
     }
    }
-   const sameViewport=action.kind==='swipe'&&fresh.coordinate_width===observation.coordinate_width&&fresh.coordinate_height===observation.coordinate_height;
-   if(!fresh.isError&&fresh.package_name===pkg&&!inspectStoreObservation(fresh,args.store,context,args.checks).blocked&&(uniqueSelector||sameViewport)){
-    const recovery=operation();recoveries.push({failedOperation:op,recoveryOperation:recovery});
-    result=unwrap(await execute('phone_act',{...target,...recoveryAction,snapshot_id:fresh.snapshot_id,operation_id:recovery}));
-    return result.isError?{...result,operation_id:recovery}:result;
-   }
+   const sameViewport=fresh.coordinate_width===observation.coordinate_width&&fresh.coordinate_height===observation.coordinate_height;
+   const sameCoordinateTarget=coordinateSelector&&(fresh.nodes||[]).some((n:ObservationNode)=>matches(n,coordinateSelector)&&!forbidden.test(nodeLabel(n)));
+   if(!uniqueSelector&&!(sameViewport&&(action.kind==='swipe'||sameCoordinateTarget)))return failure;
+   const recovery=operation();
+   recoveries.push({failedOperation:op,recoveryOperation:recovery});
+   op=recovery;
+   observation=fresh;
+   action=recoveryAction;
   }
-  return result.isError?{...result,operation_id:op}:result;
  };
  const reportError=(message:string,code='STORE_APP_NOT_READY')=>({isError:true,code,store:args.store,message:message+' No browser fallback was used.'});
  let current:any;
@@ -200,7 +213,14 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  if(args.query||args.url){
   context.evidenceChain=base;
   context.query=args.query?.trim();context.selectedLabel=undefined;context.selectedFromSnapshot=undefined;
-  const opened=unwrap(await execute(args.url?'phone_open_url':'phone_open_app',{...target,...(args.url?{url:args.url,app_package:pkg}:{package_name:pkg}),operation_id:operation()}));if(opened.isError)return opened;
+  const launchName=args.url?'phone_open_url':'phone_open_app';
+  const launchArgs={...target,...(args.url?{url:args.url,app_package:pkg}:{package_name:pkg})};
+  let opened=unwrap(await execute(launchName,{...launchArgs,operation_id:operation()}));
+  if(opened.isError&&opened.code==='NOT_READY'&&opened.dispatch_status==='not_dispatched'){
+   await wait(500,signal);
+   opened=unwrap(await execute(launchName,{...launchArgs,operation_id:operation()}));
+  }
+  if(opened.isError)return opened;
   current=await read(false,Boolean(args.query));
  }else if(!continuedQuery)current=await read();
  if(current.isError)return current;
@@ -243,6 +263,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   if(args.action.kind!=='scroll')context.evidenceChain=base+'_'+step;
   const before=inspectStoreObservation(current,args.store,context,args.checks);if(!before.sourceBound)return before;
   let action:Record<string,unknown>;
+  let coordinateSelector:Selector|undefined;
   if(args.action.kind==='click'){
    let selector=args.action.selector||{},matchesFound:ObservationNode[]=(current.nodes||[]).filter((n:ObservationNode)=>matches(n,selector));
    // Dynamic ads can move a previously observed product. Only a host-issued
@@ -267,13 +288,14 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
     const b=selector.bounds,w=current.coordinate_width,h=current.coordinate_height;
     if(!w||!h||b.right<=b.left||b.bottom<=b.top||b.left>=w||b.top>=h||b.right<=0||b.bottom<=0||(Math.min(w,b.right)-Math.max(0,b.left))*(Math.min(h,b.bottom)-Math.max(0,b.top))>w*h*.3)return reportError('The current label does not establish a bounded visible click target.','APP_TARGET_AMBIGUOUS');
     action={kind:'click',x:Math.round((Math.max(0,b.left)+Math.min(w,b.right))/2),y:Math.round((Math.max(0,b.top)+Math.min(h,b.bottom))/2)};
+    coordinateSelector=selector;
    }else action={kind:'click',selector:selectorFor(node,current.nodes)};
   }else if(args.action.kind==='scroll'){
    const direction=args.action.direction||'down';if(!['up','down'].includes(direction))throw Error('Native store scrolling requires up or down.');
    const w=current.coordinate_width,h=current.coordinate_height;if(!Number.isInteger(w)||!Number.isInteger(h)||w<64||h<64)return reportError('A fresh viewport is required for scrolling.');
    const down=direction==='down';action={kind:'swipe',x:Math.round(w*.5),y:Math.round(h*(down?0.75:0.3)),end_x:Math.round(w*.5),end_y:Math.round(h*(down?0.3:0.75)),duration_ms:450};
   }else{context.selectedLabel=undefined;context.selectedFromSnapshot=undefined;action={kind:'key',key:'back'};}
-  const result=await act(current,action);if(result.isError)return result;
+  const result=await act(current,action,false,coordinateSelector);if(result.isError)return result;
   await wait(550,signal);current=await read(args.action.kind==='click');
  }
  if(current.isError)return current;

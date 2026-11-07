@@ -23,6 +23,10 @@ final class AccessibilityProxyBackend implements ControlBackend {
     private static final ThreadPoolExecutor IPC=new ThreadPoolExecutor(0,2,20,TimeUnit.SECONDS,
         new SynchronousQueue<>(),r->{Thread t=new Thread(r,"PocketAccessibilityIpc");t.setDaemon(true);return t;},
         new ThreadPoolExecutor.AbortPolicy());
+    // Health checks must remain independent of a slow screenshot or action.
+    private static final ThreadPoolExecutor STATUS_IPC=new ThreadPoolExecutor(0,1,20,TimeUnit.SECONDS,
+        new SynchronousQueue<>(),r->{Thread t=new Thread(r,"PocketAccessibilityStatus");t.setDaemon(true);return t;},
+        new ThreadPoolExecutor.AbortPolicy());
     private static final long STATUS_IPC_TIMEOUT_MS=3500;
     private static final long OBSERVE_IPC_TIMEOUT_MS=18_000;
     private static final long VALIDATE_IPC_TIMEOUT_MS=7_000;
@@ -36,7 +40,7 @@ final class AccessibilityProxyBackend implements ControlBackend {
         try {
             pending=IPC.submit(()->context.getContentResolver().call(AccessibilityBridgeProvider.uri(context),method,null,extras));
         } catch(java.util.concurrent.RejectedExecutionException saturated) {
-            throw new ControlException(ControlException.Code.NOT_READY,"Accessibility bridge is busy; retry after recovery");
+            throw new ControlException(ControlException.Code.NOT_READY,"Accessibility bridge is busy; retry after recovery",true);
         }
         try {return pending.get(timeoutMs,TimeUnit.MILLISECONDS);}
         catch(TimeoutException timeout) {
@@ -56,7 +60,7 @@ final class AccessibilityProxyBackend implements ControlBackend {
     static ConnectionState connectionState(Context context) {
         final Future<Bundle> pending;
         try {
-            pending=IPC.submit(()->context.getApplicationContext().getContentResolver()
+            pending=STATUS_IPC.submit(()->context.getApplicationContext().getContentResolver()
                 .call(AccessibilityBridgeProvider.uri(context),"status",null,new Bundle()));
         } catch(java.util.concurrent.RejectedExecutionException saturated) {
             return ConnectionState.UNKNOWN;
@@ -65,7 +69,7 @@ final class AccessibilityProxyBackend implements ControlBackend {
             Bundle out=pending.get(STATUS_IPC_TIMEOUT_MS,TimeUnit.MILLISECONDS);
             return out!=null&&out.getBoolean("connected")?ConnectionState.CONNECTED:ConnectionState.DISCONNECTED;
         } catch(TimeoutException|ExecutionException unavailable) {
-            pending.cancel(true);return ConnectionState.DISCONNECTED;
+            pending.cancel(true);return ConnectionState.UNKNOWN;
         } catch(InterruptedException interrupted) {
             pending.cancel(true);Thread.currentThread().interrupt();return ConnectionState.UNKNOWN;
         }
