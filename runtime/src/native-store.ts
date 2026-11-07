@@ -9,7 +9,7 @@ export type {StoreName} from './store-policy.js';
 type Selector={resource_id?:string;text?:string;description?:string;bounds?:{left:number;top:number;right:number;bottom:number}};
 type StoreAction={kind:'click';selector?:Selector;target_id?:string}|{kind:'scroll';direction:'up'|'down'}|{kind:'back'|'collect'};
 export type StoreArgs={store:StoreName;query?:string;url?:string;target_id?:string;action?:StoreAction;checks?:ShoppingChecks;display_target?:'virtual'|'physical'};
-export type StoreContext={query?:string;selectedLabel?:string;selectedFromSnapshot?:string;evidenceChain?:string;targets?:Record<string,Selector>;productPage?:{label:string;at:number;snapshot:string}};
+export type StoreContext={query?:string;selectedLabel?:string;selectedFromSnapshot?:string;evidenceChain?:string;targets?:Record<string,Selector>;productPage?:{label:string;at:number;snapshot:string;windowId?:number}};
 type Execute=(name:string,args:Record<string,unknown>)=>Promise<any>;
 const forbidden=/add to (?:cart|bag|basket)|buy now|place order|pay now|checkout|purchase|subscribe and save|subscribe & save|^cart$|^orders$|^your account$|^sign in$|^log ?in$/i;
 const searchLabel=/search|rs_search|search_src|search_box|search_edit/i;
@@ -100,13 +100,15 @@ export function inspectStoreObservation(observation:BrowserObservation,store:Sto
  const searchResults=texts.some(t=>/^(?:all filters icon|prime filter,.*|filters?|sort(?: by)?|sort & filter|filter & sort|results for .+|\d[\d,]* results?)$/i.test(t))||store==='flipkart'&&Boolean(flipkartResultsSearch({...observation,nodes}));
  const productControls=texts.some(t=>/^(?:add to (?:cart|bag)|buy now|buy it now|select options)$/i.test(t));
  const prior=context.productPage;
- const rawTitle=explicitProductTitle(nodes,context.selectedLabel);
+ // A product title has already been established for this scroll chain.
+ // A matching fragment elsewhere in the page cannot replace it.
+ const rawTitle=explicitProductTitle(nodes,prior?undefined:context.selectedLabel);
  const titleIndex=rawTitle?nodes.findIndex(n=>nodeLabel(n).replace(/&amp;/g,'&').includes(rawTitle)):-1;
  const brand=store==='flipkart'&&titleIndex>=2&&/^visit store$/i.test(nodeLabel(nodes[titleIndex-1]))?nodeLabel(nodes[titleIndex-2]):'';
  let freshTitle=rawTitle;
  if(rawTitle&&/^[\w&.-]{2,30}$/.test(brand)&&!rawTitle.toLowerCase().startsWith(brand.toLowerCase()+' '))freshTitle=brand+' '+rawTitle;
  else if(rawTitle&&prior?.label.endsWith(' '+rawTitle))freshTitle=prior.label;
- const continued=Boolean(prior&&observation.captured_at_ms&&observation.captured_at_ms>=prior.at&&observation.captured_at_ms-prior.at<=15*60000&&(!freshTitle||freshTitle===prior.label));
+ const continued=Boolean(prior&&prior.windowId===observation.window_id&&observation.captured_at_ms&&observation.captured_at_ms>=prior.at&&observation.captured_at_ms-prior.at<=15*60000&&(!freshTitle||freshTitle===prior.label));
  const title=freshTitle||(continued?prior?.label:undefined);
  const productDetails=texts.some(t=>/^(?:visit the .+ store|visit the store, [^\n]{2,80}|about this item|product details|buy new)$/i.test(t));
  const selectedDetailTitle=Boolean(context.selectedLabel&&freshTitle&&nodes.some(n=>/product.?title|product.?name|pdp.?title/i.test(n.resource_id||'')));
@@ -181,7 +183,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   return current;
  };
  const recoveries:Array<{failedOperation:string;recoveryOperation:string}>=[];
- const act=async(observation:BrowserObservation&{window_id?:number},action:Record<string,unknown>,searchRetry=false,coordinateSelector?:Selector)=>{
+ const act=async(observation:BrowserObservation,action:Record<string,unknown>,searchRetry=false,coordinateSelector?:Selector)=>{
   if(signal?.aborted)throw Error('Store navigation cancelled.');
   if(action.selector&&Object.keys(action.selector).length===0)return {isError:true,code:'APP_TARGET_AMBIGUOUS',message:'No unique complete native selector was observed. Truncated or duplicate labels cannot be clicked.'};
   let op=operation();
@@ -338,7 +340,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  };
  let frame=inspectStoreObservation(current,args.store,context,args.checks);
  if(frame.pageKind==='product-page'&&frame.listingTitle&&frame.sourceBound){
-  if(!context.productPage)context.productPage={label:frame.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id};
+  if(!context.productPage)context.productPage={label:frame.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id,windowId:current.window_id};
  }else context.productPage=undefined;
  let collection:{steps:number;stoppedReason:string}|undefined;
  const collecting=(openingProduct||args.action?.kind==='collect')&&frame.pageKind==='product-page'&&frame.sourceBound&&Boolean(frame.listingTitle);
@@ -364,7 +366,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
    if(next.blocked){context.productPage=undefined;return next;}
    if(!next.sourceBound||next.pageKind!=='product-page'||next.listingTitle!==title||observed.window_id!==current.window_id){
     context.productPage=undefined;
-    return reportError('The selected product or app window changed while collecting details.','OFFER_CHANGED_DURING_COLLECTION');
+    return {...reportError('The selected product or app window changed while collecting details.','OFFER_CHANGED_DURING_COLLECTION'),collection:{steps:collection.steps,observedPage:next.pageKind,sameWindow:observed.window_id===current.window_id,sameTitle:next.listingTitle===title}};
    }
    current=observed;
    if(next.visibleText===frame.visibleText){collection.stoppedReason='no-progress';break;}

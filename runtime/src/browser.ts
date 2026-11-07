@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {nativeStoreForUrl} from './store-policy.js';
 
 export type ObservationNode={text?:string;description?:string;resource_id?:string;clickable?:boolean;scrollable?:boolean;enabled?:boolean;focused?:boolean;editable?:boolean;role?:string;bounds?:{left:number;top:number;right:number;bottom:number}};
-export type BrowserObservation={snapshot_id?:string;captured_at_ms?:number;package_name?:string;nodes?:ObservationNode[];nodes_truncated?:boolean;coordinate_width?:number;coordinate_height?:number};
+export type BrowserObservation={snapshot_id?:string;captured_at_ms?:number;package_name?:string;window_id?:number;nodes?:ObservationNode[];nodes_truncated?:boolean;coordinate_width?:number;coordinate_height?:number};
 export type ShoppingChecks={currency?:'USD'|'INR';budgetCents?:number;brand?:string;minimumRamGB?:number;minimumStorageGB?:number};
 type Price={amountCents:number;currency:'USD'|'INR'|'dollar-unspecified';kind:'conditional'|'reference'|'listed';evidence:string};
 const challenge=/verify (?:that )?you are human|unusual traffic|robot check|captcha|access denied|checking your browser|sign in to continue|log ?in to continue/i;

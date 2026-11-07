@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {navigateStoreApp,type StoreContext} from '../src/native-store.js';
+import {inspectStoreObservation,navigateStoreApp,type StoreContext} from '../src/native-store.js';
 import {OfferEvidenceLedger} from '../src/offer-evidence.js';
 const now=Date.now(),pkg='in.amazon.mShop.android.shopping',title='Sony WH-X100 wireless headphones';
 const wrap=(r:any)=>({content:[{type:'text',text:JSON.stringify(r)}]});
@@ -19,4 +19,13 @@ test('collection stops on product change without merging another product price',
  const h=harness([frame('top',[]),frame('other',['INR 1','In stock'],'JBL Other headphones')]),ledger=new OfferEvidenceLedger();
  const r=await navigateStoreApp(h.execute,{store:'amazon',action:{kind:'collect'} as any},'changed',undefined,context(),r=>ledger.record(r));
  assert.equal(r.code,'OFFER_CHANGED_DURING_COLLECTION');assert.equal(ledger.snapshot().entries.some(e=>e.frames.some(f=>f.listingTitle==='JBL Other headphones')),false);
+});
+
+test('a same-window scroll retains the proven title when only a matching image caption remains',()=>{
+ const product='Soundcore by Anker Q20i Hybrid Active Noise Cancelling Headphones, Black Over-Ear, Bluetooth, 40H ANC Playtime';
+ const state:StoreContext={selectedLabel:product,selectedFromSnapshot:'results',productPage:{label:product,at:now-1000,snapshot:'title',windowId:7}};
+ const scrolled={...frame('price',[]),window_id:7,nodes:[{text:'Black Over-Ear Bluetooth 40H ANC Playtime image'},{text:'INR 4499'},{text:'In stock'}]};
+ const report=inspectStoreObservation(scrolled,'amazon',state);
+ assert.equal(report.listingTitle,product);assert.equal(report.regularPrice?.amountCents,449900);
+ assert.equal(inspectStoreObservation({...scrolled,window_id:8},'amazon',state).regularPrice,null);
 });
