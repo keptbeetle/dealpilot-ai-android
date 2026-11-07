@@ -6,7 +6,7 @@ export type BrowserObservation={snapshot_id?:string;captured_at_ms?:number;packa
 export type ShoppingChecks={currency?:'USD'|'INR';budgetCents?:number;brand?:string;minimumRamGB?:number;minimumStorageGB?:number};
 type Price={amountCents:number;currency:'USD'|'INR'|'dollar-unspecified';kind:'conditional'|'reference'|'listed';evidence:string};
 const challenge=/verify (?:that )?you are human|unusual traffic|robot check|captcha|access denied|checking your browser|sign in to continue|log ?in to continue/i;
-const conditions=/bank|credit card|debit card|cashback|coupon|exchange|trade.?in|membership|subscribe|EMI|per month|\/mo\b/i;
+const conditions=/bank|credit card|debit card|cashback|coupon|exchange|trade.?in|membership|subscribe|EMI|per month|\/mo\b|pre-approved|credit limit|pay later|gift vouchers?/i;
 const references=/\bMRP\b|M\.R\.P\.?|list price|was price|price was|original price|regularly|RRP|\bsave(?:d|s)?\b|\bsavings\b|shipping|delivery charge|\btax(?:es)?\b|\bGST\b|\bfees?\b|order total|grand total|subtotal|starting price|from\s*$/i;
 
 function sourceAddress(nodes:ObservationNode[]):string|null{
@@ -55,16 +55,21 @@ export function inspectShoppingObservation(observation:BrowserObservation,checks
  for(const line of priceLines){
   let previousEnd=0;
   for(const match of line.matchAll(money)){
+   const start=match.index??0;
+   const suffix=line.slice(start+match[0].length);
+   // Abbreviated credit limits and incomplete decimal amounts are not prices.
+   if(/^[\dA-Za-z]|^\.\d|^\s*(?:lakh|crore|thousand|[kml])\b/i.test(suffix))continue;
    const value=match[2].replace(/,/g,'');
    if(!/^\d+(?:\.\d{1,2})?$/.test(value))continue;
    const [whole,fraction='']=value.split('.'),amountCents=Number(whole)*100+Number(fraction.padEnd(2,'0'));
    if(!Number.isSafeInteger(amountCents)||amountCents<1||amountCents>200000000)continue;
    const currency=/₹|INR|Rs/i.test(match[1])?'INR':/USD|US\$/i.test(match[1])?'USD':'dollar-unspecified';
-   const start=match.index??0,before=line.slice(Math.max(previousEnd,start-35),start),after=line.slice(start+match[0].length,start+match[0].length+55);
+   const before=line.slice(Math.max(previousEnd,start-35),start),after=suffix.slice(0,55);
    // A condition belongs to this amount only when no later amount intervenes.
    const localAfter=after.split(/(?:₹|\$|USD|INR)\s*\d/)[0];
    const suffixCondition=conditions.test(localAfter)&&(localAfter.length===after.length||/^\s*(?:with|after|using|on|per|\/mo)\b/i.test(localAfter));
-   const kind=conditions.test(before)||suffixCondition?'conditional':references.test(before)||/^\s+(?:off|\/pc|\/piece|\/unit|per piece|per unit)\b/i.test(localAfter)?'reference':'listed';
+   const suffixFee=/^\s*(?:(?:protect promise|handling|delivery|shipping|platform|convenience|mandatory|additional)\s+)?fees?\b/i.test(localAfter);
+   const kind=conditions.test(before)||suffixCondition?'conditional':references.test(before)||suffixFee||/^\s+(?:off|\/pc|\/piece|\/unit|per piece|per unit)\b/i.test(localAfter)?'reference':'listed';
    previousEnd=start+match[0].length;
    const evidence=line.slice(Math.max(0,start-45),Math.min(line.length,start+match[0].length+65));
    if(!prices.some(p=>p.amountCents===amountCents&&p.currency===currency&&p.kind===kind))prices.push({amountCents,currency,kind,evidence});

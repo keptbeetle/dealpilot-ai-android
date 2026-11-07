@@ -50,6 +50,13 @@ test('savings, shipping fees and starting prices do not become the selected prod
  }
  assert.equal(inspect(page(['Headphones','Bank card offer','₹3,000','In stock'])).regularPrice,null);
 });
+
+test('a Flipkart protection fee and abbreviated credit limit cannot displace the actual listing price',()=>{
+ const result=inspect(page(['40%, 4,999, ₹2,999','+₹39 Protect Promise Fee','Pre-approved up to Rs. 1L, Up to ₹500 off, Zero charges - Activate Now']));
+ assert.equal(result.regularPrice?.amountCents,299900);
+ assert.equal(result.prices.find(p=>p.amountCents===3900)?.kind,'reference');
+ assert.ok(!result.prices.some(p=>p.amountCents===100));
+});
 test('a selected ten-pack total is kept separate from per-piece and GST breakdown amounts',()=>{
  const result=inspect(page(['NFC stickers','₹500.00','for','10','pcs','₹50.00','/pc','×','Price (excl. GST)','₹424.00','GST @ 18%','+','₹76.00','In Stock']),{currency:'INR',budgetCents:10000});
  assert.equal(result.regularPrice?.amountCents,50000);assert.equal(result.checks[0].outcome,'contradicted');

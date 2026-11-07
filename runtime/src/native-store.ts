@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {inspectShoppingObservation,type BrowserObservation,type ObservationNode,type ShoppingChecks} from './browser.js';
 import {STORE_APPS,nativeStoreForUrl,type StoreName} from './store-policy.js';
-import {applyStableOcrPrice} from './screen-ocr.js';
+import {applyStableOcrPrice,applyStableVariantStock,selectedColour} from './screen-ocr.js';
 import {OfferEvidenceLedger} from './offer-evidence.js';
 export {STORE_APPS} from './store-policy.js';
 export type {StoreName} from './store-policy.js';
@@ -284,8 +284,9 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   const evidence={...frame,continuity:{chainId:context.evidenceChain}};
   return recordEvidence?recordEvidence(evidence):localLedger.record(evidence);
  };
- const readPricePixels=async(frame:any)=>{
-  if(frame.pageKind!=='product-page'||!frame.sourceBound||frame.blocked||frame.regularPrice)return frame;
+ const needsVariantStock=(frame:any)=>args.store==='amazon'&&frame.stock==='unknown'&&Boolean(selectedColour(frame.visibleText));
+ const readOfferPixels=async(frame:any)=>{
+  if(frame.pageKind!=='product-page'||!frame.sourceBound||frame.blocked||frame.regularPrice&&!needsVariantStock(frame))return frame;
   const first=unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false,include_ocr:true,max_image_dimension:1800}));
   if(!first.isError&&first.ocr&&!first.ocr.isError){
    await wait(650,signal);
@@ -294,7 +295,8 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
     const refreshed=inspectStoreObservation(second,args.store,context,args.checks);
     if(refreshed.listingTitle===frame.listingTitle&&refreshed.pageKind==='product-page'&&!refreshed.blocked){
      current=second;
-     return applyStableOcrPrice(refreshed,first,second);
+     const priced=frame.regularPrice?refreshed:applyStableOcrPrice(refreshed,first,second);
+     return applyStableVariantStock(priced,first,second);
     }
    }
   }
@@ -308,7 +310,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  const collecting=(openingProduct||args.action?.kind==='collect')&&frame.pageKind==='product-page'&&frame.sourceBound&&Boolean(frame.listingTitle);
  if(args.action?.kind==='collect'&&!collecting)return reportError('Open a source-bound product page before collecting offer details.','APP_PRODUCT_REQUIRED');
  // Skip screenshot capture on the title/image area when there is no price anchor.
- if(!collecting||/₹|\b(?:price|INR|USD)\b/i.test(frame.visibleText))frame=await readPricePixels(frame);
+ if(!collecting||needsVariantStock(frame)||/₹|\b(?:price|INR|USD)\b/i.test(frame.visibleText))frame=await readOfferPixels(frame);
  let report=retain(frame);
  if(collecting){
   const title=frame.listingTitle;
@@ -333,7 +335,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
    current=observed;
    if(next.visibleText===frame.visibleText){collection.stoppedReason='no-progress';break;}
    frame=next;
-   if(!report.regularPrice&&/₹|\b(?:price|INR|USD)\b/i.test(frame.visibleText))frame=await readPricePixels(frame);
+   if(report.stock==='unknown'&&needsVariantStock(frame)||!report.regularPrice&&/₹|\b(?:price|INR|USD)\b/i.test(frame.visibleText))frame=await readOfferPixels(frame);
    report=retain(frame);
   }
   if(report.regularPrice&&report.stock==='available')collection.stoppedReason='comparison-fields-observed';

@@ -4,7 +4,7 @@ import {OfferEvidenceLedger} from '../src/offer-evidence.js';
 const now=Date.now(),pkg='in.amazon.mShop.android.shopping',title='Sony WH-X100 wireless headphones';
 const wrap=(r:any)=>({content:[{type:'text',text:JSON.stringify(r)}]});
 const frame=(id:string,lines:string[],label=title)=>({snapshot_id:id,captured_at_ms:now,package_name:pkg,coordinate_width:720,coordinate_height:1280,nodes:[{resource_id:'productTitle',text:label},{text:'About this item'},{text:'Product details'},{text:'Back'},...lines.map(text=>({text}))]});
-function harness(frames:any[]){let i=0;const calls:any[]=[];return {calls,execute:async(name:string,args:any)=>{calls.push({name,args});return wrap(name==='phone_capabilities'?{operation_prefix:'owned'}:name==='phone_apps'?{apps:[{package_name:pkg}]}:name==='phone_observe'?frames[Math.min(i++,frames.length-1)]:{status:'requested'});}};}
+function harness(frames:any[]){let i=0;const calls:any[]=[];return {calls,execute:async(name:string,args:any)=>{calls.push({name,args});return wrap(name==='phone_capabilities'?{operation_prefix:'owned'}:name==='phone_apps'?{apps:[{package_name:pkg}]}:name==='phone_observe'?args.include_ocr?{ocr:{isError:true}}:frames[Math.min(i++,frames.length-1)]:{status:'requested'});}};}
 const context=():StoreContext=>({query:'wireless headphones',selectedLabel:title,selectedFromSnapshot:'search',evidenceChain:'owned-selection',productPage:{label:title,at:now-1000,snapshot:'identity'}});
 test('one native collection joins source price, stock and seller from successive real-screen frames',async()=>{
  const h=harness([frame('top',['Selected Color: Black']),frame('price',['INR 2999','Selected Color: Black']),frame('stock',['In stock','Sold by: Source Seller'])]);const ledger=new OfferEvidenceLedger();
