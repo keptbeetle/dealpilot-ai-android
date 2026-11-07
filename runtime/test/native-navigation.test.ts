@@ -35,3 +35,25 @@ test('owned targets can follow a full unchanged label after ad layout movement, 
   else{assert.equal(result.code,'APP_TARGET_AMBIGUOUS');assert.equal(clicks.length,0);}
  }
 });
+
+test('scrolled Flipkart results can reopen their visible query after the filter row leaves the viewport',async()=>{
+ const pkg='com.flipkart.android',query='JBL wireless headphones';
+ const box=(left:number,top:number,right:number,bottom:number)=>({left,top,right,bottom});
+ const observed=(id:string,nodes:any[])=>({...screen(nodes,id),package_name:pkg,coordinate_width:1080,coordinate_height:2400});
+ const warm=observed('warm-results',[
+  {description:'Sony, WI-C100 Bluetooth Headset, ₹2,790, ₹1,390',clickable:true,bounds:box(0,91,540,612)},
+  {description:'JBL, Tune 520 BT Bluetooth Headset, ₹4,999, ₹2,999',clickable:true,bounds:box(540,91,1080,612)},
+  {clickable:true,bounds:box(21,123,126,228)},
+  {description:'wireless headphones Sony JBL under 4000',clickable:true,bounds:box(147,123,923,228)},
+  {text:'wireless headphones Sony JBL under 4000',bounds:box(245,144,887,206)},
+  {clickable:true,bounds:box(954,123,1059,228)},
+ ]);
+ assert.equal(classifyStoreScreen(warm,'flipkart'),'search-results');
+ assert.equal(classifyStoreScreen({...warm,nodes:warm.nodes.slice(2)},'flipkart'),'unknown');
+ const frames=[warm,observed('editor',[{editable:true,focused:true,text:''}]),observed('typed',[{editable:true,focused:true,text:query}]),observed('results',[{text:'Filters'},{text:'JBL headphones'},{text:'Sony headphones'},{text:'Results'}])];
+ const actions:any[]=[];let frame=0;
+ const result=await navigateStoreApp(async(name,args)=>wrap(name==='phone_capabilities'?{operation_prefix:'owned'}:name==='phone_apps'?{apps:[{package_name:pkg}]}:name==='phone_observe'?frames[Math.min(frame++,frames.length-1)]:(actions.push(args),{})),{store:'flipkart',query},'warm-flipkart');
+ assert.equal(result.pageKind,'search-results');
+ assert.equal(actions.find(a=>a.kind==='click')?.selector.description,'wireless headphones Sony JBL under 4000');
+ assert.ok(actions.some(a=>a.kind==='type'&&a.text===query));
+});

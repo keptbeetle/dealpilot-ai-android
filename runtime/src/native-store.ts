@@ -30,6 +30,24 @@ function selectorFor(node:ObservationNode,nodes:ObservationNode[]):Selector{
  return {};
 }
 function matches(node:ObservationNode,selector:Selector){return Object.entries(selector).length>0&&Object.entries(selector).every(([key,value])=>value&&(key==='bounds'?sameBounds(node.bounds,value as Selector['bounds']):node[key as keyof Selector]===value));}
+function flipkartResultsSearch(observation:BrowserObservation){
+ const {coordinate_width:w,coordinate_height:h,nodes=[]}=observation;
+ if(!w||!h)return;
+ const cards=nodes.filter(n=>{
+  const b=n.bounds;
+  return n.clickable&&b&&b.bottom>h*.15&&b.bottom-b.top>h*.10&&b.right-b.left>=w*.35&&b.right-b.left<=w*.60&&/₹\s*\d/.test(nodeLabel(n));
+ });
+ if(!cards.some(n=>n.bounds!.right<=w*.55)||!cards.some(n=>n.bounds!.left>=w*.45))return;
+ // The filter row can scroll away. Match the wide, labelled query control
+ // inside the results toolbar, with its separate left and right controls.
+ const queries=nodes.filter(n=>{
+  const b=n.bounds,label=nodeLabel(n);
+  if(!n.clickable||n.enabled===false||!b||label.length<2||label.length>180||forbidden.test(label)||b.top<h*.04||b.bottom>h*.15||b.right-b.left<w*.45||b.bottom-b.top>h*.07)return false;
+  const adjacent=nodes.filter(other=>other.clickable&&other.bounds&&Math.abs(other.bounds.top-b.top)<=h*.015&&Math.abs(other.bounds.bottom-b.bottom)<=h*.015);
+  return adjacent.some(other=>other.bounds!.right<=b.left)&&adjacent.some(other=>other.bounds!.left>=b.right)&&nodes.some(child=>child!==n&&child.text===label&&child.bounds&&child.bounds.left>=b.left&&child.bounds.right<=b.right&&child.bounds.top>=b.top&&child.bounds.bottom<=b.bottom);
+ });
+ return queries.length===1?queries[0]:undefined;
+}
 function searchControl(observation:BrowserObservation,store:StoreName,editorOnly=false){
  const nodes=observation.nodes||[];
  const named=nodes.find(n=>n.enabled!==false&&(!editorOnly||n.editable)&&searchLabel.test([n.resource_id,n.text,n.description].join(' '))&&!/voice|camera|barcode|image/i.test([n.text,n.description].join(' '))&&(n.clickable||n.editable));
@@ -38,6 +56,8 @@ function searchControl(observation:BrowserObservation,store:StoreName,editorOnly
  const editors=nodes.filter(n=>n.editable&&n.enabled!==false);
  const focused=editors.length===1&&editors[0].focused?editors[0]:undefined;
  if(editorOnly||focused)return focused;
+ const scrolledResults=flipkartResultsSearch(observation);
+ if(scrolledResults)return scrolledResults;
  // Observed Flipkart home exposes its rotating placeholder, not "Search".
  // Require the native home landmarks and one bounded, wide labelled control;
  // never invent a label or tap a fixed coordinate from an earlier screenshot.
@@ -65,8 +85,8 @@ export function classifyStoreScreen(observation:BrowserObservation,store:StoreNa
  const text=(observation.nodes||[]).map(nodeLabel).join('\n');
  if(/captcha|verify you are human|access denied|sign in to continue/i.test(text))return 'challenge';
  if((observation.nodes||[]).some(n=>n.editable&&n.focused))return 'search-input';
- if(/(?:^|\n)(?:add to cart|buy now)(?:$|\n)/i.test(text))return 'product-details';
- if(/(?:^|\n)(?:filters?|sort & filter|all filters icon)(?:$|\n)/i.test(text))return 'search-results';
+ if(/(?:^|\n)(?:filters?|sort & filter|all filters icon)(?:$|\n)/i.test(text)||store==='flipkart'&&flipkartResultsSearch(observation))return 'search-results';
+ if(/(?:^|\n)(?:add to cart|buy now|visit the store, [^\n]{2,80})(?:$|\n)/i.test(text))return 'product-details';
  if(searchControl(observation,store))return 'home-or-search';
  return 'unknown';
 }
@@ -77,13 +97,13 @@ export function inspectStoreObservation(observation:BrowserObservation,store:Sto
  });
  const packageAccepted=(definition.packages as readonly string[]).includes(observation.package_name||'');
  const texts=nodes.map(nodeLabel).filter(Boolean),text=texts.join('\n');
- const searchResults=texts.some(t=>/^(?:all filters icon|prime filter,.*|filters?|sort(?: by)?|sort & filter|filter & sort|results for .+|\d[\d,]* results?)$/i.test(t));
+ const searchResults=texts.some(t=>/^(?:all filters icon|prime filter,.*|filters?|sort(?: by)?|sort & filter|filter & sort|results for .+|\d[\d,]* results?)$/i.test(t))||store==='flipkart'&&Boolean(flipkartResultsSearch({...observation,nodes}));
  const productControls=texts.some(t=>/^(?:add to (?:cart|bag)|buy now|buy it now|select options)$/i.test(t));
  const freshTitle=explicitProductTitle(nodes,context.selectedLabel);
  const prior=context.productPage;
  const continued=Boolean(prior&&observation.captured_at_ms&&observation.captured_at_ms>=prior.at&&observation.captured_at_ms-prior.at<=15*60000&&(!freshTitle||freshTitle===prior.label));
  const title=freshTitle||(continued?prior?.label:undefined);
- const productDetails=texts.some(t=>/^(?:visit the .+ store|about this item|product details|buy new)$/i.test(t));
+ const productDetails=texts.some(t=>/^(?:visit the .+ store|visit the store, [^\n]{2,80}|about this item|product details|buy new)$/i.test(t));
  const selectedDetailTitle=Boolean(context.selectedLabel&&freshTitle&&nodes.some(n=>/product.?title|product.?name|pdp.?title/i.test(n.resource_id||'')));
  const product=Boolean(title&&(productControls||productDetails||continued||selectedDetailTitle)&&!searchResults);
  const pageKind=product?'product-page':searchResults?'search-results':context.selectedLabel?'unknown':context.query?'search-results':'unknown';
