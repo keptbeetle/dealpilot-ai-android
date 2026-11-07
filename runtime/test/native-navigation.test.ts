@@ -11,7 +11,7 @@ test('host-issued target IDs resolve observed controls and invented IDs dispatch
  const context:StoreContext={},calls:any[]=[];
  const exec=async(name:string,args:any)=>{calls.push({name,args});return wrap(name==='phone_capabilities'?{operation_prefix:'owned'}:name==='phone_apps'?{apps:[{package_name:pkg}]}:name==='phone_observe'?product():{});};
  const first=await navigateStoreApp(exec,{store:'amazon'},'inspect',undefined,context);const target=first.navigationTargets.find((t:any)=>t.label==='More details');assert.match(target.target_id,/^target_/);
- await navigateStoreApp(exec,{store:'amazon',action:{kind:'click',target_id:target.target_id}},'click',undefined,context);assert.ok(calls.some(c=>c.name==='phone_act'&&c.args.selector?.text==='More details'));
+ await navigateStoreApp(exec,{store:'amazon',target_id:target.target_id},'click',undefined,context);assert.ok(calls.some(c=>c.name==='phone_act'&&c.args.selector?.text==='More details'));
  const before=calls.length;const forged=await navigateStoreApp(exec,{store:'amazon',action:{kind:'click',target_id:'target_forged'}},'forged',undefined,context);assert.equal(forged.code,'APP_TARGET_EXPIRED');assert.equal(calls.length,before);
 });
 test('new-query recovery goes back once from a recognised product and then confirms search input',async()=>{

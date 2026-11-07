@@ -8,7 +8,7 @@ export type {StoreName} from './store-policy.js';
 
 type Selector={resource_id?:string;text?:string;description?:string;bounds?:{left:number;top:number;right:number;bottom:number}};
 type StoreAction={kind:'click';selector?:Selector;target_id?:string}|{kind:'scroll';direction:'up'|'down'}|{kind:'back'|'collect'};
-export type StoreArgs={store:StoreName;query?:string;url?:string;action?:StoreAction;checks?:ShoppingChecks;display_target?:'virtual'|'physical'};
+export type StoreArgs={store:StoreName;query?:string;url?:string;target_id?:string;action?:StoreAction;checks?:ShoppingChecks;display_target?:'virtual'|'physical'};
 export type StoreContext={query?:string;selectedLabel?:string;selectedFromSnapshot?:string;evidenceChain?:string;targets?:Record<string,Selector>;productPage?:{label:string;at:number;snapshot:string}};
 type Execute=(name:string,args:Record<string,unknown>)=>Promise<any>;
 const forbidden=/add to (?:cart|bag|basket)|buy now|place order|pay now|checkout|purchase|subscribe and save|subscribe & save|^cart$|^orders$|^your account$|^sign in$|^log ?in$/i;
@@ -132,6 +132,10 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  let openingProduct=false;
  if(signal?.aborted)throw Error('Store navigation cancelled.');
  if(!Object.hasOwn(STORE_APPS,args.store))throw Error('Choose the installed Amazon or Flipkart app.');
+ if(args.target_id!==undefined){
+  if(args.action&&(args.action.kind!=='click'||args.action.selector||args.action.target_id&&args.action.target_id!==args.target_id))throw Error('A target_id requires a matching click action.');
+  args={...args,action:{kind:'click',target_id:args.target_id}};
+ }
  if(args.action&&!['click','scroll','back','collect'].includes(args.action.kind))throw Error('Unsupported native store action.');
  if(args.action?.kind==='click'&&args.action.target_id){
   const selector=context.targets?.[args.action.target_id];

@@ -292,7 +292,25 @@ export class PocketRuntime {
             const completed=messageText(user).match(/^\[Worker completion\] ([a-z0-9-]+) generation /)?.[1];
             const completedShopping=Boolean(completed&&this.runtime.listConversations().some(c=>c.conversationId===completed&&c.agent.name==='shopping-researcher'));
             shopping=completedShopping||reports.some(report=>report.sourceKind==='android-app'||report.prices.length>0||/\/(?:products?|dp|p)\//i.test(report.sourceUrl||''));
-            if(completedShopping){const worker=this.sessions.get(completed!);reports=worker?browserReports(worker.messages.slice(worker.messages.findLastIndex((m:any)=>m.role==='user'))):[];}
+            if(completedShopping){
+              const worker=this.sessions.get(completed!);
+              reports=worker?browserReports(worker.messages.slice(worker.messages.findLastIndex((m:any)=>m.role==='user'))):[];
+              const latestInput=session.messages.findLast((m:any)=>m.role==='user'&&m.inputSource);
+              const request=this.shoppingRequest('main');
+              if(request?.category&&latestInput&&/\b(?:compare|side by side|versus)\b/i.test(messageText(latestInput))){
+                // A comparison follow-up can combine earlier fresh offers
+                // from this chat and category. Recheck the current constraints.
+                const prior=this.runtime.listConversations().filter(c=>
+                  c.conversationId!==completed&&c.agent.name==='shopping-researcher'&&
+                  this.workerMainThreads.get(c.conversationId)===this.mainThreadId&&
+                  this.shoppingRequest(c.conversationId)?.category===request.category
+                ).slice(-4);
+                const retained=prior.flatMap(c=>browserReports(this.sessions.get(c.conversationId)?.messages??[])).filter(report=>
+                  report.sourceKind==='android-app'&&report.pageKind==='product-page'&&verifyShoppingReport(report,request).comparison.rankable
+                );
+                reports=[...retained.slice(-6),...reports];
+              }
+            }
             // A separately buyer-requested sandbox proposal follows its existing
             // quote/review boundary; this guard formats research conclusions.
             if(messageText(message).includes('POCKET_CHECKOUT'))shopping=this.shoppingRequest('main')?.checks.currency==='INR'||reports.some(report=>verifyShoppingReport(report,this.shoppingRequest('main')).status==='contradicted');

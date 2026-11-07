@@ -9,6 +9,7 @@ import {SubagentParams,parseSubagentInvocation} from '../vendor/pi9/schema.js';
 import {memoryTools} from '../src/memory.js';
 import {ensureCodexCredentials} from '../src/codex-auth.js';
 import {inspectBrowserObservation} from '../src/browser.js';
+import {inspectStoreObservation} from '../src/native-store.js';
 
 class Bridge implements NativeBridge {
  state:any={};events:any[]=[];tools:any[]=[];credentials:any={authMode:'scripted'};
@@ -39,6 +40,31 @@ test('shopping completion and main delivery withhold unsupported drafts while re
  assert.ok(session.messages.some((m:any)=>m.researchGrounded&&m.researchDraft),'raw model draft stays in the private durable transcript');
  assert.match(String(session.messages[0].content),/Return findings as your final answer/,'memory injection retains the registered worker instructions');
  assert.ok(runtime.state().messages.some((m:any)=>m.role==='assistant'&&m.text.startsWith('Research is incomplete.')),'main completion is grounded too');
+});
+
+test('a comparison follow-up combines two fresh native offers from workers in the same chat',async()=>{
+ const runtime=new PocketRuntime(new Bridge());
+ command(runtime,{action:'send',text:'Find wireless on-ear headphones under INR 5000'});
+ await until(()=>!runtime.busy&&runtime.state().messages.some(m=>m.role==='assistant'));
+ async function source(title:string,price:number){
+  const started=runtime.startTasks([{kind:'spawn',agent:'shopping-researcher',label:title,prompt:'Read capabilities'}],{initiatedBy:'model'});
+  await started.completion;
+  await until(()=>!runtime.busy&&!runtime.state().active,8000);
+  const id=(started.starts[0] as any).conversationId,worker=runtime.sessions.get(id)!;
+  const report=inspectStoreObservation({package_name:'in.amazon.mShop.android.shopping',snapshot_id:title,captured_at_ms:Date.now(),nodes:[{resource_id:'productTitle',text:title},{text:'Buy now'},{text:'INR '+price},{text:'In stock'}]},'amazon',{selectedLabel:title,selectedFromSnapshot:'results'});
+  worker.agent.state.messages.push({role:'toolResult',toolCallId:title,toolName:'phone_store_app',content:[{type:'text',text:JSON.stringify(report)}],isError:false,timestamp:Date.now()} as any);
+  return id;
+ }
+ await source('Sony X100 headphones',2999);
+ command(runtime,{action:'send',text:'Compare the Sony with another available headphone'});
+ await until(()=>!runtime.busy&&runtime.state().messages.at(-1)?.role==='assistant');
+ const current=await source('JBL X200 headphones',2499);
+ runtime.main.agent.state.messages.push({role:'user',content:[{type:'text',text:'[Worker completion] '+current+' generation 1: source results'}],timestamp:Date.now()} as any);
+ await runtime.main.continue();
+ const answer=messageText(runtime.main.messages.at(-1));
+ assert.match(answer,/Sony X100 headphones/);
+ assert.match(answer,/JBL X200 headphones/);
+ assert.match(answer,/Lowest listed price among matching observed offers: INR 2499.00/);
 });
 test('a quick main-chat product lookup cannot bypass source grounding or reuse older-turn listings',async()=>{
  const runtime=new PocketRuntime(new Bridge());
