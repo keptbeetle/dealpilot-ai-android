@@ -1,5 +1,7 @@
 # Sequential comparison implementation and verification
 
+The subsequent [live comparison retest](LIVE-COMPARISON-FIX-2026-11-07.md) passed with two native Amazon offers. This report preserves the preceding stage-six results.
+
 Owner-directed implementation on 7 November 2026. The [six-stage plan](COMPARISON-DELIVERY-PLAN-2026-11-07.md) was implemented in order, retaining failed expectations and testing each stage before the next local commit. AI-authored tests, actual device operations, archived source replay and injected payment outcomes are separate evidence categories.
 
 ## Implemented stages
