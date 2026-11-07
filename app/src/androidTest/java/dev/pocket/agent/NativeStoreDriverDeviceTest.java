@@ -1,6 +1,5 @@
 package dev.pocket.agent;
 
-import android.app.UiAutomation;
 import android.content.Context;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -21,7 +20,8 @@ import static org.junit.Assume.assumeTrue;
 public class NativeStoreDriverDeviceTest {
     @Test public void runAuthorizedNativeNavigationChecks() throws Exception {
         assumeTrue("Explicit native-store driver opt-in required", "yes".equals(InstrumentationRegistry.getArguments().getString("liveStoreDriver")));
-        InstrumentationRegistry.getInstrumentation().getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
+        // Exercise the installed accessibility service. Reserving UiAutomation
+        // here would prevent inspecting Settings while restoring that service.
         Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
         File folder=new File(context.getFilesDir(),"native-store-driver");assertTrue(folder.isDirectory()||folder.mkdirs());
         File request=new File(folder,"request.json"),response=new File(folder,"response.json");

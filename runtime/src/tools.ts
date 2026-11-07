@@ -191,8 +191,7 @@ export function nativeTools(host:any,owner:string,grant?:readonly string[]):any[
         let contexts=storeContexts.get(host);if(!contexts){contexts=new Map();storeContexts.set(host,contexts);}
         const key=owner+'|'+(owner==='main'?host.state?.().mainThreadId??'main':owner)+'|'+(args.display_target||'physical')+'|'+args.store;
         let context=contexts.get(key);if(!context){context={};contexts.set(key,context);}
-        let result=await navigateStoreApp(execute,args,_id,signal,context);
-        if(!result.isError&&host.recordShoppingEvidence)result=host.recordShoppingEvidence(owner,result);
+        const result=await navigateStoreApp(execute,args,_id,signal,context,host.recordShoppingEvidence?report=>host.recordShoppingEvidence!(owner,report):undefined);
         return toolResult(result.isError?{...result,store:args.store,observedAt:Date.now()}:{...result,verification:verifyShoppingReport(result,request)});
       }
       const authorize=()=>{

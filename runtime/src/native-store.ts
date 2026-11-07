@@ -2,11 +2,12 @@ import {createHash} from 'node:crypto';
 import {inspectShoppingObservation,type BrowserObservation,type ObservationNode,type ShoppingChecks} from './browser.js';
 import {STORE_APPS,nativeStoreForUrl,type StoreName} from './store-policy.js';
 import {applyStableOcrPrice} from './screen-ocr.js';
+import {OfferEvidenceLedger} from './offer-evidence.js';
 export {STORE_APPS} from './store-policy.js';
 export type {StoreName} from './store-policy.js';
 
 type Selector={resource_id?:string;text?:string;description?:string;bounds?:{left:number;top:number;right:number;bottom:number}};
-type StoreAction={kind:'click';selector?:Selector;target_id?:string}|{kind:'scroll';direction:'up'|'down'}|{kind:'back'};
+type StoreAction={kind:'click';selector?:Selector;target_id?:string}|{kind:'scroll';direction:'up'|'down'}|{kind:'back'|'collect'};
 export type StoreArgs={store:StoreName;query?:string;url?:string;action?:StoreAction;checks?:ShoppingChecks;display_target?:'virtual'|'physical'};
 export type StoreContext={query?:string;selectedLabel?:string;selectedFromSnapshot?:string;evidenceChain?:string;targets?:Record<string,Selector>;productPage?:{label:string;at:number;snapshot:string}};
 type Execute=(name:string,args:Record<string,unknown>)=>Promise<any>;
@@ -98,11 +99,12 @@ export function inspectStoreObservation(observation:BrowserObservation,store:Sto
   note:'Observed native app evidence, not a web-page capture. No product URL or SKU is invented. Search cards are discovery only. Seller, variant, offers and delivered total still require review.'};
 }
 
-export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:string,signal?:AbortSignal,context:StoreContext={}){
+export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:string,signal?:AbortSignal,context:StoreContext={},recordEvidence?:(report:any)=>any){
  let ownedTarget:Selector|undefined;
+ let openingProduct=false;
  if(signal?.aborted)throw Error('Store navigation cancelled.');
  if(!Object.hasOwn(STORE_APPS,args.store))throw Error('Choose the installed Amazon or Flipkart app.');
- if(args.action&&!['click','scroll','back'].includes(args.action.kind))throw Error('Unsupported native store action.');
+ if(args.action&&!['click','scroll','back','collect'].includes(args.action.kind))throw Error('Unsupported native store action.');
  if(args.action?.kind==='click'&&args.action.target_id){
   const selector=context.targets?.[args.action.target_id];
   if(!selector||args.query&&args.query.trim()!==context.query)return {isError:true,code:'APP_TARGET_EXPIRED',store:args.store,message:'This target is not in the current observed store context. Inspect the current screen and choose a returned target_id.'};
@@ -113,7 +115,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  context.targets={};
  // Only an explicit scroll can continue an already observed product identity.
  // New navigation, searches and unrelated inspections must prove identity again.
- if(args.action?.kind!=='scroll')context.productPage=undefined;
+ if(args.action?.kind!=='scroll'&&args.action?.kind!=='collect')context.productPage=undefined;
  if(args.query!==undefined&&(!args.query.trim()||args.query.length>180))throw Error('Store search requires 1 to 180 characters.');
  // Search+action is a bounded sequence: finish and observe the search before
  // validating the action against its actual results. A URL remains standalone.
@@ -217,7 +219,7 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   const submitted=await act(current,{kind:'key',key:'enter',...(Object.keys(inputSelector).length?{selector:inputSelector}:input.focused?{}:{selector:{}})});if(submitted.isError)return submitted;
   await wait(750,signal);current=await read(true);
  }
- if(args.action){
+ if(args.action&&args.action.kind!=='collect'){
   if(args.action.kind!=='scroll')context.evidenceChain=base+'_'+step;
   const before=inspectStoreObservation(current,args.store,context,args.checks);if(!before.sourceBound)return before;
   let action:Record<string,unknown>;
@@ -237,7 +239,10 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
    const samePosition=selector.bounds&&matchesFound.length>1&&matchesFound.every(n=>nodeLabel(n)===nodeLabel(matchesFound[0])&&sameBounds(n.bounds,matchesFound[0].bounds));
    if(matchesFound.length!==1&&!samePosition)return reportError('The observed app target must match exactly one current node or one identical label at the same position.','APP_TARGET_AMBIGUOUS');
    const node=matchesFound[0],label=nodeLabel(node);if(!label||forbidden.test(label))return reportError('Store research cannot operate purchase or account controls.','RESEARCH_ACTION_BLOCKED');
-   if(before.pageKind!=='product-page'){context.selectedLabel=label;context.selectedFromSnapshot=current.snapshot_id;}
+   if(before.pageKind!=='product-page'){
+    openingProduct=before.pageKind==='search-results';
+    context.selectedLabel=label;context.selectedFromSnapshot=current.snapshot_id;
+   }
    if(selector.bounds){
     const b=selector.bounds,w=current.coordinate_width,h=current.coordinate_height;
     if(!w||!h||b.right<=b.left||b.bottom<=b.top||b.left>=w||b.top>=h||b.right<=0||b.bottom<=0||(Math.min(w,b.right)-Math.max(0,b.left))*(Math.min(h,b.bottom)-Math.max(0,b.top))>w*h*.3)return reportError('The current label does not establish a bounded visible click target.','APP_TARGET_AMBIGUOUS');
@@ -253,19 +258,67 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
  }
  if(current.isError)return current;
  if(current.package_name!==pkg)return reportError('The observed screen left the selected store.','PRIVATE_STORE_SESSION_UNAVAILABLE');
- let report:any=inspectStoreObservation(current,args.store,context,args.checks);
- if(report.pageKind==='product-page'&&report.sourceBound&&!report.blocked&&!report.regularPrice){
+ if(!context.evidenceChain)context.evidenceChain=base;
+ const localLedger=new OfferEvidenceLedger();
+ const retain=(frame:any)=>{
+  const evidence={...frame,continuity:{chainId:context.evidenceChain}};
+  return recordEvidence?recordEvidence(evidence):localLedger.record(evidence);
+ };
+ const readPricePixels=async(frame:any)=>{
+  if(frame.pageKind!=='product-page'||!frame.sourceBound||frame.blocked||frame.regularPrice)return frame;
   const first=unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false,include_ocr:true,max_image_dimension:1800}));
   if(!first.isError&&first.ocr&&!first.ocr.isError){
    await wait(650,signal);
    const second=unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false,include_ocr:true,max_image_dimension:1800}));
-   if(!second.isError&&second.package_name===pkg){const refreshed=inspectStoreObservation(second,args.store,context,args.checks);if(refreshed.listingTitle===report.listingTitle){current=second;report=applyStableOcrPrice(refreshed,first,second);}}
+   if(!second.isError&&second.package_name===pkg){
+    const refreshed=inspectStoreObservation(second,args.store,context,args.checks);
+    if(refreshed.listingTitle===frame.listingTitle&&refreshed.pageKind==='product-page'&&!refreshed.blocked){
+     current=second;
+     return applyStableOcrPrice(refreshed,first,second);
+    }
+   }
   }
+  return frame;
+ };
+ let frame=inspectStoreObservation(current,args.store,context,args.checks);
+ if(frame.pageKind==='product-page'&&frame.listingTitle&&frame.sourceBound){
+  if(!context.productPage)context.productPage={label:frame.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id};
+ }else context.productPage=undefined;
+ let collection:{steps:number;stoppedReason:string}|undefined;
+ const collecting=(openingProduct||args.action?.kind==='collect')&&frame.pageKind==='product-page'&&frame.sourceBound&&Boolean(frame.listingTitle);
+ if(args.action?.kind==='collect'&&!collecting)return reportError('Open a source-bound product page before collecting offer details.','APP_PRODUCT_REQUIRED');
+ // Skip screenshot capture on the title/image area when there is no price anchor.
+ if(!collecting||/₹|\b(?:price|INR|USD)\b/i.test(frame.visibleText))frame=await readPricePixels(frame);
+ let report=retain(frame);
+ if(collecting){
+  const title=frame.listingTitle;
+  collection={steps:0,stoppedReason:'scroll-limit'};
+  for(let i=0;i<3;i++){
+   if(report.regularPrice&&report.stock==='available')break;
+   if(report.stock==='unavailable'||report.stock==='conflict'||report.ocrConflict){collection.stoppedReason='source-hold';break;}
+   const w=current.coordinate_width,h=current.coordinate_height;
+   if(!Number.isInteger(w)||!Number.isInteger(h)||w<64||h<64){collection.stoppedReason='viewport-unavailable';break;}
+   const moved=await act(current,{kind:'swipe',x:Math.round(w*.5),y:Math.round(h*.75),end_x:Math.round(w*.5),end_y:Math.round(h*.30),duration_ms:450});
+   if(moved.isError){collection.stoppedReason=moved.code||'scroll-held';break;}
+   collection.steps++;
+   await wait(550,signal);
+   const observed=await read();
+   if(observed.isError){collection.stoppedReason=observed.code||'observation-held';break;}
+   const next=inspectStoreObservation(observed,args.store,context,args.checks);
+   if(next.blocked){context.productPage=undefined;return next;}
+   if(!next.sourceBound||next.pageKind!=='product-page'||next.listingTitle!==title||observed.window_id!==current.window_id){
+    context.productPage=undefined;
+    return reportError('The selected product or app window changed while collecting details.','OFFER_CHANGED_DURING_COLLECTION');
+   }
+   current=observed;
+   if(next.visibleText===frame.visibleText){collection.stoppedReason='no-progress';break;}
+   frame=next;
+   if(!report.regularPrice&&/₹|\b(?:price|INR|USD)\b/i.test(frame.visibleText))frame=await readPricePixels(frame);
+   report=retain(frame);
+  }
+  if(report.regularPrice&&report.stock==='available')collection.stoppedReason='comparison-fields-observed';
  }
- if(report.pageKind==='product-page'&&report.listingTitle&&report.sourceBound&&!context.productPage)context.productPage={label:report.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id};
- if(report.pageKind!=='product-page')context.productPage=undefined;
- if(!context.evidenceChain)context.evidenceChain=base;
- const navigationTargets=[...new Map<string,{label:string;selector:Selector}>(report.navigationTargets.map(t=>[JSON.stringify(t.selector),t])).values()].map(t=>({...t,target_id:'target_'+createHash('sha256').update(pkg+'|'+current.snapshot_id+'|'+JSON.stringify(t.selector)).digest('hex').slice(0,18)}));
+ const navigationTargets=[...new Map<string,{label:string;selector:Selector}>(frame.navigationTargets.map(t=>[JSON.stringify(t.selector),t])).values()].map(t=>({...t,target_id:'target_'+createHash('sha256').update(pkg+'|'+current.snapshot_id+'|'+JSON.stringify(t.selector)).digest('hex').slice(0,18)}));
  context.targets=Object.fromEntries(navigationTargets.map(t=>[t.target_id,t.selector]));
- return {...report,navigationTargets,screenState:classifyStoreScreen(current,args.store),...target,continuity:{chainId:context.evidenceChain},operation_prefix:caps.operation_prefix,preDispatchRecoveries:recoveries};
+ return {...report,navigationTargets,screenState:classifyStoreScreen(current,args.store),...target,continuity:{chainId:context.evidenceChain},operation_prefix:caps.operation_prefix,preDispatchRecoveries:recoveries,...(collection?{collection}:{})};
 }
