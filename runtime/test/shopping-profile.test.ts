@@ -12,7 +12,11 @@ function setup(){
 }
 test('owner-authorized visible shopping is advertised while general Pocket capabilities remain available',()=>{
  const {runtime,session}=setup();
- for(const name of ['phone_browser','phone_store_app','phone_open_url','phone_open_app','phone_observe','phone_act'])assert.ok(session.agent.state.tools.find((t:any)=>t.name===name).parameters.properties.display_target.enum.includes('physical'),name);
+ for(const name of ['phone_browser','phone_store_app','phone_observe'])assert.ok(session.agent.state.tools.find((t:any)=>t.name===name).parameters.properties.display_target.enum.includes('physical'),name);
+ for(const name of ['phone_open_url','phone_open_app','phone_act','phone_batch']){
+  assert.ok(!session.agent.state.tools.some((t:any)=>t.name===name));
+  assert.ok(runtime.main.agent.state.tools.some((t:any)=>t.name===name));
+ }
  assert.ok(runtime.main.agent.state.tools.find((t:any)=>t.name==='phone_shell').parameters.properties.action.enum.includes('exec'));
  assert.ok(!session.agent.state.tools.find((t:any)=>t.name==='phone_shell').parameters.properties.action.enum.includes('exec'));
 });
@@ -20,8 +24,8 @@ test('visible and optional virtual native research pass the scoped authorization
  const {runtime}=setup();
  for(const name of ['phone_browser','phone_store_app','phone_open_url','phone_open_app','phone_observe','phone_act'])for(const display_target of ['physical','virtual'])assert.doesNotThrow(()=>runtime.authorizePhone('shop',name,{display_target}));
 });
-test('nested batches accept visible navigation but retain the source-safe shell boundary',async()=>{
- const {runtime,effects}=setup(),tool=nativeTools(runtime,'shop',['phone_batch','phone_open_url']).find(t=>t.name==='phone_batch')!;
+test('internal batch primitives retain the source-safe shell boundary',async()=>{
+ const {runtime,effects}=setup(),tool=nativeTools(runtime,'shop',['phone_batch','phone_open_url'],true).find(t=>t.name==='phone_batch')!;
  await tool.execute('visible',{calls:[{name:'phone_open_url',args:{url:'https://shop.example',display_target:'physical'}}]});
  assert.equal(effects[0].args.calls[0].args.display_target,'physical');
  await assert.rejects(()=>tool.execute('shell',{calls:[{name:'phone_shell',args:{action:'exec',command:'curl merchant.example'}}]}),/cannot use unrestricted shell/);

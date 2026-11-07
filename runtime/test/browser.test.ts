@@ -111,13 +111,17 @@ test('a previous Chrome product cannot masquerade as the requested page, and vis
  assert.match(result.holds.join(' '),/earlier page/);
  assert.ok(calls.filter(c=>c.name!=='phone_capabilities').every(c=>c.args.display_target==='physical'));
 });
-test('focused shopping worker retains navigation prerequisites and model inheritance without removing original phone tools',async()=>{
+test('focused shopping worker keeps guarded navigation and model inheritance while general phone tools remain available',async()=>{
  const bridge={call(method:string){return JSON.stringify({ok:true,result:method==='credentials.get'?{authMode:'scripted'}:method==='autonomy.load'?emptyAutonomy():{}});},emit(){}};
  const runtime=new PocketRuntime(bridge);
  const definition=runtime.registry.agents.get('shopping-researcher');assert.ok(definition);
  const session=(runtime as any).createSession('shopping-check',{definition,requestedConfig:{}});
  const names=session.agent.state.tools.map((t:any)=>t.name);
- for(const required of ['phone_store_app','phone_apps','phone_open_app','phone_browser','phone_open_url','phone_observe','phone_act','phone_capabilities'])assert.ok(names.includes(required));
+ for(const required of ['phone_store_app','phone_apps','phone_browser','phone_observe','phone_capabilities'])assert.ok(names.includes(required));
+ for(const raw of ['phone_open_app','phone_open_url','phone_act']){
+  assert.ok(!names.includes(raw));
+  assert.ok(runtime.main.agent.state.tools.some((t:any)=>t.name===raw));
+ }
  assert.ok(!names.includes('phone_sms'));assert.ok(runtime.main.agent.state.tools.some((t:any)=>t.name==='phone_sms'));
  assert.ok(runtime.registry.agents.has('phone-operator'));assert.equal(session.agent.state.model.id,runtime.main.agent.state.model.id);
 });

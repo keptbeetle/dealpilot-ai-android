@@ -66,6 +66,15 @@ test('a comparison follow-up combines two fresh native offers from workers in th
  assert.match(answer,/JBL X200 headphones/);
  assert.match(answer,/Lowest listed price among matching observed offers: INR 2499.00/);
 });
+
+test('the focused shopping tool schema admits owned target IDs and collection while keeping raw gestures internal',()=>{
+ const tools=nativeTools({focusedShoppingResearch:()=>true,call:()=>{throw Error('Validation must not dispatch');}},'shopping-contract');
+ const store=tools.find(t=>t.name==='phone_store_app');
+ const validate=(args:any)=>validateToolArguments(store,{type:'toolCall',id:'store-contract',name:store.name,arguments:args});
+ assert.equal(validate({store:'amazon',target_id:'target_1234567890abcdef12'}).target_id,'target_1234567890abcdef12');
+ assert.equal(validate({store:'flipkart',action:{kind:'collect'}}).action.kind,'collect');
+ assert.equal(tools.some(t=>['phone_act','phone_open_app','phone_open_url','phone_batch'].includes(t.name)),false);
+});
 test('a quick main-chat product lookup cannot bypass source grounding or reuse older-turn listings',async()=>{
  const runtime=new PocketRuntime(new Bridge());
  const report=inspectBrowserObservation({package_name:'com.android.chrome',captured_at_ms:Date.now(),nodes:[{resource_id:'com.android.chrome:id/url_bar',text:'shop.example/products/stickers'},{text:'₹500.00'},{text:'In stock'},{text:'Price (excl. GST)'},{text:'₹424.00'},{text:'GST @ 18%'},{text:'+'},{text:'₹76.00'}]});
