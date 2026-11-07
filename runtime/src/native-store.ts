@@ -99,8 +99,13 @@ export function inspectStoreObservation(observation:BrowserObservation,store:Sto
  const texts=nodes.map(nodeLabel).filter(Boolean),text=texts.join('\n');
  const searchResults=texts.some(t=>/^(?:all filters icon|prime filter,.*|filters?|sort(?: by)?|sort & filter|filter & sort|results for .+|\d[\d,]* results?)$/i.test(t))||store==='flipkart'&&Boolean(flipkartResultsSearch({...observation,nodes}));
  const productControls=texts.some(t=>/^(?:add to (?:cart|bag)|buy now|buy it now|select options)$/i.test(t));
- const freshTitle=explicitProductTitle(nodes,context.selectedLabel);
  const prior=context.productPage;
+ const rawTitle=explicitProductTitle(nodes,context.selectedLabel);
+ const titleIndex=rawTitle?nodes.findIndex(n=>nodeLabel(n).replace(/&amp;/g,'&').includes(rawTitle)):-1;
+ const brand=store==='flipkart'&&titleIndex>=2&&/^visit store$/i.test(nodeLabel(nodes[titleIndex-1]))?nodeLabel(nodes[titleIndex-2]):'';
+ let freshTitle=rawTitle;
+ if(rawTitle&&/^[\w&.-]{2,30}$/.test(brand)&&!rawTitle.toLowerCase().startsWith(brand.toLowerCase()+' '))freshTitle=brand+' '+rawTitle;
+ else if(rawTitle&&prior?.label.endsWith(' '+rawTitle))freshTitle=prior.label;
  const continued=Boolean(prior&&observation.captured_at_ms&&observation.captured_at_ms>=prior.at&&observation.captured_at_ms-prior.at<=15*60000&&(!freshTitle||freshTitle===prior.label));
  const title=freshTitle||(continued?prior?.label:undefined);
  const productDetails=texts.some(t=>/^(?:visit the .+ store|visit the store, [^\n]{2,80}|about this item|product details|buy new)$/i.test(t));
@@ -109,7 +114,10 @@ export function inspectStoreObservation(observation:BrowserObservation,store:Sto
  const pageKind=product?'product-page':searchResults?'search-results':context.selectedLabel?'unknown':context.query?'search-results':'unknown';
  const proof=Boolean(packageAccepted&&observation.snapshot_id&&observation.captured_at_ms);
  const ref=proof?'android-app://'+observation.package_name+'/observations/'+encodeURIComponent(observation.snapshot_id!):null;
- const report=inspectShoppingObservation({...observation,nodes},checks,{kind:'android-app',bound:proof,url:null,ref,label:definition.label,pageKind,holds:[
+ // The current Flipkart title separates the selected offer from earlier
+ // cards. Below the title, only an explicit native price group adds a price.
+ const priceNodes=store==='flipkart'&&product?(titleIndex>=0?nodes.slice(titleIndex):nodes.filter(n=>/^\d{1,3}%,\s*[\d,.]+,\s*₹\s*\d[\d,.]*$/.test(nodeLabel(n)))):undefined;
+ const report=inspectShoppingObservation({...observation,nodes},checks,{kind:'android-app',bound:proof,url:null,ref,label:definition.label,pageKind,priceNodes,holds:[
   ...(!packageAccepted?['The observed screen is outside the selected store app. No browser fallback was used.']:[]),
   ...(!proof?['A fresh native app snapshot is required to bind this observation.']:[]),
   ...(!product?['Open an individual product inside this app before attributing its price or specifications.']:['Exact seller, selected variant and offer eligibility remain unverified.']),

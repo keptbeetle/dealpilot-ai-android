@@ -15,6 +15,21 @@ function screen(nodes:any[],extra:Partial<BrowserObservation>={}):BrowserObserva
 const product=()=>screen([{resource_id:'product_title',text:'Sony wireless headphones WH-EXAMPLE'},{text:'INR 4999'},{text:'INR 3999 with bank credit card'},{text:'In stock'},{text:'Add to Cart',clickable:true}]);
 const wrap=(value:any)=>({content:[{type:'text',text:JSON.stringify(value)}]});
 
+test('Flipkart product scope excludes a previous listing and monthly instalments from the current price',()=>{
+ const title='Tune 770NC Active Noise Cancelling, 70Hr Playtime, Fast Pair & Mu...more';
+ const observations=screen([
+  {text:'₹2,699'},{text:'JBL'},{text:'Visit store'},{text:title},{text:'Buy now'},
+  {description:'53%, 9,999, ₹4,749',clickable:true},{text:'₹4,749'},
+  {text:'Buy at ₹4,036, EMI @ ₹673 x 6m, No Cost EMI'},{text:'Buy at ₹4,036'},{text:'EMI @ ₹673 x 6m'},{text:'₹1,009/m, (4 months), Bajaj Finance'},{text:'+₹39 Protect Promise Fee'},
+ ],{package_name:'com.flipkart.android'});
+ const selected='JBL, Tune 770NC Active Noise Cancelling, 70Hr Playtime, Fast Pair & Multi Connect Bluetooth Headset Black';
+ const r=inspectStoreObservation(observations,'flipkart',{selectedLabel:selected,selectedFromSnapshot:'results'});
+ assert.equal(r.regularPrice?.amountCents,474900);
+ assert.ok(!r.prices.some(p=>p.amountCents===269900&&p.kind==='listed'));
+ assert.ok(r.prices.filter(p=>[403600,100900].includes(p.amountCents)).every(p=>p.kind==='conditional'));
+ assert.match(r.listingTitle||'',/^JBL Tune 770NC/);
+});
+
 test('busy and stale native gestures retry only when dispatch was explicitly prevented',async()=>{
  for(const mode of ['busy','stale-twice','unknown','window-changed']){
   let reads=0,acts=0;

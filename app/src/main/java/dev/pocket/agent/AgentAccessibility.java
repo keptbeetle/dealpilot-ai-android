@@ -2,10 +2,12 @@ package dev.pocket.agent;
 
 import android.accessibilityservice.AccessibilityService;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import dev.pocket.android.AndroidScreenBackend;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class AgentAccessibility extends AccessibilityService {
+    private static final java.util.regex.Pattern PRICE_DIGITS=java.util.regex.Pattern.compile("[₹0-9,.\\s]{1,24}");
     static volatile AgentAccessibility connected;
     private AndroidScreenBackend backend;
     private final ConcurrentHashMap<Integer,AndroidScreenBackend> virtualBackends=new ConcurrentHashMap<>();
@@ -25,8 +27,21 @@ public final class AgentAccessibility extends AccessibilityService {
         if(type==AccessibilityEvent.TYPE_VIEW_CLICKED || type==AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED || type==AccessibilityEvent.TYPE_VIEW_SCROLLED || type==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             int displayId=android.os.Build.VERSION.SDK_INT>=33?event.getDisplayId():android.view.Display.DEFAULT_DISPLAY;
             AndroidScreenBackend target=displayId==0?backend:virtualBackends.get(displayId);
-            if(target!=null)target.noteInteraction(event.getEventTime());
+            if(target!=null){
+                if(isFlipkartPriceAnimation(event))target.notePriceAnimation(event.getEventTime());
+                else target.noteInteraction(event.getEventTime());
+            }
         }
+    }
+    private static boolean isFlipkartPriceAnimation(AccessibilityEvent event) {
+        if(event.getEventType()!=AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED||!"com.flipkart.android".contentEquals(event.getPackageName()==null?"":event.getPackageName()))return false;
+        AccessibilityNodeInfo source=event.getSource();
+        if(source==null)return false;
+        try {
+            if(source.isEditable())return false;
+            CharSequence value=source.getText();
+            return value!=null&&PRICE_DIGITS.matcher(value).matches();
+        } finally {source.recycle();}
     }
     @Override public void onInterrupt() {}
     @Override public void onDestroy() {virtualBackends.clear();if(connected==this) connected=null;super.onDestroy();}

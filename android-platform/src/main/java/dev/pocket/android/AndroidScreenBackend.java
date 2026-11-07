@@ -41,6 +41,7 @@ public final class AndroidScreenBackend implements ControlBackend {
     private final Map<String, Observation> snapshots = new LinkedHashMap<>();
     private final Map<String, Long> snapshotRevisions = new LinkedHashMap<>();
     private final java.util.concurrent.atomic.AtomicLong interactionTime = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong viewportInteractionTime = new java.util.concurrent.atomic.AtomicLong();
     private static final long MAX_SNAPSHOT_AGE_MS = 15_000;
     private static final long SCREENSHOT_THROTTLE_RETRY_MS = 1_100;
     private static final int SCREENSHOT_THROTTLE_RETRIES = 1;
@@ -52,6 +53,13 @@ public final class AndroidScreenBackend implements ControlBackend {
     public AndroidScreenBackend(AccessibilityService service,int displayId) {if(displayId<0)throw new IllegalArgumentException("displayId");this.service=service;this.displayId=displayId;}
     /** May be called from the accessibility callback without waiting on the worker lock. */
     public void noteInteraction(long eventTime) {
+        long time=eventTime>0?eventTime:android.os.SystemClock.uptimeMillis();
+        viewportInteractionTime.accumulateAndGet(time,Math::max);
+        interactionTime.accumulateAndGet(time,Math::max);
+    }
+
+    /** Decorative number changes still invalidate click and text targets. */
+    public void notePriceAnimation(long eventTime) {
         long time=eventTime>0?eventTime:android.os.SystemClock.uptimeMillis();
         interactionTime.accumulateAndGet(time,Math::max);
     }
@@ -170,7 +178,7 @@ public final class AndroidScreenBackend implements ControlBackend {
             onMain(() -> { validateContext(expected); return null; });
         }
         // Retain only target metadata, never screenshots or captured app text.
-        if (capturedUptime[0] < interactionTime.get()) throw new ControlException(STALE_OBSERVATION,"Screen changed during observation; observe again");
+        if (capturedUptime[0] < viewportInteractionTime.get()) throw new ControlException(STALE_OBSERVATION,"Screen changed during observation; observe again");
         snapshotRevisions.put(base.snapshotId(), capturedUptime[0]);
         snapshots.put(base.snapshotId(), new Observation(base.snapshotId(), base.capturedAtMs(), base.packageName(),
             base.windowId(), base.coordinateWidth(), base.coordinateHeight(), base.interactive(), base.locked(),
@@ -258,8 +266,17 @@ public final class AndroidScreenBackend implements ControlBackend {
     }
 
     private void validateFreshness(Observation observed) throws ControlException {
+        validateFreshness(observed,false);
+    }
+
+    private static boolean viewportAction(Action action) {
+        return action.kind()==Kind.SWIPE || action.kind()==Kind.KEY&&"back".equals(action.key());
+    }
+
+    private void validateFreshness(Observation observed,boolean viewportOnly) throws ControlException {
+        long revision=viewportOnly?viewportInteractionTime.get():interactionTime.get();
         if (System.currentTimeMillis()-observed.capturedAtMs()>MAX_SNAPSHOT_AGE_MS
-            || snapshotRevisions.getOrDefault(observed.snapshotId(),0L) < interactionTime.get())
+            || snapshotRevisions.getOrDefault(observed.snapshotId(),0L) < revision)
             throw new ControlException(STALE_OBSERVATION,"Screen interaction occurred; observe again");
     }
 
@@ -292,7 +309,7 @@ public final class AndroidScreenBackend implements ControlBackend {
         if (observed == null || System.currentTimeMillis()-observed.capturedAtMs()>MAX_SNAPSHOT_AGE_MS) {
             throw new ControlException(STALE_OBSERVATION,"A recent snapshot ID is required");
         }
-        validateFreshness(observed);
+        validateFreshness(observed,viewportAction(a));
         onMain(() -> {
             if (!interactive()) throw new ControlException(SCREEN_OFF,"Display asleep");
             if (locked()) throw new ControlException(LOCKED,"Unlock the device before controlling apps");
@@ -312,7 +329,7 @@ public final class AndroidScreenBackend implements ControlBackend {
         }
         if (a.selector()==null && (a.x()!=null || a.y()!=null)) point(a.x(),a.y(),observed);
         if(a.kind()==Kind.TYPE)return setText(a,observed);
-        return onMain(() -> { validateContext(observed); validateFreshness(observed); return nativeAction(a); });
+        return onMain(() -> { validateContext(observed); validateFreshness(observed,viewportAction(a)); return nativeAction(a); });
     }
 
     private static void point(Integer x,Integer y,Observation o) throws ControlException {
@@ -326,7 +343,7 @@ public final class AndroidScreenBackend implements ControlBackend {
         onMain(() -> {
             Observation expected = snapshots.get(a.snapshotId());
             validateContext(expected);
-            validateFreshness(expected);
+            validateFreshness(expected,viewportAction(a));
             Path path = new Path(); path.moveTo(a.x(),a.y());
             if (a.kind()==Kind.SWIPE) path.lineTo(a.endX(),a.endY());
             GestureDescription g = new GestureDescription.Builder().setDisplayId(displayId).addStroke(new GestureDescription.StrokeDescription(path,0,duration)).build();

@@ -6,7 +6,7 @@ export type BrowserObservation={snapshot_id?:string;captured_at_ms?:number;packa
 export type ShoppingChecks={currency?:'USD'|'INR';budgetCents?:number;brand?:string;minimumRamGB?:number;minimumStorageGB?:number};
 type Price={amountCents:number;currency:'USD'|'INR'|'dollar-unspecified';kind:'conditional'|'reference'|'listed';evidence:string};
 const challenge=/verify (?:that )?you are human|unusual traffic|robot check|captcha|access denied|checking your browser|sign in to continue|log ?in to continue/i;
-const conditions=/bank|credit card|debit card|cashback|coupon|exchange|trade.?in|membership|subscribe|EMI|per month|\/mo\b|pre-approved|credit limit|pay later|gift vouchers?/i;
+const conditions=/bank|credit card|debit card|cashback|coupon|exchange|trade.?in|membership|subscribe|EMI|per month|\/m(?:o(?:nth)?)?\b|pre-approved|credit limit|pay later|gift vouchers?/i;
 const references=/\bMRP\b|M\.R\.P\.?|list price|was price|price was|original price|regularly|RRP|\bsave(?:d|s)?\b|\bsavings\b|shipping|delivery charge|\btax(?:es)?\b|\bGST\b|\bfees?\b|order total|grand total|subtotal|starting price|from\s*$/i;
 
 function sourceAddress(nodes:ObservationNode[]):string|null{
@@ -24,7 +24,7 @@ function capacity(text:string,attribute:'ram'|'storage'):number[]{
  const before=new RegExp(noun+'[ \\t]*[:=-]?[ \\t]*(\\d+(?:\\.\\d+)?)[ \\t]*(GB|TB)','gi');
  return [...new Set([...text.matchAll(after),...text.matchAll(before)].map(match=>Number(match[1])*(match[2].toUpperCase()==='TB'?1024:1)))];
 }
-export type ShoppingSourceContext={kind:'browser'|'android-app';bound:boolean;url:string|null;ref:string|null;label:string;pageKind:'page'|'search-results'|'product-page'|'unknown';holds:string[]};
+export type ShoppingSourceContext={kind:'browser'|'android-app';bound:boolean;url:string|null;ref:string|null;label:string;pageKind:'page'|'search-results'|'product-page'|'unknown';holds:string[];priceNodes?:ObservationNode[]};
 export function inspectBrowserObservation(observation:BrowserObservation,checks:ShoppingChecks={}){
  const url=sourceAddress(observation.nodes||[]),chrome=observation.package_name==='com.android.chrome';
  const nativeStore=url?nativeStoreForUrl(url):undefined;
@@ -36,21 +36,23 @@ export function inspectBrowserObservation(observation:BrowserObservation,checks:
  ]});
 }
 export function inspectShoppingObservation(observation:BrowserObservation,checks:ShoppingChecks,source:ShoppingSourceContext){
- const nodes=observation.nodes||[],seen=new Set<string>();
- const lines=nodes.map(n=>(n.text||n.description||'').trim()).filter(text=>text&&!seen.has(text)&&Boolean(seen.add(text)));
+ const nodes=observation.nodes||[];
+ const labels=(items:ObservationNode[])=>[...new Set(items.map(n=>(n.text||n.description||'').trim()).filter(Boolean))];
+ const lines=labels(nodes),moneyLines=source.priceNodes?labels(source.priceNodes):lines;
  const text=lines.join('\n').slice(0,10000),url=source.url;
  const animatedDigits=lines.some(line=>/\b0,\s*1,\s*2,\s*3,\s*4,\s*5,\s*6,\s*7,\s*8,\s*9\b/.test(line));
  const prices:Price[]=[];
  const money=/(US\$|\bUSD\s*|\bINR\s*|\bRs\.?\s*|₹\s*|\$\s*)(\d[\d,]*(?:\.\d{1,2})?)/gi;
- const priceLines=lines.map((line,index)=>{
-  if(!animatedDigits&&/^(?:₹|\$|US\$|USD|INR|Rs\.?)$/.test(line)&&/^\d[\d,]*(?:\.\d{1,2})?$/.test(lines[index+1]||'')){
-   const suffix=conditions.test(lines[index+2]||'')?' '+lines[index+2]:'';
-   const prefix=references.test(lines[index-1]||'')||conditions.test(lines[index-1]||'')?lines[index-1]+' ':'';
-   return prefix+line+' '+lines[index+1]+suffix;
+ const priceLines=moneyLines.map((line,index)=>{
+  if(!animatedDigits&&/^(?:₹|\$|US\$|USD|INR|Rs\.?)$/.test(line)&&/^\d[\d,]*(?:\.\d{1,2})?$/.test(moneyLines[index+1]||'')){
+   const suffix=conditions.test(moneyLines[index+2]||'')?' '+moneyLines[index+2]:'';
+   const prefix=references.test(moneyLines[index-1]||'')||conditions.test(moneyLines[index-1]||'')?moneyLines[index-1]+' ':'';
+   return prefix+line+' '+moneyLines[index+1]+suffix;
   }
-  const previous=lines[index-1]==='+'&&/\bGST\b/i.test(lines[index-2]||'')?lines[index-2]+' +':lines[index-1]||'';
-  const unit=/^\/(?:pc|piece|unit)$|^per (?:piece|unit)$/i.test(lines[index+1]||'')?' '+lines[index+1]:'';
-  return (!/(?:₹|\$|USD|INR)\s*\d/.test(previous)&&(references.test(previous)||conditions.test(previous))?previous+' '+line:line)+unit;
+  const previous=moneyLines[index-1]==='+'&&/\bGST\b/i.test(moneyLines[index-2]||'')?moneyLines[index-2]+' +':moneyLines[index-1]||'';
+  const unit=/^\/(?:pc|piece|unit)$|^per (?:piece|unit)$/i.test(moneyLines[index+1]||'')?' '+moneyLines[index+1]:'';
+  const emi=/^Buy at\s/i.test(line)&&/^EMI\s*[@:]/i.test(moneyLines[index+1]||'')?' '+moneyLines[index+1]:'';
+  return (!/(?:₹|\$|USD|INR)\s*\d/.test(previous)&&(references.test(previous)||conditions.test(previous))?previous+' '+line:line)+unit+emi;
  });
  for(const line of priceLines){
   let previousEnd=0;
@@ -67,7 +69,7 @@ export function inspectShoppingObservation(observation:BrowserObservation,checks
    const before=line.slice(Math.max(previousEnd,start-35),start),after=suffix.slice(0,55);
    // A condition belongs to this amount only when no later amount intervenes.
    const localAfter=after.split(/(?:₹|\$|USD|INR)\s*\d/)[0];
-   const suffixCondition=conditions.test(localAfter)&&(localAfter.length===after.length||/^\s*(?:with|after|using|on|per|\/mo)\b/i.test(localAfter));
+   const suffixCondition=conditions.test(localAfter)&&(localAfter.length===after.length||/^\s*(?:with|after|using|on|per|\/m(?:o(?:nth)?)?)\b/i.test(localAfter)||/buy at\s*$/i.test(before)&&/^\s*,?\s*EMI\s*[@:]/i.test(localAfter));
    const suffixFee=/^\s*(?:(?:protect promise|handling|delivery|shipping|platform|convenience|mandatory|additional)\s+)?fees?\b/i.test(localAfter);
    const kind=conditions.test(before)||suffixCondition?'conditional':references.test(before)||suffixFee||/^\s+(?:off|\/pc|\/piece|\/unit|per piece|per unit)\b/i.test(localAfter)?'reference':'listed';
    previousEnd=start+match[0].length;
@@ -81,7 +83,7 @@ export function inspectShoppingObservation(observation:BrowserObservation,checks
  const regular=listed.length===1?listed[0]:null;
  const search=source.pageKind==='search-results'||source.pageKind==='unknown';
  const unavailable=/out of stock|currently unavailable|sold out|not available/i.test(text);
- const available=/\bin stock\b|available for delivery/i.test(text);
+ const available=/\bin stock\b|available for delivery|available to ship|(?:^|\n)only (?:\d+|a few|few) left[.!]?(?:$|\n)/i.test(text);
  const stock=available&&unavailable?'conflict':unavailable?'unavailable':available?'available':'unknown';
  const ram=capacity(text,'ram'),storage=capacity(text,'storage');
  const results:Array<{attribute:string;outcome:'supported'|'contradicted'|'unknown';evidence:string}>=[];
