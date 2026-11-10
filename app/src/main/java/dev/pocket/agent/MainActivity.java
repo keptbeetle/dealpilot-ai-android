@@ -911,8 +911,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         CredentialStore credentials=new CredentialStore(this);
         switch(path) {
             case "/native/snapshot" -> {
-                JSONObject currentState=state;
-                uiReads.submit(()->{try {reply.complete(webSnapshot(currentState),null);}
+                // Retailer navigation backgrounds this Activity and unregisters its event
+                // observer. Read the service's persisted snapshot on the I/O executor;
+                // the Activity field may be stale until the user returns to Pocket.
+                uiReads.submit(()->{try {reply.complete(webSnapshot(store.load()),null);}
                     catch(Exception failure){reply.complete(null,"Could not refresh the phone state. Try again.");}});
                 return;
             }
