@@ -329,11 +329,16 @@ final class NativeTools implements AutoCloseable {
         }
         return Json.obj("nodes",nodes,"nodes_truncated",outputTruncated);
     }
+    static int boundedScreenshotDimension(JSONObject args) {
+        int requested=args.optInt("max_image_dimension",1280);
+        // Models and external tool callers cannot bypass the native OCR memory budget.
+        return args.optBoolean("include_ocr",false)?Math.min(requested,1280):requested;
+    }
     private JSONObject observation(JSONObject a,String owner) throws Exception {return observation(a,owner,OBSERVATION_TEXT_BUDGET);}
     private JSONObject observation(JSONObject a,String owner,int textBudget) throws Exception {
         boolean ocr=a.optBoolean("include_ocr",false);
         if(ocr)textBudget=Math.min(textBudget,14000);
-        ControlBackend.Observation o=screen(owner,a).observe(a.optBoolean("include_image",false)||ocr,a.optInt("max_image_dimension",1280),a.optInt("max_nodes",DEFAULT_OBSERVATION_NODES));
+        ControlBackend.Observation o=screen(owner,a).observe(a.optBoolean("include_image",false)||ocr,boundedScreenshotDimension(a),a.optInt("max_nodes",DEFAULT_OBSERVATION_NODES));
         List<ControlBackend.Node> observationNodes=o.nodes();
         if(a.optBoolean("compact",false)) {
             // Native WebViews can retain the full off-screen document. Keep the

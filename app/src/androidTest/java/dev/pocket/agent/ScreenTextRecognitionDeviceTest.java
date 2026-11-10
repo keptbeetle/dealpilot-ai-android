@@ -39,6 +39,24 @@ public class ScreenTextRecognitionDeviceTest {
   assertNull("Tool shutdown must release the native recognizer",field.get(null));
   assertTrue("Repeated OCR must not retain hundreds of MB per snapshot: before="+baselinePssKb+" after="+android.os.Debug.getPss(),android.os.Debug.getPss()-baselinePssKb<250000);
  }
+ @Test public void repeatedTypicalStoreSizeScreenshotsKeepRecognitionAndBoundPss() throws Exception {
+  Bitmap bitmap=Bitmap.createBitmap(720,1280,Bitmap.Config.ARGB_8888);
+  Canvas canvas=new Canvas(bitmap);canvas.drawColor(Color.WHITE);
+  Paint paint=new Paint();paint.setColor(Color.BLACK);paint.setTextSize(43);paint.setAntiAlias(true);
+  canvas.drawText("Sony WH-CH520 Black",24,220,paint);
+  canvas.drawText("Price INR 3590",24,460,paint);
+  ByteArrayOutputStream encoded=new ByteArrayOutputStream();bitmap.compress(Bitmap.CompressFormat.JPEG,80,encoded);bitmap.recycle();
+  ScreenTextRecognition.shutdown();
+  long before=android.os.Debug.getPss(),peak=before;
+  try{
+   for(int i=0;i<6;i++){
+    JSONObject result=ScreenTextRecognition.recognize(encoded.toByteArray(),"store-"+i,400+i);
+    assertTrue(result.toString(),result.toString().contains("3590"));
+    peak=Math.max(peak,android.os.Debug.getPss());
+   }
+  }finally{ScreenTextRecognition.shutdown();}
+  assertTrue("Repeated store-sized images must remain within 250 MB additional PSS; baseline="+before+" peak="+peak,peak-before<250000);
+ }
  @Test public void archivedRealDigitWheelScreenshotIsRecognisedAsPixels() throws Exception {
   File folder=new File(InstrumentationRegistry.getInstrumentation().getTargetContext().getFilesDir(),"ocr-test"),file=new File(folder,"flipkart.png");Assume.assumeTrue("Optional private same-visit screenshot supplied by USB audit",file.isFile());
   File source=new File(folder,"flipkart-anchors.json");Assume.assumeTrue(source.isFile());JSONObject meta=new JSONObject(new String(Files.readAllBytes(source.toPath()),java.nio.charset.StandardCharsets.UTF_8));

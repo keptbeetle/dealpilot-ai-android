@@ -6,6 +6,23 @@ val ciBuildNumber = providers.gradleProperty("ciBuildNumber").orNull?.let {
 val ciDebugKeystore = System.getenv("CI_DEBUG_KEYSTORE")
 val ngrokNativeClasses = configurations.create("ngrokNativeClasses") { isTransitive = false }
 val ngrokAndroidArm64 = configurations.create("ngrokAndroidArm64") { isTransitive = false }
+// An APK must never package an ignored, outdated runtime.cjs when TypeScript changes.
+// CI can build the bundle first; Gradle verifies the source inputs for local builds.
+val buildPocketRuntime = tasks.register<Exec>("buildPocketRuntime") {
+    workingDir = rootProject.file("runtime")
+    commandLine(if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) "npm.cmd" else "npm", "run", "build")
+    inputs.files(fileTree(rootProject.file("runtime")) {
+        include("src/**", "vendor/**", "build.mjs", "SOURCE_PINS.json", "package.json",
+            "package-lock.json", "PI-LICENSE", "PI-SOURCE.md")
+    }).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.files(
+        rootProject.file("app/src/main/assets/runtime.cjs"),
+        rootProject.file("app/src/main/assets/runtime-manifest.json"),
+        rootProject.file("app/src/main/assets/runtime-notices.txt"),
+        rootProject.file("app/src/main/assets/dealpilot-verification-manifest.json")
+    )
+}
+tasks.named("preBuild").configure { dependsOn(buildPocketRuntime) }
 val syncPocketUi = tasks.register<Sync>("syncPocketUi") {
     from(rootProject.file("preview")) {
         include("index.html", "style.css", "mark.svg", "connection.js", "drawer-swipe.js", "chat-titles.js", "short-title.mjs", "chat-view.js", "refresh-scheduler.js", "model-picker.js", "native-*.js", "native.css", "shopping.html", "shopping.js", "shopping.css")

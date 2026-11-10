@@ -11,6 +11,16 @@ test('one native collection joins source price, stock and seller from successive
  const r=await navigateStoreApp(h.execute,{store:'amazon',action:{kind:'collect'} as any},'collect-one',undefined,context(),report=>ledger.record(report));
  assert.equal(r.regularPrice?.amountCents,299900);assert.equal(r.stock,'available');assert.match(r.visibleText,/Sold by: Source Seller/);assert.equal(r.evidenceFields.regularPrice[0].snapshotId,'price');assert.equal(h.calls.filter(c=>c.name==='phone_act').length,2);assert.equal(r.collection.stoppedReason,'comparison-fields-observed');
 });
+test('native OCR is bounded to two 1280px attempts per collection and never invents price or stock',async()=>{
+ const h=harness([frame('top',['Price INR unavailable','Detail A']),frame('page-two',['Price INR unavailable','Detail B']),frame('page-three',['Price INR unavailable','Detail C']),frame('page-four',['Price INR unavailable','Detail D'])]);
+ const r=await navigateStoreApp(h.execute,{store:'amazon',action:{kind:'collect'} as any},'bounded-ocr',undefined,context(),x=>x);
+ const ocr=h.calls.filter(call=>call.name==='phone_observe'&&call.args.include_ocr);
+ assert.equal(ocr.length,2);
+ assert.ok(ocr.every(call=>call.args.max_image_dimension===1280&&call.args.include_image===false));
+ assert.equal(r.regularPrice,null);
+ assert.equal(r.stock,'unknown');
+ assert.ok(r.holds.some((h:string)=>/recognition budget exhausted/.test(h)));
+});
 test('collection stops when scrolling makes no progress and never operates purchase controls',async()=>{
  const h=harness([frame('top',['Add to cart'])]);const r=await navigateStoreApp(h.execute,{store:'amazon',action:{kind:'collect'} as any},'no-progress',undefined,context(),r=>r);
  assert.equal(r.collection.stoppedReason,'no-progress');assert.ok(h.calls.filter(c=>c.name==='phone_act').length<=2);assert.ok(h.calls.filter(c=>c.name==='phone_act').every(c=>c.args.kind==='swipe'));assert.equal(r.regularPrice,null);

@@ -321,12 +321,17 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   return recordEvidence?recordEvidence(evidence):localLedger.record(evidence);
  };
  const needsVariantStock=(frame:any)=>args.store==='amazon'&&frame.stock==='unknown'&&Boolean(selectedColour(frame.visibleText));
+ let ocrAttempts=0;
  const readOfferPixels=async(frame:any)=>{
   if(frame.pageKind!=='product-page'||!frame.sourceBound||frame.blocked||frame.regularPrice&&!needsVariantStock(frame))return frame;
-  const first=unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false,include_ocr:true,max_image_dimension:1800}));
+  // ML Kit can use substantial native memory for high-resolution frames.
+  // Bound repeated capture attempts and leave unverified fields unknown.
+  if(ocrAttempts>=2)return {...frame,holds:[...frame.holds,'On-device screenshot recognition budget exhausted; unverified fields remain unknown.']};
+  ocrAttempts++;
+  const first=unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false,include_ocr:true,max_image_dimension:1280}));
   if(!first.isError&&first.ocr&&!first.ocr.isError){
    await wait(650,signal);
-   const second=unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false,include_ocr:true,max_image_dimension:1800}));
+   const second=unwrap(await execute('phone_observe',{...target,max_nodes:500,compact:true,include_image:false,include_ocr:true,max_image_dimension:1280}));
    if(!second.isError&&second.package_name===pkg){
     const refreshed=inspectStoreObservation(second,args.store,context,args.checks);
     if(refreshed.listingTitle===frame.listingTitle&&refreshed.pageKind==='product-page'&&!refreshed.blocked){
