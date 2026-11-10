@@ -338,6 +338,26 @@ export async function navigateStoreApp(execute:Execute,args:StoreArgs,callId:str
   }
   return frame;
  };
+ // The first visible native detail screen can be a full-screen gallery.
+ // Preserve the selected target but do not attribute a price until the same
+ // app window exposes a product title. Two bounded scrolls avoid loops.
+ if(openingProduct&&inspectStoreObservation(current,args.store,context,args.checks).pageKind!=='product-page'&&
+    classifyStoreScreen(current,args.store)==='product-details'){
+   const windowId=current.window_id;
+   for(let attempt=0;attempt<2;attempt++){
+     const w=current.coordinate_width,h=current.coordinate_height;
+     if(!Number.isInteger(w)||!Number.isInteger(h)||w<64||h<64)break;
+     const moved=await act(current,{kind:'swipe',x:Math.round(w*.5),y:Math.round(h*.75),end_x:Math.round(w*.5),end_y:Math.round(h*.3),duration_ms:450});
+     if(moved.isError)break;
+     await wait(500,signal);
+     const observed=await read();
+     if(observed.isError||observed.package_name!==pkg||observed.window_id!==windowId)break;
+     current=observed;
+     const detail=inspectStoreObservation(current,args.store,context,args.checks);
+     if(detail.pageKind==='product-page'&&detail.listingTitle)break;
+     if(classifyStoreScreen(current,args.store)!=='product-details')break;
+   }
+ }
  let frame=inspectStoreObservation(current,args.store,context,args.checks);
  if(frame.pageKind==='product-page'&&frame.listingTitle&&frame.sourceBound){
   if(!context.productPage)context.productPage={label:frame.listingTitle,at:current.captured_at_ms,snapshot:current.snapshot_id,windowId:current.window_id};

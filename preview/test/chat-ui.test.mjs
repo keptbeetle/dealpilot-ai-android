@@ -28,6 +28,21 @@ test('assistant source links are clickable with visible hosts, while HTML and un
  reconcileMessages(list,[{role:'user',text}]);assert.equal(list.querySelector('a'),null);
 });
 
+test('assistant emphasis and headings render safely without interpreting HTML or formatting user text',async()=>{
+ const document=dom(),{reconcileMessages}=await import('../chat-view.js'),list=document.querySelector('#messages');
+ const source='### Research Status\n**Verified:** *Unknown* \u0060quote\u0060 <img src=x onerror=alert(1)> [Source](https://shop.example/item)';
+ reconcileMessages(list,[{role:'assistant',text:source}]);
+ assert.equal(list.querySelector('h3')?.textContent,'Research Status');
+ assert.equal(list.querySelector('strong')?.textContent,'Verified:');
+ assert.equal(list.querySelector('em')?.textContent,'Unknown');
+ assert.equal(list.querySelector('code')?.textContent,'quote');
+ assert.equal(list.querySelector('img'),null);
+ assert.match(list.textContent,/<img src=x/);
+ assert.equal(list.querySelector('a')?.getAttribute('href'),'https://shop.example/item');
+ reconcileMessages(list,[{role:'user',text:source}]);
+ assert.equal(list.querySelector('h3'),null);assert.equal(list.querySelector('strong'),null);
+ assert.match(list.textContent,/\*\*Verified:\*\*/);
+});
 test('source comparison Markdown renders a bounded table with inert product text and literal user messages',async()=>{
  const document=dom(),{reconcileMessages}=await import('../chat-view.js'),list=document.querySelector('#messages');
  const text='Observed comparison\n| Product | Listed price |\n| --- | --- |\n| Sony <script>x</script> | INR 2999 |\n| JBL | Unknown |\nDelivery unknown.';

@@ -4,7 +4,7 @@ import {inspectStoreObservation,navigateStoreApp,STORE_APPS} from '../src/native
 import {nativeStoreForUrl} from '../src/store-policy.js';
 import {browsePage,inspectBrowserObservation,type BrowserObservation} from '../src/browser.js';
 import {browserReports,groundedShoppingResearch} from '../src/shopping-evidence.js';
-import {nativeTools} from '../src/tools.js';
+import {nativeTools,clearNativeToolUiState} from '../src/tools.js';
 
 // Assistant-authored synthetic source fixtures; not real retailer or human evidence.
 const now=1793948000000;
@@ -202,6 +202,31 @@ test('duplicate native WebView labels use a fresh bounded hit while stale positi
  const stale=bridge([screen(nodes)]);const result=await navigateStoreApp(stale.execute,{store:'amazon',action:{kind:'click',selector:{text:'Sony wireless headphones',bounds:{...bounds,top:201}}}},'stale');
  assert.equal(result.code,'APP_TARGET_AMBIGUOUS');assert.ok(!stale.calls.some(c=>c.name==='phone_act'));
 });
+test('a native product gallery scrolls to a title before binding price and stock',async()=>{
+ const title='JBL Tune 520BT wireless headphones';
+ const search=screen([{text:'Filters'},{text:title,clickable:true},{text:'Search'},{text:'Sort by relevance'},{text:'More results'}],{snapshot_id:'results',window_id:7});
+ const gallery=screen([{text:'Buy now'},{text:'Selected Color: Black'},{text:'Gallery'},{text:'Top pick'},{text:'Headphone image'}],{snapshot_id:'gallery',window_id:7});
+ const detail=screen([{resource_id:'product_title',text:title},{text:'INR 2999'},{text:'In stock'},{text:'Buy now'}],{snapshot_id:'detail',window_id:7});
+ const host=bridge([search,gallery,detail]);
+ const result=await navigateStoreApp(host.execute,{store:'amazon',action:{kind:'click',selector:{text:title}}},'gallery');
+ assert.equal(result.pageKind,'product-page',JSON.stringify(result));
+ assert.equal(result.listingTitle,title);
+ assert.equal(result.regularPrice?.amountCents,299900);
+ assert.equal(result.stock,'available');
+ assert.equal(host.calls.filter(c=>c.name==='phone_act'&&c.args.kind==='swipe').length,1);
+ assert.equal(result.sourceBound,true);
+});
+test('gallery recovery refuses changed native window and never reads the unrelated product price',async()=>{
+ const title='JBL Tune 520BT wireless headphones';
+ const search=screen([{text:'Filters'},{text:title,clickable:true},{text:'Search'},{text:'Sort by relevance'},{text:'More results'}],{snapshot_id:'results',window_id:7});
+ const gallery=screen([{text:'Buy now'},{text:'Selected Color: Black'},{text:'Gallery'},{text:'Top pick'},{text:'Headphone image'}],{snapshot_id:'gallery',window_id:7});
+ const different=screen([{resource_id:'product_title',text:'Unrelated sponsored headphones'},{text:'INR 999'},{text:'In stock'},{text:'Buy now'}],{snapshot_id:'different-window',window_id:8});
+ const host=bridge([search,gallery,different]);
+ const result=await navigateStoreApp(host.execute,{store:'amazon',action:{kind:'click',selector:{text:title}}},'gallery-window-change');
+ assert.notEqual(result.pageKind,'product-page');
+ assert.equal(result.regularPrice,null);
+ assert.equal(host.calls.filter(c=>c.name==='phone_act'&&c.args.kind==='swipe').length,1);
+});
 test('native actions consume fresh snapshots and cancellation stops before any primitive',async()=>{
  const host=bridge([screen([{text:'Sony headphones',clickable:true},{text:'Filters'},{text:'Search'},{text:'Help'}],{snapshot_id:'fresh'}),product()]);
  const context={};await navigateStoreApp(host.execute,{store:'amazon',action:{kind:'click',selector:{text:'Sony headphones'}}},'click',undefined,context);
@@ -212,6 +237,22 @@ test('private-session rejection is retained without retries, website calls or ph
  const host=bridge([],{isError:true,code:'ACTION_REJECTED',message:'Existing session cannot be used on a private display'});
  const result=await navigateStoreApp(host.execute,{store:'amazon',query:'headphones'},'session');assert.equal(result.code,'ACTION_REJECTED');
  assert.deepEqual(host.calls.map(c=>c.name),['phone_capabilities','phone_apps','phone_open_app']);
+});
+test('completed worker releases native selections so retired target IDs cannot be reused',async()=>{
+ const calls:string[]=[];
+ const observation=screen([{text:'Search'},{text:'Headphones',clickable:true},{text:'Filters'},{text:'Other results'},{text:'Product cards'}]);
+ const host={dropPriorImages:()=>{},call:(_method:string,{name}:any)=>{
+  calls.push(name);return name==='phone_capabilities'?{operation_prefix:'owned'}:name==='phone_apps'?{apps:[{package_name:pkg}]}:name==='phone_observe'?observation:{status:'dispatched'};
+ }};
+ const tool=nativeTools(host,'finished-worker').find(tool=>tool.name==='phone_store_app');
+ assert.ok(tool);
+ const observed=JSON.parse((await tool.execute('inspect',{store:'amazon'})).content[0].text);
+ const id=observed.navigationTargets?.find((t:any)=>t.label==='Headphones')?.target_id;
+ assert.ok(id);
+ clearNativeToolUiState(host,'finished-worker');
+ const after=JSON.parse((await tool.execute('stale',{store:'amazon',target_id:id})).content[0].text);
+ assert.equal(after.code,'APP_TARGET_EXPIRED');
+ assert.equal(calls.filter(name=>name==='phone_act').length,0);
 });
 test('native composite retains primitive grants and approval gates',async()=>{
  const host={authorizePhone:()=>{throw Error('approval expired');},call:()=>{throw Error('must not dispatch');}};

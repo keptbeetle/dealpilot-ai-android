@@ -68,6 +68,13 @@ function ownerUiState(host:any,owner:string,target:DisplayTarget='virtual'):Owne
   return state;
 }
 export function clearNativeToolUiState(host:any,owner:string,target?:DisplayTarget):void {
+  // Each finished worker previously retained its native targets and selection
+  // context in a host-lifetime Map. Release them alongside its screen lease.
+  const stores=storeContexts.get(host);
+  if(stores)for(const key of stores.keys()){
+    const parts=key.split('|');
+    if(parts[0]===owner&&(!target||parts[2]===target))stores.delete(key);
+  }
   const owners=uiStates.get(host);if(!owners)return;
   if(target){owners.delete(uiStateKey(owner,target));return;}
   owners.delete(uiStateKey(owner,'virtual'));owners.delete(uiStateKey(owner,'physical'));

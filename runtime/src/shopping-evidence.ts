@@ -51,11 +51,16 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now(),request
   if(!report.sourceUrl||nativeStoreForUrl(report.sourceUrl))continue;
   try{const url=new URL(report.sourceUrl);if(url.protocol!=='https:'||url.username||url.password)continue;unique.set(url.href,report);}catch{}
  }
- const pages=[...unique.values()].slice(-6);
- const products=pages.filter(report=>!report.blocked&&report.sourceBound&&(native(report)?report.pageKind==='product-page'&&Boolean(report.listingTitle):report.pageKind!=='search-results'&&/\/(?:products?|dp|p)\//i.test(new URL(report.sourceUrl!).pathname)));
+ const freshPages=[...unique.values()];
+ const products=freshPages.filter(report=>!report.blocked&&report.sourceBound&&(native(report)?report.pageKind==='product-page'&&Boolean(report.listingTitle):report.pageKind!=='search-results'&&/\/(?:products?|dp|p)\//i.test(new URL(report.sourceUrl!).pathname))).slice(-6);
+ // Search, gallery and session frames must not crowd previously verified product
+ // frames out of the limited display budget. They remain independently time-bound.
+ const pages=freshPages.slice(-6);
  if(!products.length){
+   // Distinct native snapshots should not multiply the same app handoff.
+   const discoveryPages=[...new Map([...unique.values()].map(report=>[native(report)?'native:'+report.sourcePackage:'url:'+report.sourceUrl,report])).values()].slice(-6);
   return 'Research is incomplete. No individual product listing was verified, so I cannot report current product prices, offers or matching specifications. Typical prices and model guesses have been withheld.'+
-   (pages.length?'\n\nObserved discovery screens:\n'+pages.map(report=>'- '+(native(report)?'['+report.sourceLabel+'](pocket-store://'+nativeStoreForPackage(report.sourcePackage!) +')':'[Open observed page](<'+report.sourceUrl+'>)')+(report.blocked?' — access requires user attention.':' — discovery evidence only.')).join('\n'):'\nNo fresh source-bound app or browser evidence was retained.')+
+   (discoveryPages.length?'\n\nObserved discovery screens:\n'+discoveryPages.map(report=>'- '+(native(report)?'['+report.sourceLabel+'](pocket-store://'+nativeStoreForPackage(report.sourcePackage!) +')':'[Open observed page](<'+report.sourceUrl+'>)')+(report.blocked?' — access requires user attention.':' — discovery evidence only.')).join('\n'):'\nNo fresh source-bound app or browser evidence was retained.')+
    accessText+'\n\nThis evidence does not establish a cart, payment or merchant order.';
  }
  const sections=products.map(report=>{

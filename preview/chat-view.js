@@ -1,21 +1,45 @@
 const renderedMessageText=new WeakMap();
+// Render only a small safe inline Markdown subset. Never parse untrusted
+// assistant/source content as HTML or allow it to select a URL destination.
+function appendInline(body,text){
+  const pattern=/(?<!\\)\*\*([^*\n]{1,240})\*\*|(?<!\\)\*([^*\n]{1,240})\*|(?<!\\)`([^`\n]{1,240})`/g;
+  let offset=0;
+  for(const match of text.matchAll(pattern)){
+    body.append(document.createTextNode(text.slice(offset,match.index)));
+    const mark=document.createElement(match[1]?'strong':match[2]?'em':'code');
+    mark.textContent=match[1]||match[2]||match[3];
+    body.append(mark);offset=match.index+match[0].length;
+  }
+  body.append(document.createTextNode(text.slice(offset)));
+}
 function appendLinks(body,text){
   const pattern=/\[([^\]\n]{1,120})\]\(<?((?:https|pocket-store):\/\/[^<>\s)]+)>?\)|(?:https|pocket-store):\/\/[^\s<>()]+/g;
   let offset=0;
   for(const match of text.matchAll(pattern)){
-    body.append(document.createTextNode(text.slice(offset,match.index)));
+    appendInline(body,text.slice(offset,match.index));
     const raw=(match[2]||match[0]).replace(/[.,;!]+$/,'');let url;
     try{url=new URL(raw);const native=globalThis.window?.PocketNative&&url.protocol==='pocket-store:'&&['amazon','flipkart'].includes(url.hostname)&&!url.pathname&&!url.search&&!url.hash&&!url.port;if((url.protocol!=='https:'&&!native)||url.username||url.password||raw.length>2048)url=null;}catch{}
     if(url){const link=document.createElement('a');link.href=url.href;link.textContent=match[1]?match[1]+' ('+url.hostname+')':raw;link.rel='noopener noreferrer';link.target=globalThis.window?.PocketNative?'_self':'_blank';body.append(link);if(!match[2])body.append(document.createTextNode(match[0].slice(raw.length)));}
     else body.append(document.createTextNode(match[0]));
     offset=match.index+match[0].length;
   }
-  body.append(document.createTextNode(text.slice(offset)));
+  appendInline(body,text.slice(offset));
 }
 function messageText(body,text,linkify){
   body.replaceChildren();if(!linkify){body.textContent=text;return;}
   const lines=text.split('\n'),cells=line=>line.trim().replace(/^\||\|$/g,'').split(/(?<!\\)\|/).map(s=>s.trim().replace(/\\([|<>\[\]*_`])/g,'$1'));
-  let plain=[];const flush=()=>{if(plain.length){appendLinks(body,plain.join('\n')+'\n');plain=[];}};
+  let plain=[];const flush=(final=false)=>{
+    if(!plain.length)return;
+    let textLines=[];const flushText=(finalText=false)=>{if(textLines.length){appendLinks(body,textLines.join('\n')+(finalText?'':'\n'));textLines=[];}};
+    for(const line of plain){
+      const heading=/^\s{0,3}#{1,4}\s+(.{1,220})$/.exec(line);
+      if(!heading){textLines.push(line);continue;}
+      flushText();
+      const title=document.createElement('h3');title.className='message-inline-heading';
+      appendInline(title,heading[1]);body.append(title);
+    }
+    flushText(final);plain=[];
+  };
   for(let i=0;i<lines.length;i++){
     if(lines[i].startsWith('|')&&/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(lines[i+1]||'')){
       flush();const wrap=document.createElement('div');wrap.className='comparison-table-scroll';const table=document.createElement('table');table.setAttribute('aria-label','Product comparison');
@@ -23,7 +47,7 @@ function messageText(body,text,linkify){
       for(;i<lines.length&&lines[i].startsWith('|')&&count<30;i++,count++){const row=document.createElement('tr');for(const value of cells(lines[i]).slice(0,6)){const td=document.createElement('td');td.textContent=value;row.append(td);}tbody.append(row);}i--;table.append(tbody);wrap.append(table);body.append(wrap);
     }else plain.push(lines[i]);
   }
-  if(plain.length)appendLinks(body,plain.join('\n'));
+  flush(true);
 }
 export function reconcileMessages(parent,items,label='Assistant') {
   let changed=false;

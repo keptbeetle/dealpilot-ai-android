@@ -27,6 +27,22 @@ test('expired source observations and unrelated tool text cannot supply fresh pr
  assert.deepEqual(browserReports([{role:'user',toolName:'phone_browser',content:[{type:'text',text:JSON.stringify(report)}]}]),[]);
  assert.equal(browserReports([{role:'toolResult',toolName:'phone_browser',content:[{type:'text',text:JSON.stringify(report)}]}]).length,1);
 });
+test('repeated native discovery observations render one handoff per retailer, without invented products',()=>{
+ const frame=(store:'amazon'|'flipkart',id:string)=>inspectStoreObservation({package_name:store==='amazon'?'in.amazon.mShop.android.shopping':'com.flipkart.android',snapshot_id:id,captured_at_ms:now,nodes:[{text:'Search headphones'},{text:'Headphones results'}]},store);
+ const answer=groundedShoppingResearch([frame('amazon','a'),...Array.from({length:9},(_,i)=>frame('flipkart','f'+i))],now);
+ assert.match(answer,/Research is incomplete/);
+ assert.equal((answer.match(/pocket-store:\/\/flipkart/g)||[]).length,1);
+ assert.equal((answer.match(/pocket-store:\/\/amazon/g)||[]).length,1);
+ assert.doesNotMatch(answer,/Page-listed amount|Lowest listed price/);
+});
+test('many later discovery frames cannot evict an earlier fresh product observation',()=>{
+ const product=inspectStoreObservation({package_name:'in.amazon.mShop.android.shopping',snapshot_id:'product-source',captured_at_ms:now,nodes:[{resource_id:'product_title',text:'Sony WH-CH520 headphones'},{text:'Buy now'},{text:'INR 2999'},{text:'In stock'}]},'amazon');
+ const discovery=Array.from({length:9},(_,i)=>inspectStoreObservation({package_name:'com.flipkart.android',snapshot_id:'discovery-'+i,captured_at_ms:now+i,nodes:[{text:'Search headphones'},{text:'Results'}]},'flipkart'));
+ const answer=groundedShoppingResearch([product,...discovery],now+30);
+ assert.match(answer,/Source-observed listing evidence/);
+ assert.match(answer,/Sony WH-CH520/);
+ assert.match(answer,/2999\.00/);
+});
 test('an access challenge retains its observed handoff link while withholding prices',()=>{
  const report=observation('shop.example/products/headphones',['CAPTCHA verify you are human','INR 4999']);
  const answer=groundedShoppingResearch([report],now);assert.match(answer,/access requires user attention/);assert.match(answer,/shop.example/);assert.ok(!answer.includes('4999'));
