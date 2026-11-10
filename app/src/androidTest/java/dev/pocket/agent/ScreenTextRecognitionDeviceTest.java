@@ -57,6 +57,29 @@ public class ScreenTextRecognitionDeviceTest {
   }finally{ScreenTextRecognition.shutdown();}
   assertTrue("Repeated store-sized images must remain within 250 MB additional PSS; baseline="+before+" peak="+peak,peak-before<250000);
  }
+ @Test public void ocrRecognizerClosesAfterInactivityAndReuseExtendsItsLease() throws Exception {
+  Bitmap bitmap=Bitmap.createBitmap(480,180,Bitmap.Config.ARGB_8888);
+  Canvas canvas=new Canvas(bitmap);canvas.drawColor(Color.WHITE);
+  Paint paint=new Paint();paint.setColor(Color.BLACK);paint.setTextSize(46);paint.setAntiAlias(true);
+  canvas.drawText("Price INR 899",15,115,paint);
+  ByteArrayOutputStream bytes=new ByteArrayOutputStream();bitmap.compress(Bitmap.CompressFormat.PNG,100,bytes);bitmap.recycle();
+  java.lang.reflect.Field field=ScreenTextRecognition.class.getDeclaredField("recognizer");
+  field.setAccessible(true);
+  ScreenTextRecognition.shutdown();
+  try {
+   ScreenTextRecognition.recognize(bytes.toByteArray(),"idle-1",100);
+   Object first=field.get(null);assertNotNull(first);
+   Thread.sleep(1500);
+   ScreenTextRecognition.recognize(bytes.toByteArray(),"idle-2",200);
+   long activePssKb=android.os.Debug.getPss();
+   assertSame("Active consecutive OCR captures reuse the same model",first,field.get(null));
+   Thread.sleep(2500);
+   assertSame("The old timer must not close an active recognizer",first,field.get(null));
+   Thread.sleep(2100);
+   assertNull("Idle OCR must release the native recognition model",field.get(null));
+   android.util.Log.i("PocketOcrMemoryTest","PSS_KB active="+activePssKb+" afterIdle="+android.os.Debug.getPss());
+  }finally{ScreenTextRecognition.shutdown();}
+ }
  @Test public void archivedRealDigitWheelScreenshotIsRecognisedAsPixels() throws Exception {
   File folder=new File(InstrumentationRegistry.getInstrumentation().getTargetContext().getFilesDir(),"ocr-test"),file=new File(folder,"flipkart.png");Assume.assumeTrue("Optional private same-visit screenshot supplied by USB audit",file.isFile());
   File source=new File(folder,"flipkart-anchors.json");Assume.assumeTrue(source.isFile());JSONObject meta=new JSONObject(new String(Files.readAllBytes(source.toPath()),java.nio.charset.StandardCharsets.UTF_8));

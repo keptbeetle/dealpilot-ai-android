@@ -11,21 +11,46 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.security.MessageDigest;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** On-device transcription only; an OCR claim is not a verified offer or action target. */
 final class ScreenTextRecognition {
-    // Initializing and closing ML Kit for every screenshot repeatedly creates
-    // large native recognition contexts. Keep one serialized recognizer for the
-    // lifetime of the tool host, then release it on service shutdown.
+    // Reuse one serialized native recognizer across a burst of screenshots,
+    // then close it after a brief idle period so successive conversations do
+    // not retain the prior model while allocating a fresh runtime workload.
     private static TextRecognizer recognizer;
+    private static final long IDLE_RELEASE_MS = 3500;
+    private static final ScheduledExecutorService idleReleaser = Executors.newSingleThreadScheduledExecutor(job->{
+        Thread thread=new Thread(job,"PocketOcrIdleRelease");thread.setDaemon(true);return thread;
+    });
+    private static ScheduledFuture<?> pendingRelease;
+    private static long releaseVersion;
     private static TextRecognizer reusableRecognizer() {
         if(recognizer==null)recognizer=TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         return recognizer;
     }
-    static synchronized void shutdown() {
+    private static void closeRecognizer() {
         if(recognizer!=null){recognizer.close();recognizer=null;}
+    }
+    private static void releaseWhenIdle() {
+        if(pendingRelease!=null)pendingRelease.cancel(false);
+        long version=++releaseVersion;
+        pendingRelease=idleReleaser.schedule(()->{
+            synchronized(ScreenTextRecognition.class){
+                if(version!=releaseVersion)return;
+                pendingRelease=null;
+                closeRecognizer();
+            }
+        },IDLE_RELEASE_MS,TimeUnit.MILLISECONDS);
+    }
+    static synchronized void shutdown() {
+        releaseVersion++;
+        if(pendingRelease!=null){pendingRelease.cancel(false);pendingRelease=null;}
+        closeRecognizer();
     }
     static JSONObject recognize(byte[] image,String snapshotId,long capturedAt) throws Exception {
         return recognize(image,snapshotId,capturedAt,new JSONArray(),0,0);
@@ -59,6 +84,6 @@ final class ScreenTextRecognition {
             }
             StringBuilder hash=new StringBuilder();for(byte b:MessageDigest.getInstance("SHA-256").digest(image))hash.append(String.format(java.util.Locale.ROOT,"%02x",b&255));
             return Json.obj("engine","mlkit-latin","snapshotId",snapshotId,"capturedAt",capturedAt,"imageSha256",hash.toString(),"width",bitmap.getWidth(),"height",bitmap.getHeight(),"lines",lines,"currencyRegions",regions,"truncated",truncated,"onDevice",true);
-        }finally{bitmap.recycle();}
+        }finally{bitmap.recycle();releaseWhenIdle();}
     }
 }
