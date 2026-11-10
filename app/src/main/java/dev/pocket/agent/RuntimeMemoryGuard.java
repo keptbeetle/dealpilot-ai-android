@@ -15,13 +15,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * safely reclaim this isolated process rather than losing the entire device.
  */
 final class RuntimeMemoryGuard implements AutoCloseable {
+    static final long SOFT_PRESSURE_KB = 450L * 1024;
     static final long WARNING_KB = 700L * 1024;
     static final long EMERGENCY_KB = 1000L * 1024;
+    static final long COMPACTION_COOLDOWN_MS = 20_000;
     static final long SAMPLE_DELAY_MS = 500;
     private final Context context;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final Thread watcher;
     private int consecutiveWarnings;
+    private int consecutiveSoftPressure;
+    private long lastCompactionAtMs;
 
     RuntimeMemoryGuard(Context context) {
         this.context = context.getApplicationContext();
@@ -45,6 +49,10 @@ final class RuntimeMemoryGuard implements AutoCloseable {
     static boolean mustStop(long rssKb, int consecutiveHighReadings) {
         return rssKb >= EMERGENCY_KB
             || (rssKb >= WARNING_KB && consecutiveHighReadings >= 2);
+    }
+
+    static boolean shouldRequestCompaction(long rssKb,int consecutiveSamples,long elapsedSinceLastMs) {
+        return rssKb>=SOFT_PRESSURE_KB&&consecutiveSamples>=2&&elapsedSinceLastMs>=COMPACTION_COOLDOWN_MS;
     }
 
     private static long readRssKb() {
@@ -74,6 +82,22 @@ final class RuntimeMemoryGuard implements AutoCloseable {
                 // Do not wait for the potentially wedged Javet/Node/UI event loop.
                 Process.killProcess(Process.myPid());
                 return;
+            }
+            if(rssKb>=SOFT_PRESSURE_KB)consecutiveSoftPressure++;
+            else consecutiveSoftPressure=0;
+            long now=android.os.SystemClock.elapsedRealtime();
+            if(shouldRequestCompaction(rssKb,consecutiveSoftPressure,now-lastCompactionAtMs)) {
+                RuntimeHost host=AgentService.peekHost();
+                if(host!=null) {
+                    lastCompactionAtMs=now;
+                    android.os.Debug.MemoryInfo memory=new android.os.Debug.MemoryInfo();
+                    android.os.Debug.getMemoryInfo(memory);
+                    Log.w("PocketMemoryGuard","Soft memory pressure rssKb="+rssKb+" nativePssKb="+memory.nativePss
+                        +" otherPssKb="+memory.otherPss+" dalvikPssKb="+memory.dalvikPss);
+                    host.compactRuntimeMemory().whenComplete((outcome,failure)->{
+                        if(failure!=null)Log.w("PocketMemoryGuard","Soft-pressure V8 compaction could not finish");
+                    });
+                }
             }
             try { Thread.sleep(SAMPLE_DELAY_MS); }
             catch (InterruptedException interrupted) { Thread.currentThread().interrupt();return; }

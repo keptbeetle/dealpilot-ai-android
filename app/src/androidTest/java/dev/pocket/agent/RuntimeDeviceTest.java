@@ -66,6 +66,18 @@ public class RuntimeDeviceTest {
         System.out.println("POCKET_NODE_MEMORY="+stats);
         assertTrue("Embedded Node heap budget was not applied: "+stats,stats.optLong("v8HeapLimitBytes")>0&&stats.optLong("v8HeapLimitBytes")<700L*1024*1024);
     }
+    @Test public void embeddedNodeMemoryCanCompactWithoutLosingRuntimeState() throws Exception {
+        RuntimeHost h=host();
+        JSONObject before=h.memoryStats().get(5,TimeUnit.SECONDS);
+        JSONObject compacted=h.compactRuntimeMemory().get(10,TimeUnit.SECONDS);
+        JSONObject after=h.memoryStats().get(5,TimeUnit.SECONDS);
+        assertTrue(compacted.toString(),compacted.optBoolean("compacted"));
+        assertTrue(compacted.toString(),compacted.optLong("pssBeforeKb")>0&&compacted.optLong("pssAfterKb")>0);
+        assertTrue(after.toString(),after.optLong("v8HeapLimitBytes")>0);
+        assertTrue(after.toString(),after.optLong("heapUsed")>0);
+        assertEquals("Compaction must not re-create or reset the isolate",before.optLong("v8HeapLimitBytes"),after.optLong("v8HeapLimitBytes"));
+        System.out.println("POCKET_NODE_COMPACTION="+compacted);
+    }
     @Test public void observationNodeSerializationStaysBelowToolTextBudget() throws Exception {
         java.util.List<dev.pocket.control.ControlBackend.Node> nodes=new java.util.ArrayList<>();
         String hostile=("\\\"\n".repeat(500))+"tail";

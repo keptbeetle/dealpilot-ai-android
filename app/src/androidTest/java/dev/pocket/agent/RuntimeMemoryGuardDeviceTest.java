@@ -13,6 +13,14 @@ public final class RuntimeMemoryGuardDeviceTest {
         assertEquals(-1L, RuntimeMemoryGuard.parseVmRssKb("VmRSS: 300 MB"));
     }
 
+    @Test public void compactsOnlySustainedSoftPressureWithCooldown() {
+        assertFalse(RuntimeMemoryGuard.shouldRequestCompaction(350L*1024,4,30_000));
+        assertFalse(RuntimeMemoryGuard.shouldRequestCompaction(RuntimeMemoryGuard.SOFT_PRESSURE_KB,1,30_000));
+        assertFalse(RuntimeMemoryGuard.shouldRequestCompaction(RuntimeMemoryGuard.SOFT_PRESSURE_KB,2,1_000));
+        assertTrue(RuntimeMemoryGuard.shouldRequestCompaction(RuntimeMemoryGuard.SOFT_PRESSURE_KB,2,RuntimeMemoryGuard.COMPACTION_COOLDOWN_MS));
+        assertTrue(RuntimeMemoryGuard.shouldRequestCompaction(610L*1024,3,60_000));
+    }
+
     @Test public void allowsNormalWorkAndRejectsSustainedUnsafeRss() {
         assertFalse(RuntimeMemoryGuard.mustStop(250L * 1024, 0));
         assertFalse(RuntimeMemoryGuard.mustStop(RuntimeMemoryGuard.WARNING_KB, 1));

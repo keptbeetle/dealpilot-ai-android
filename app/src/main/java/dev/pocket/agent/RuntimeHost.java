@@ -48,6 +48,13 @@ public final class RuntimeHost implements AutoCloseable {
     private final java.util.Set<CompletableFuture<?>> pendingRequests =
         java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
     private final Runnable pump = this::pumpEvents;
+    private long lastV8CompactionAtMs;
+    private final Runnable idleV8Compaction = () -> {
+        if(closed||closing||active||runtime==null)return;
+        if(android.os.SystemClock.uptimeMillis()-lastV8CompactionAtMs<10_000)return;
+        try {compactNodeHeapOnOwnerThread();}
+        catch(Throwable failure){android.util.Log.w("PocketRuntime","Idle V8 compaction unavailable",failure);}
+    };
     private void pumpEvents() {
         pumpScheduled = false;
         pumpDueAtMs = 0;
@@ -195,6 +202,12 @@ public final class RuntimeHost implements AutoCloseable {
                 String response = runtime.getExecutor("(()=>{const value=PocketAgent.dispatch(" + JSONObject.quote(serialized) + ");return typeof value==='string'?value:JSON.stringify(value)})()").executeString();
                 runtime.await(V8AwaitMode.RunNoWait); schedulePump();
                 JSONObject outcome = response == null ? new JSONObject().put("ok", true) : new JSONObject(response);
+                if (outcome.optBoolean("ok") && ("new_main".equals(command.optString("action")) || "open_main".equals(command.optString("action")))) {
+                    // Switching chats serializes the full retained worker archive. Release
+                    // unreachable V8 buffers before the next research session allocates.
+                    try {compactNodeHeapOnOwnerThread();}
+                    catch(Throwable memoryError) {android.util.Log.w("PocketRuntime","Chat transition V8 compaction unavailable",memoryError);}
+                }
                 if (outcome.optBoolean("ok") && ("new_main".equals(command.optString("action")) || "stop_all".equals(command.optString("action"))))
                     VoiceConversationInvitation.cancel(context, "chat_or_runtime_changed");
                 result.complete(outcome);
@@ -248,7 +261,11 @@ public final class RuntimeHost implements AutoCloseable {
         } else if (type.equals("ready") || type.equals("error") || (BuildConfig.DEVELOPMENT_TOOLS && type.equals("log"))) {
             try {store.record(event);} catch(Throwable persistenceFailure) {android.util.Log.w("PocketRuntime","Runtime event persistence failed",persistenceFailure);}
         }
-        if(type.equals("state")||type.equals("activity"))workWakeLock.setActive(active&&!cleanupOnly);
+        if(type.equals("state")||type.equals("activity")) {
+            workWakeLock.setActive(active&&!cleanupOnly);
+            handler.removeCallbacks(idleV8Compaction);
+            if(!active&&!closing&&!closed)handler.postDelayed(idleV8Compaction,3_000);
+        }
         try {listener.accept(event);} catch(Throwable observerFailure) {android.util.Log.w("PocketRuntime","Runtime listener failed",observerFailure);}
         schedulePump();
     }
@@ -397,6 +414,27 @@ public final class RuntimeHost implements AutoCloseable {
         if(!accepted)result.completeExceptionally(new IllegalStateException("Runtime thread is unavailable"));
         return result;
     }
+    private JSONObject compactNodeHeapOnOwnerThread() throws Exception {
+        if(runtime==null)throw new IllegalStateException("Runtime is not running");
+        long before=android.os.Debug.getPss();
+        runtime.lowMemoryNotification();
+        lastV8CompactionAtMs=android.os.SystemClock.uptimeMillis();
+        long after=android.os.Debug.getPss();
+        JSONObject memory=new JSONObject(runtime.getExecutor("JSON.stringify(process.memoryUsage())").executeString());
+        android.util.Log.i("PocketRuntime","V8 compaction PSS(KB) before="+before+" after="+after
+            +" nodeHeapUsedBytes="+memory.optLong("heapUsed")+" nodeExternalBytes="+memory.optLong("external"));
+        return Json.obj("pssBeforeKb",before,"pssAfterKb",after,"nodeHeapUsedBytes",memory.optLong("heapUsed"),
+            "nodeExternalBytes",memory.optLong("external"),"compacted",true);
+    }
+    /** Local instrumentation and in-process callers only, never exposed by WebView. */
+    CompletableFuture<JSONObject> compactRuntimeMemory() {
+        CompletableFuture<JSONObject> result=track(new CompletableFuture<>());
+        if(!handler.post(()->{
+            try{result.complete(compactNodeHeapOnOwnerThread());}
+            catch(Throwable error){result.completeExceptionally(error);}
+        }))result.completeExceptionally(new IllegalStateException("Runtime owner thread is unavailable"));
+        return result;
+    }
     public CompletableFuture<JSONObject> memoryStats() {
         CompletableFuture<JSONObject> result = track(new CompletableFuture<>());
         boolean accepted=handler.post(() -> {
@@ -438,7 +476,7 @@ public final class RuntimeHost implements AutoCloseable {
     }
     private void closeOnOwnerThread() {
         if(closed)return;
-        closed=true;handler.removeCallbacks(pump);pumpScheduled=false;
+        closed=true;handler.removeCallbacks(pump);handler.removeCallbacks(idleV8Compaction);pumpScheduled=false;
         boolean clean=false;
         try {clean=drainRuntimeBeforeClose();}
         catch(Throwable error) {fail("Runtime shutdown drain failed",error);}
