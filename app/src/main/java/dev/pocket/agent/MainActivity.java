@@ -892,6 +892,34 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 });
             });
     }
+    private void createChatFromWeb(PocketWebUi.Reply reply) {
+        // Reply only after the runtime has created and durably published a new
+        // thread. A queued service Intent used to return the previous chat's
+        // snapshot, allowing a subsequent send to race the thread transition.
+        JSONObject before=store.load();
+        if(before.optBoolean("busy"))throw new IllegalStateException("Stop the current response before starting a new chat");
+        String previousThread=before.optString("mainThreadId");
+        VoiceConversationInvitation.cancel(this,"thread_changed");
+        stopService(new Intent(this,SubscriptionVoiceService.class));
+        RuntimeOwner lease=RuntimeOwner.acquire(getApplicationContext());
+        lease.ready.thenCompose(ignored->lease.host.dispatch(json("action","new_main")))
+            .whenComplete((result,error)->{
+                lease.close();
+                uiReads.submit(()->{
+                    if(error!=null||result==null||!result.optBoolean("ok")) {
+                        reply.complete(null,result==null?"Could not create a new chat":result.optString("error","Could not create a new chat"));
+                        return;
+                    }
+                    try {
+                        JSONObject updated=store.load();
+                        if(previousThread.equals(updated.optString("mainThreadId"))) {
+                            reply.complete(null,"The new chat was not confirmed. Try again.");return;
+                        }
+                        reply.complete(webSnapshot(updated),null);
+                    }catch(Exception readFailure){reply.complete(null,"Could not load the new chat");}
+                });
+            });
+    }
     private JSONArray credentialsForUi() throws Exception { return new CredentialStore(this).mcpServers(); }
     private void finishChatDeletion(String threadId,PocketWebUi.Reply reply,long deadline) {
         if(isDestroyed()){reply.complete(null,"Chat deletion was interrupted");return;}
@@ -974,7 +1002,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             case "/native/archive" -> { historyQueries.submit(()->{try(StateStore history=new StateStore(getApplicationContext())){reply.complete(history.readConversation(body.optString("threadId"),body.optInt("offset")),null);}catch(Exception failure){reply.complete(null,"Could not read saved conversation");}});return; }
             case "/native/open-chat" -> {openChatFromWeb(body.optString("threadId"),reply);return;}
             case "/native/send" -> { String text=body.optString("text").trim();if(text.isEmpty()||text.length()>12000)throw new IllegalArgumentException("Enter a message of 12000 characters or fewer");sendMainMessage(text); }
-            case "/native/new" -> { if(state.optBoolean("busy"))throw new IllegalStateException("Stop the current response before starting a new chat");VoiceConversationInvitation.cancel(this,"thread_changed");stopService(new Intent(this,SubscriptionVoiceService.class));command(json("action","new_main")); }
+            case "/native/new" -> {createChatFromWeb(reply);return;}
             case "/native/stop" -> command(json("action","stop_main"));
             case "/native/minimize" -> moveTaskToBack(true);
             case "/native/theme" -> {

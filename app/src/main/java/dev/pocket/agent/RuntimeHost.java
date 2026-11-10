@@ -74,7 +74,8 @@ public final class RuntimeHost implements AutoCloseable {
         tools = new NativeTools(context);
         // Set the embedded Node old-space budget before the first isolate is created.
         // RSS protection separately covers external allocations outside the JS heap.
-        NodeRuntimeOptions.V8_FLAGS.setMaxOldSpaceSize(384).setMemorySaverMode(true);
+        // Cap V8 old-space on this memory-limited Android test device.
+        NodeRuntimeOptions.V8_FLAGS.setMaxOldSpaceSize(192).setMemorySaverMode(true);
         runtime = V8Host.getNodeI18nInstance().createV8Runtime();
         runtime.getNodeModule(NodeModuleModule.class).setRequireRootDirectory(context.getFilesDir());
         try (V8ValueObject bridge = runtime.createV8ValueObject()) {
@@ -202,12 +203,8 @@ public final class RuntimeHost implements AutoCloseable {
                 String response = runtime.getExecutor("(()=>{const value=PocketAgent.dispatch(" + JSONObject.quote(serialized) + ");return typeof value==='string'?value:JSON.stringify(value)})()").executeString();
                 runtime.await(V8AwaitMode.RunNoWait); schedulePump();
                 JSONObject outcome = response == null ? new JSONObject().put("ok", true) : new JSONObject(response);
-                if (outcome.optBoolean("ok") && ("new_main".equals(command.optString("action")) || "open_main".equals(command.optString("action")))) {
-                    // Switching chats serializes the full retained worker archive. Release
-                    // unreachable V8 buffers before the next research session allocates.
-                    try {compactNodeHeapOnOwnerThread();}
-                    catch(Throwable memoryError) {android.util.Log.w("PocketRuntime","Chat transition V8 compaction unavailable",memoryError);}
-                }
+                // Avoid full synchronous V8 compaction inside the WebView chat-switch
+                // acknowledgment; idle and soft-pressure compaction remain enabled.
                 if (outcome.optBoolean("ok") && ("new_main".equals(command.optString("action")) || "stop_all".equals(command.optString("action"))))
                     VoiceConversationInvitation.cancel(context, "chat_or_runtime_changed");
                 result.complete(outcome);

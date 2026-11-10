@@ -64,7 +64,8 @@ public class RuntimeDeviceTest {
         System.out.println("POCKET_NODE_GATE="+gate);
         JSONObject stats=h.memoryStats().get(5,TimeUnit.SECONDS);
         System.out.println("POCKET_NODE_MEMORY="+stats);
-        assertTrue("Embedded Node heap budget was not applied: "+stats,stats.optLong("v8HeapLimitBytes")>0&&stats.optLong("v8HeapLimitBytes")<700L*1024*1024);
+        assertTrue("Embedded Android V8 heap ceiling is not bounded: "+stats,
+            stats.optLong("v8HeapLimitBytes")>200L*1024*1024&&stats.optLong("v8HeapLimitBytes")<400L*1024*1024);
     }
     @Test public void embeddedNodeMemoryCanCompactWithoutLosingRuntimeState() throws Exception {
         RuntimeHost h=host();
