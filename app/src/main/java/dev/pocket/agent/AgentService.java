@@ -27,6 +27,7 @@ public final class AgentService extends Service {
     private final Handler main = new Handler(Looper.getMainLooper());
     private RuntimeHost host;
     private RuntimeOwner runtimeLease;
+    private RuntimeMemoryGuard memoryGuard;
     private volatile boolean stopping;
     private java.util.concurrent.CompletableFuture<Void> startup;
     public static void observe(Observer observer) { observers.add(observer); }
@@ -41,6 +42,7 @@ public final class AgentService extends Service {
         Notification notification = notification();
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         else startForeground(1, notification);
+        memoryGuard = new RuntimeMemoryGuard(this);
         runtimeLease=RuntimeOwner.acquire(this); host=runtimeLease.host; startup=runtimeLease.ready;
     }
     private Notification notification() {
@@ -154,7 +156,8 @@ public final class AgentService extends Service {
     }
     @Override public void onDestroy() {
         stopping = true;
-        instance = null; if (runtimeLease != null) runtimeLease.close(); stopForeground(STOP_FOREGROUND_REMOVE);
+        instance = null; if (memoryGuard != null) memoryGuard.close();
+        if (runtimeLease != null) runtimeLease.close(); stopForeground(STOP_FOREGROUND_REMOVE);
         try { publish(new JSONObject().put("type", "stopped")); } catch (Exception ignored) { }
         super.onDestroy();
     }

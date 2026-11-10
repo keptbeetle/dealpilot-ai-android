@@ -8,6 +8,7 @@ import com.caoccao.javet.enums.V8AwaitMode;
 import com.caoccao.javet.exceptions.JavetException;
 import com.caoccao.javet.interop.NodeRuntime;
 import com.caoccao.javet.interop.V8Host;
+import com.caoccao.javet.interop.options.NodeRuntimeOptions;
 import com.caoccao.javet.node.modules.NodeModuleModule;
 import com.caoccao.javet.values.reference.V8ValueObject;
 import java.io.File;
@@ -64,6 +65,9 @@ public final class RuntimeHost implements AutoCloseable {
     private void createRuntime() throws Exception {
         store.markInterrupted();
         tools = new NativeTools(context);
+        // Set the embedded Node old-space budget before the first isolate is created.
+        // RSS protection separately covers external allocations outside the JS heap.
+        NodeRuntimeOptions.V8_FLAGS.setMaxOldSpaceSize(384).setMemorySaverMode(true);
         runtime = V8Host.getNodeI18nInstance().createV8Runtime();
         runtime.getNodeModule(NodeModuleModule.class).setRequireRootDirectory(context.getFilesDir());
         try (V8ValueObject bridge = runtime.createV8ValueObject()) {
@@ -397,7 +401,7 @@ public final class RuntimeHost implements AutoCloseable {
         CompletableFuture<JSONObject> result = track(new CompletableFuture<>());
         boolean accepted=handler.post(() -> {
             if(runtime==null){result.completeExceptionally(new IllegalStateException("Runtime is not running"));return;}
-            try { result.complete(new JSONObject(runtime.getExecutor("JSON.stringify(process.memoryUsage())").executeString())); }
+            try { result.complete(new JSONObject(runtime.getExecutor("JSON.stringify({...process.memoryUsage(),v8HeapLimitBytes:require('v8').getHeapStatistics().heap_size_limit})").executeString())); }
             catch (Throwable error) {handleRuntimeEntryFailure("Runtime memory query failed",error);result.completeExceptionally(error);}
         });
         if(!accepted)result.completeExceptionally(new IllegalStateException("Runtime thread is unavailable"));

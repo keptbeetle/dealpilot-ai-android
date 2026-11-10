@@ -30,6 +30,24 @@ test('chat shows an attributed comparison table and distinguishes lowest listed 
  const s=groundedShoppingResearch([product('Sony X100 headphones'),product('JBL X200 headphones',2499)],now,req());
  assert.match(s,/\| Product \|/);assert.match(s,/Lowest listed price among matching observed offers/);assert.match(s,/Delivery costs remain unknown/);assert.match(s,/JBL X200/);assert.ok(!s.includes('cheapest delivered'));
 });
+test('source-observed over-budget price remains visible as excluded, never rankable',()=>{
+ const sony=product('Sony WH-CH520 headphones',3590),soundcore=product('Soundcore Q20i headphones',5999);
+ const comparison=compareShoppingCandidates([sony,soundcore],req(),now);
+ assert.equal(comparison.rows[1].priceCents,null);
+ assert.equal(comparison.rows[1].observedPriceCents,599900);
+ assert.equal(comparison.rows[1].rankable,false);
+ assert.equal(comparison.status,'insufficient');
+ const text=groundedShoppingResearch([sony,soundcore],now,req());
+ assert.match(text,/Soundcore Q20i headphones \| Amazon Android app \| INR 5999\.00 \(over budget\)/);
+ assert.doesNotMatch(text,/Lowest listed price among matching observed offers/);
+});
+test('an unbound or stale source cannot lend an observed price to the comparison',()=>{
+ const sony=product('Sony WH-CH520 headphones',3590);
+ const other={...product('Soundcore Q20i headphones',5999),sourceBound:false};
+ const stale={...product('Soundcore Q20i headphones',5999),observedAt:now-16*60000};
+ assert.equal(compareShoppingCandidates([sony,other],req(),now).rows.length,1);
+ assert.equal(compareShoppingCandidates([sony,stale],req(),now).rows[1].observedPriceCents,null);
+});
 test('partial page observations may compare explicit known facts while missing required specs still hold',()=>{
  const a={...product('Sony X100 headphones'),truncated:true},b={...product('JBL X200 headphones'),truncated:true};
  assert.equal(compareShoppingCandidates([a,b],req(),now).status,'comparable-listed-prices');

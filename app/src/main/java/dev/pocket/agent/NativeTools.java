@@ -55,6 +55,7 @@ final class NativeTools implements AutoCloseable {
     @Override public synchronized void close() {
         displays.retireOwners(new LinkedHashSet<>(acquiredVirtualOwners),displayGeneration);
         acquiredVirtualOwners.clear();
+        ScreenTextRecognition.shutdown();
     }
     private synchronized JSONObject screenLease(JSONObject args,String owner) {
         if(args.length()!=1) return Json.failure("INVALID_ARGUMENT","Only action is accepted");

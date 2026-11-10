@@ -222,6 +222,11 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     }
     @Override protected void onStart() {
         super.onStart(); AgentService.observe(this); SubscriptionVoiceService.observe(this); state = store.load(); render();
+        android.content.SharedPreferences guard=getSharedPreferences("memory-guard",0);
+        if(guard.getLong("lastIncidentAt",0)>0) {
+            toast("Pocket Agent stopped an unsafe memory spike. Saved chats are preserved; retry the interrupted work.");
+            guard.edit().remove("lastIncidentAt").apply();
+        }
         JSONArray events = store.recentEvents();
         for (int i = 0; i < events.length(); i++) {
             JSONObject event = events.optJSONObject(i);
@@ -867,6 +872,26 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         try(AutonomyStore automation=new AutonomyStore(this)){result.put("autonomy",automation.load());result.put("autonomyStatus",automation.status());}
         return result;
     }
+    private void openChatFromWeb(String threadId,PocketWebUi.Reply reply) {
+        if(!threadId.matches("[a-f0-9-]{36}"))throw new IllegalArgumentException("Invalid chat");
+        // Read service-backed state: this Activity may be stopped during native store work.
+        if(store.load().optBoolean("busy"))throw new IllegalStateException("Stop the current response before switching chats");
+        VoiceConversationInvitation.cancel(this,"thread_changed");
+        stopService(new Intent(this,SubscriptionVoiceService.class));
+        RuntimeOwner lease=RuntimeOwner.acquire(getApplicationContext());
+        lease.ready.thenCompose(ignored->lease.host.dispatch(json("action","open_main","threadId",threadId)))
+            .whenComplete((outcome,failure)->{
+                lease.close();
+                uiReads.submit(()->{
+                    if(failure!=null||outcome==null||!outcome.optBoolean("ok")){
+                        reply.complete(null,"Could not open this chat. Stop active work and try again.");
+                        return;
+                    }
+                    try {reply.complete(webSnapshot(store.load()),null);}
+                    catch(Exception readFailure){reply.complete(null,"Could not load the opened chat");}
+                });
+            });
+    }
     private JSONArray credentialsForUi() throws Exception { return new CredentialStore(this).mcpServers(); }
     private void finishChatDeletion(String threadId,PocketWebUi.Reply reply,long deadline) {
         if(isDestroyed()){reply.complete(null,"Chat deletion was interrupted");return;}
@@ -947,7 +972,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 }catch(Exception failure){reply.complete(null,"Conversation naming is unavailable");}});return;
             }
             case "/native/archive" -> { historyQueries.submit(()->{try(StateStore history=new StateStore(getApplicationContext())){reply.complete(history.readConversation(body.optString("threadId"),body.optInt("offset")),null);}catch(Exception failure){reply.complete(null,"Could not read saved conversation");}});return; }
-            case "/native/open-chat" -> {String threadId=body.optString("threadId");if(!threadId.matches("[a-f0-9-]{36}"))throw new IllegalArgumentException("Invalid chat");if(state.optBoolean("busy"))throw new IllegalStateException("Stop the current response before switching chats");String id="open-"+System.nanoTime();webRequests.put(id,(value,error)->{if(error!=null){reply.complete(null,error);return;}try{reply.complete(webSnapshot(),null);}catch(Exception failure){reply.complete(null,"Could not load the opened chat");}});VoiceConversationInvitation.cancel(this,"thread_changed");stopService(new Intent(this,SubscriptionVoiceService.class));command(json("action","open_main","threadId",threadId,"requestId",id));pocketUi.view.postDelayed(()->{PocketWebUi.Reply pending=webRequests.remove(id);if(pending!=null)pending.complete(null,"Could not open this chat. Try again.");},20000);return;}
+            case "/native/open-chat" -> {openChatFromWeb(body.optString("threadId"),reply);return;}
             case "/native/send" -> { String text=body.optString("text").trim();if(text.isEmpty()||text.length()>12000)throw new IllegalArgumentException("Enter a message of 12000 characters or fewer");sendMainMessage(text); }
             case "/native/new" -> { if(state.optBoolean("busy"))throw new IllegalStateException("Stop the current response before starting a new chat");VoiceConversationInvitation.cancel(this,"thread_changed");stopService(new Intent(this,SubscriptionVoiceService.class));command(json("action","new_main")); }
             case "/native/stop" -> command(json("action","stop_main"));

@@ -62,7 +62,9 @@ public class RuntimeDeviceTest {
         RuntimeHost h=host();JSONObject gate=h.runCompatibilityGate().get(30,TimeUnit.SECONDS);
         assertTrue(gate.toString(),gate.optBoolean("ok"));
         System.out.println("POCKET_NODE_GATE="+gate);
-        System.out.println("POCKET_NODE_MEMORY="+h.memoryStats().get(5,TimeUnit.SECONDS));
+        JSONObject stats=h.memoryStats().get(5,TimeUnit.SECONDS);
+        System.out.println("POCKET_NODE_MEMORY="+stats);
+        assertTrue("Embedded Node heap budget was not applied: "+stats,stats.optLong("v8HeapLimitBytes")>0&&stats.optLong("v8HeapLimitBytes")<700L*1024*1024);
     }
     @Test public void observationNodeSerializationStaysBelowToolTextBudget() throws Exception {
         java.util.List<dev.pocket.control.ControlBackend.Node> nodes=new java.util.ArrayList<>();
