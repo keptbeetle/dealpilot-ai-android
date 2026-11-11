@@ -54,7 +54,7 @@
                 <data android:scheme="pocketagent" android:host="paypal" android:path="/cancel" />
             </intent-filter>
         </activity>
-        <service android:name=".PocketVoiceInteractionService" android:label="Pocket Agent" android:exported="true"
+        <service android:name=".PocketVoiceInteractionService" android:label="DealPilot AI" android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
             <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
             <meta-data android:name="android.voice_interaction" android:resource="@xml/pocket_voice_interaction" />
@@ -77,12 +77,12 @@
         </service>
         <service android:name=".AccessibilityGuardianService" android:exported="false" android:process=":guardian"
             android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Crash recovery for the user-enabled Pocket Agent accessibility service" />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Crash recovery for the user-enabled DealPilot AI accessibility service" />
         </service>
         <service android:name=".AccessibilityRepairService" android:exported="false" android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Scoped repair of the still-enabled Pocket Agent accessibility service after a crash" />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Scoped repair of the still-enabled DealPilot AI accessibility service after a crash" />
         </service>
-        <service android:name=".PhoneNotifications" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true" android:label="Pocket Agent notification tools">
+        <service android:name=".PhoneNotifications" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true" android:label="DealPilot AI notification tools">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
         <service android:name=".AutonomyAlarmService" android:exported="false" android:foregroundServiceType="specialUse">
