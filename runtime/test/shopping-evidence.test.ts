@@ -11,6 +11,12 @@ test('read-only comparisons of previous shopping evidence are grounded without t
  assert.equal(existingShoppingComparisonRequested('Which of those two listings is cheapest under INR 4000?'),true);
  assert.equal(existingShoppingComparisonRequested('Compare two NEW headphones under INR 5000 by visiting Amazon'),false);
  assert.equal(existingShoppingComparisonRequested('Compare the earlier listings, but do a fresh search now'),false);
+ assert.equal(existingShoppingComparisonRequested('Compare only the two existing observed JLab and Noise listings from this chat under INR 4000. Do not search again or interact with a retailer, cart or checkout.'),true,'Negated new-search language must not bypass source-grounded comparisons');
+ assert.equal(existingShoppingComparisonRequested('Compare these observed offers; no new search needed.'),true);
+ assert.equal(existingShoppingComparisonRequested('Compare existing listings without fresh research.'),true);
+ assert.equal(existingShoppingComparisonRequested('Compare these offers; do not do a fresh search now.'),true);
+ assert.equal(existingShoppingComparisonRequested('Compare the previous offers, but please run a fresh search now.'),false);
+ assert.equal(existingShoppingComparisonRequested('Compare the previous offers and search again now.'),false);
  assert.equal(existingShoppingComparisonRequested('What is two plus two?'),false);
 });
 test('scrolling to specifications does not erase earlier price evidence or silently merge eligibility',()=>{

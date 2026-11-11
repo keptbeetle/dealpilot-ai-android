@@ -62,6 +62,22 @@ test('stale and search-card observations cannot support constraint passes',()=>{
 test('unknown fees never become zero and reported free shipping does not establish final total',()=>{
  const value=verifyShoppingReport(report(['FREE delivery','Inclusive of all taxes']),request(),now);assert.equal(value.cost?.reportedTotalCents,null);assert.deepEqual(value.cost?.unknownComponents,['mandatory fees']);assert.equal(value.checkoutVerified,false);
 });
+test('real alternative headphone manufacturers are recognized without mistaking noise cancellation for a brand',()=>{
+ for(const brand of ['JLab','Noise','boAt','Skullcandy','Philips']){
+  const req=updateShoppingRequest(undefined,'Find only '+brand+' new over-ear headphones under INR 5000')!;
+  const title=brand+' Model X100 Over-Ear Headphones';
+  const checked=verifyShoppingReport(report([],title),req,now);
+  assert.equal(checked.observedBrand.toLowerCase(),brand.toLowerCase());
+  assert.equal(checked.checks.find(c=>c.attribute==='required brand')?.outcome,'supported',brand);
+ }
+ const natural=updateShoppingRequest(undefined,'I prefer headphones with noise cancellation under INR 4000')!;
+ assert.deepEqual(natural.preferredBrands,[]);
+ const branded=updateShoppingRequest(undefined,'I prefer Noise Airwave or JLab headphones under INR 4000')!;
+ assert.ok(branded.preferredBrands.includes('Noise'));
+ assert.ok(branded.preferredBrands.includes('JLab'));
+ const generic=verifyShoppingReport(report([],'Noise Cancelling Bluetooth Headphones X100'),updateShoppingRequest(undefined,'Find wireless headphones under INR 4000'),now);
+ assert.equal(generic.observedBrand,null,'A generic noise-cancelling feature is not a manufacturer claim');
+});
 test('checksum-invalid identifiers are rejected; same names without identifiers do not establish cross-store equivalence',()=>{
  const a=report(['EAN: 4006381333932']);assert.equal(verifyShoppingReport(a,request(),now).status,'contradicted');
  const left={...report(),verification:verifyShoppingReport(report(),request(),now)};assert.equal(compareVerifiedListings(left,left).basis,'unresolved');assert.equal(compareVerifiedListings({...left,verification:{}},left).basis,'unresolved');

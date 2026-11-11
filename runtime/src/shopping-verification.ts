@@ -2,11 +2,13 @@ import {assessSourceIdentity,compareReportedOffers} from '../vendor/dealpilot/so
 import {evaluateReportedCost} from '../vendor/dealpilot/purchase-cost.js';
 import {assessObservationFreshness} from '../vendor/dealpilot/source-freshness.js';
 import {canonicalGtin,normalizePartNumber} from '../vendor/dealpilot/product-identifiers.js';
-import type {ShoppingRequest,HeadphoneFit} from './shopping-request.js';
+import {SHOPPING_BRANDS,type ShoppingRequest,type HeadphoneFit} from './shopping-request.js';
 import {reportedCostClaims} from './reported-costs.js';
 
 type Result={attribute:string;outcome:'supported'|'contradicted'|'unknown';evidence:string};
-const brandLabel=/^(?:Samsung|Motorola|Sony|JBL|ASUS|Lenovo|Dell|HP|Acer|Apple|Bose|Anker|Soundcore|OnePlus|Xiaomi|Realme|Nothing|Google|Vivo|Oppo)$/i;
+const brandWords=SHOPPING_BRANDS.map(value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+const brandLabel=new RegExp('^(?:'+brandWords+')$','i');
+const titleBrandPattern=new RegExp('\\b('+brandWords+')\\b','i');
 const colours=['black','white','blue','navy','pink','beige','silver','grey','gray','green','red','purple','brown','cream','yellow','orange'];
 const compact=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,'');
 const coloursIn=(value:string)=>colours.filter(colour=>new RegExp('\\b'+colour+'\\b','i').test(value));
@@ -50,7 +52,9 @@ export function verifyShoppingReport(report:any,request?:ShoppingRequest,now=Dat
  const text=String(report.visibleText||'');
  const requestedBrand=request?.checks.brand;
  const escapedBrand=requestedBrand?.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
- const titleBrand=title.match(/\b(Samsung|Motorola|Sony|JBL|ASUS|Lenovo|Dell|HP|Acer|Apple|Bose|Anker|Soundcore|OnePlus|Xiaomi|Realme|Nothing|Google|Vivo|Oppo)\b/i)?.[1]||'';
+ const brandMatch=title.match(titleBrandPattern);
+ const brandCandidate=brandMatch?.[1]||'';
+ const titleBrand=brandCandidate.toLowerCase()==='noise'&&/^[\s-]*(?:cancell?(?:ing|ation)|reduct?(?:ion)?|isolat(?:ing|ion))\b/i.test(title.slice((brandMatch?.index||0)+brandCandidate.length))?'':brandCandidate;
  const pageBrand=adjacentPageBrand(title,text);
  const brandDisagreement=Boolean(titleBrand&&pageBrand&&titleBrand.toLowerCase()!==pageBrand.toLowerCase());
  const brand=titleBrand||pageBrand||(escapedBrand&&new RegExp('\\b'+escapedBrand+'\\b','i').test(title)?requestedBrand:'')||'';

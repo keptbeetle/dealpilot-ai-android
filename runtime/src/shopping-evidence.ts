@@ -11,7 +11,13 @@ export function existingShoppingComparisonRequested(text:string):boolean {
  if(typeof text!=='string'||text.length>12000)return false;
  const prior=/\b(?:existing|earlier|previous|already|observed|verified|those|these|both)\b|\bfrom this chat\b|\bcurrent (?:source )?evidence\b/i.test(text);
  const comparison=/\b(?:compare|comparison|rank|cheapest|cheaper|which|budget|under|below|meets?|qualif(?:y|ies)|listed price)\b/i.test(text);
- const fresh=/\b(?:fresh|new|latest)\s+(?:search|research|lookup|listings?|offers?|results?)\b|\b(?:search|research|browse|refresh|rerun|recheck)\s+(?:again|now|fresh|new|latest)\b/i.test(text);
+ const freshnessLanguage=/\b(?:fresh|new|latest)\s+(?:search|research|lookup|listings?|offers?|results?)\b|\b(?:search|research|browse|refresh|rerun|recheck)\s+(?:again|now|fresh|new|latest)\b/gi;
+ // A request to *avoid* another search must not disable source-grounded
+ // re-evaluation and allow a model recollection to masquerade as evidence.
+ const fresh=[...text.matchAll(freshnessLanguage)].some(match=>{
+  const preceding=text.slice(0,match.index).split(/[.!?;,\n]|\bbut\b/i).at(-1)||'';
+  return !/\b(?:do not|don.t|never|without|no|avoid|not)\b(?:\s+[^\s,.;!?]+){0,6}\s*$/i.test(preceding);
+ });
  return prior&&comparison&&!fresh;
 }
 export function browserReports(messages:any[]):Report[]{

@@ -1,7 +1,8 @@
 import type {ShoppingChecks} from './browser.js';
 export type HeadphoneFit='over-ear'|'on-ear'|'in-ear';
 export type ShoppingRequest={version:1;revision:number;checks:ShoppingChecks;newOnly:boolean;preferredBrands:string[];requiredBrands?:string[];category?:'smartphone'|'laptop'|'headphones';headphoneFits?:HeadphoneFit[];issues:string[]};
-const brands=['Samsung','Motorola','Sony','JBL','ASUS','Lenovo','Dell','HP','Acer','Apple','Bose','Anker','Soundcore','OnePlus','Xiaomi','Realme','Nothing','Google','Vivo','Oppo'];
+export const SHOPPING_BRANDS=['Samsung','Motorola','Sony','JBL','ASUS','Lenovo','Dell','HP','Acer','Apple','Bose','Anker','Soundcore','OnePlus','Xiaomi','Realme','Nothing','Google','Vivo','Oppo','JLab','Noise','boAt','Skullcandy','Philips','Sennheiser','Edifier','Zebronics','Boult'] as const;
+const brands:readonly string[]=SHOPPING_BRANDS;
 export function restoreShoppingRequest(value:any):ShoppingRequest|undefined{
  if(!value||value.version!==1||!Number.isSafeInteger(value.revision)||value.revision<0||!value.checks||typeof value.newOnly!=='boolean'||!Array.isArray(value.preferredBrands)||!Array.isArray(value.issues))return;
  const checks:ShoppingChecks={};
@@ -57,7 +58,8 @@ export function updateShoppingRequest(previous:ShoppingRequest|undefined,message
  }
  if(/\bnew(?: phones?| smartphones?| laptops?| headphones?|earbuds?| products?| items?)? only\b|\bonly new\b|\bnew\s+(?:(?:wireless|bluetooth|over[- ]ear|on[- ]ear|noise[- ]cancelling|android|gaming)\s+){0,4}(?:smartphones?|phones?|laptops?|headphones?|headsets?|earbuds?)\b|\bno (?:used|refurbished|renewed)\b|\b(?:both|all|each|every)\s+(?:(?:must|should)\s+be\s+|are\s+)?(?:brand[- ]?)?new\b|\b(?:must|should)\s+be\s+(?:brand[- ]?)?new\b|\b(?:brand[- ]?)?new\s+(?:condition|products?|items?|models?|listings?)\b/i.test(message))request.newOnly=true;
  if(/\b(?:used|refurbished|renewed) (?:is |are )?(?:okay|ok|allowed)\b/i.test(message))request.newOnly=false;
- const named=brands.filter(brand=>new RegExp('\\b'+brand+'\\b','i').test(message));
+ const noiseBrandNamed=/\bNoise\b/.test(message)&&!/\bNoise[- ](?:cancell?(?:ing|ation)|reduct?(?:ion)?|isolat(?:ing|ion))\b/i.test(message)||/\b(?:brand|manufacturer)\s+(?:is\s+)?noise\b|\bnoise\s+airwave\b/i.test(message);
+ const named=brands.filter(brand=>new RegExp('\\b'+brand+'\\b','i').test(message)&&(brand!=='Noise'||noiseBrandNamed));
  if(named.length&&/\bprefer|preferred|ideally/i.test(message)){
   request.preferredBrands=named;
   if(/\b(?:just|only) preferred\b|\bother brands (?:are )?(?:okay|ok|allowed)\b/i.test(message)){delete request.checks.brand;delete request.requiredBrands;}
