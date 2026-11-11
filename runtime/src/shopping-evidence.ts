@@ -90,8 +90,12 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now(),request
   if(report.stockOcrEvidence)lines.push('- Selected colour '+report.stockOcrEvidence.colour+' availability on screen: '+report.stockOcrEvidence.claim+'.');
   if(report.holds.length)lines.push('- Hold: '+report.holds.slice(0,4).join(' '));
   const verification=verifyShoppingReport(report,request,now);
+  if(verification.observedBrand&&!new RegExp('\\b'+verification.observedBrand.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(report.listingTitle||''))
+   lines.push('- Manufacturer label beside the opened product title: '+verification.observedBrand+'.');
   lines.push('- DealPilot checks: '+verification.status+'.');
-  for(const check of verification.checks)lines.push('- '+check.attribute+': '+check.outcome+'.');
+  for(const check of verification.checks)
+   lines.push('- '+check.attribute+': '+check.outcome+'.'+(check.attribute==='headphone fit'&&check.outcome!=='unknown'?' Evidence: '+check.evidence:''));
+
   lines.push('- Identity: '+verification.identity.status+'; delivered cost: '+(verification.cost?.status||'unknown')+'.');
   for(const reason of verification.reasons.slice(0,8))lines.push('- Verification hold: '+reason);
   return lines.join('\n');

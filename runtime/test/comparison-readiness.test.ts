@@ -7,6 +7,18 @@ import {groundedShoppingResearch} from '../src/shopping-evidence.js';
 const now=1794030000000;
 const req=()=>updateShoppingRequest(undefined,'Find new headphones under INR 5000. Sony and JBL are preferred.')!;
 function product(title:string,price=2999,extra:string[]=[]){return inspectStoreObservation({package_name:'in.amazon.mShop.android.shopping',snapshot_id:title,captured_at_ms:now,nodes:[{resource_id:'productTitle',text:title},{text:'Add to cart'},{text:'INR '+price},{text:'Condition: New'},{text:'In stock'},...extra.map(text=>({text}))]},'amazon',{selectedLabel:title,selectedFromSnapshot:'results'});}
+test('two independently observed new in-stock over-ear models can be compared without checkout approval',()=>{
+ const request=updateShoppingRequest(undefined,'Find NEW over-ear headphones under INR 4000')!;
+ const comparison=compareShoppingCandidates([
+  product('JBL Tune X200 Over-Ear headphones',2999),
+  product('Soundcore Q20i Over-Ear headphones',3799)
+ ],request,now);
+ assert.equal(comparison.status,'comparable-listed-prices');
+ assert.equal(comparison.rows.filter(r=>r.rankable).length,2);
+ assert.equal(comparison.lowestListedPriceCents,299900);
+ assert.equal(comparison.purchaseReady,false);
+ assert.equal(comparison.checkoutVerified,false);
+});
 test('different models can compare matching source facts despite unknown seller and delivered costs',()=>{
  const r=compareShoppingCandidates([product('Sony WH-X100 headphones'),product('JBL Tune X200 headphones',2499)],req(),now);
  assert.equal(r.status,'comparable-listed-prices');assert.equal(r.rows.filter(r=>r.matchesRequirements).length,2);assert.equal(r.lowestListedPriceCents,249900);assert.ok(r.rows.every(r=>r.deliveredTotalCents===null));assert.equal(r.checkoutVerified,false);
@@ -39,6 +51,18 @@ test('source-observed over-budget price remains visible as excluded, never ranka
  assert.equal(comparison.status,'insufficient');
  const text=groundedShoppingResearch([sony,soundcore],now,req());
  assert.match(text,/Soundcore Q20i headphones \| Amazon Android app \| INR 5999\.00 \(over budget\)/);
+ assert.doesNotMatch(text,/Lowest listed price among matching observed offers/);
+});
+test('comparison table explains specifically why observed listings do not meet requirements',()=>{
+ const request=updateShoppingRequest(undefined,'Find NEW over-ear headphones under INR 4000')!;
+ const sony={...product('Sony WH-CH520 On Ear Headphones',3590),
+  visibleText:product('Sony WH-CH520 On Ear Headphones',3590).visibleText.replace('Condition: New','')};
+ const soundcore=product('Soundcore Q20i Over-Ear Headphones',4998);
+ const text=groundedShoppingResearch([sony,soundcore],now,request);
+ assert.match(text,/new condition: unknown/);
+ assert.match(text,/headphone fit: contradicted/);
+ assert.match(text,/regular-price budget: contradicted/);
+ assert.match(text,/INR 4998\.00 \(over budget\)/);
  assert.doesNotMatch(text,/Lowest listed price among matching observed offers/);
 });
 test('an unbound or stale source cannot lend an observed price to the comparison',()=>{

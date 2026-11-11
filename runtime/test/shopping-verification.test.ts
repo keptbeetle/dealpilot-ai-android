@@ -45,6 +45,16 @@ test('currency, over-budget prices, insufficient storage, used condition and una
 test('conflicting selected variant and page identity cannot become verified from the lower price',()=>{
  const wrong=report([],'Samsung Galaxy M355G 256GB White','Samsung Galaxy M355G 128GB Black');assert.equal(verifyShoppingReport(wrong,request(),now).identity.status,'conflict');assert.equal(verifyShoppingReport(wrong,request(),now).status,'contradicted');
 });
+test('conflicting explicit conditions on the same native product observation cannot count as new',()=>{
+ const both=report(['Condition: Used']);
+ const verified=verifyShoppingReport(both,request(),now);
+ assert.equal(verified.condition,'conflict');
+ assert.equal(verified.status,'contradicted');
+ assert.equal(verified.checks.find(c=>c.attribute==='new condition')?.outcome,'contradicted');
+ assert.equal(verified.comparison.rankable,false);
+ const notNewRequired=verifyShoppingReport(both,{...request(),newOnly:false},now);
+ assert.equal(notNewRequired.status,'contradicted','A contradictory source must be held even without a new-only constraint');
+});
 test('stale and search-card observations cannot support constraint passes',()=>{
  assert.equal(verifyShoppingReport(report(),request(),now+16*60000).freshness.status,'stale');assert.ok(verifyShoppingReport(report(),request(),now+16*60000).checks.every(c=>c.outcome==='unknown'));
  assert.ok(verifyShoppingReport({...report(),pageKind:'search-results'},request(),now).checks.every(c=>c.outcome==='unknown'));
@@ -55,6 +65,42 @@ test('unknown fees never become zero and reported free shipping does not establi
 test('checksum-invalid identifiers are rejected; same names without identifiers do not establish cross-store equivalence',()=>{
  const a=report(['EAN: 4006381333932']);assert.equal(verifyShoppingReport(a,request(),now).status,'contradicted');
  const left={...report(),verification:verifyShoppingReport(report(),request(),now)};assert.equal(compareVerifiedListings(left,left).basis,'unresolved');assert.equal(compareVerifiedListings({...left,verification:{}},left).basis,'unresolved');
+});
+test('Flipkart truncated detail safely links same-model selected-card fit, not unrelated variants',()=>{
+ const title='Tune 520 BT 57Hr Playtime, Pure Bass, Multi Connect 5.3LE Bluetoo...more';
+ const selected=', JBL, Tune 520 BT 57Hr Playtime, Pure Bass, Multi Connect 5.3LE Bluetooth Headset Black, On the Ear, 4.1, 30%, INR 3499';
+ const fp=inspectStoreObservation({package_name:'com.flipkart.android',snapshot_id:'flipkart-detail',captured_at_ms:now,
+  nodes:[{text:'Selected Color:'},{text:'Black'},{text:'JBL'},{text:'Visit store'},{resource_id:'productTitle',text:title},
+    {text:'Add to cart'},{text:'Buy now'},{text:'INR 3499'},{text:'Delivery details'}]},'flipkart',{selectedLabel:selected,selectedFromSnapshot:'clicked-search-card'});
+ const previous={...fp,listingTitle:title}; // Existing saved native observations had an unprefixed truncated detail title.
+ const req=updateShoppingRequest(undefined,'Find new over-ear headphones under INR 4000, only JBL')!;
+ const current=verifyShoppingReport(previous,req,now);
+ assert.equal(current.checks.find(c=>c.attribute==='headphone fit')?.outcome,'contradicted');
+ assert.match(current.checks.find(c=>c.attribute==='headphone fit')?.evidence||'',/Linked selected search card/);
+ assert.equal(current.checks.find(c=>c.attribute==='new condition')?.outcome,'unknown');
+ assert.equal(current.checks.find(c=>c.attribute==='required brand')?.outcome,'supported');
+ assert.equal(current.observedBrand,'JBL');
+ assert.equal(current.identity.status,'model-compatible');
+ assert.equal(current.identity.variantUnresolved,false);
+ assert.equal(current.comparison.eligible,false,'A contradictory over-ear requirement vetoes the comparison');
+ const permitted=verifyShoppingReport(previous,updateShoppingRequest(undefined,'Find on-ear headphones under INR 4000, only JBL'),now);
+ assert.equal(permitted.comparison.eligible,true,'The same-model and selected-colour claims are linked');
+ assert.equal(permitted.comparison.rankable,false,'Stock remains unknown, even when the style and price qualify');
+ assert.equal(current.comparison.rankable,false);
+ assert.equal(current.purchaseReady,false);
+ const wrongModel=verifyShoppingReport({...previous,selectedFrom:{...previous.selectedFrom,label:selected.replace('Tune 520 BT','Tune 530 BT')}},req,now);
+ assert.equal(wrongModel.checks.find(c=>c.attribute==='headphone fit')?.outcome,'unknown');
+ assert.equal(wrongModel.comparison.eligible,false,'Battery hour overlap cannot substitute for a matching selected product');
+ const differentColour=verifyShoppingReport({...previous,selectedFrom:{...previous.selectedFrom,label:selected.replace('Headset Black','Headset Blue')}},req,now);
+ assert.equal(differentColour.checks.find(c=>c.attribute==='headphone fit')?.outcome,'unknown');
+ assert.equal(differentColour.status,'contradicted');
+ assert.equal(differentColour.comparison.eligible,false);
+ const missingSelection=verifyShoppingReport({...previous,selectedFrom:{...previous.selectedFrom,snapshot_id:undefined}},req,now);
+ assert.equal(missingSelection.checks.find(c=>c.attribute==='headphone fit')?.outcome,'unknown');
+ const otherBrand=verifyShoppingReport({...previous,visibleText:previous.visibleText.replace('JBL'+String.fromCharCode(10)+'Visit store','Sony'+String.fromCharCode(10)+'Visit store')},req,now);
+ assert.equal(otherBrand.checks.find(c=>c.attribute==='required brand')?.outcome,'contradicted');
+ const contradictoryTitle=verifyShoppingReport({...previous,listingTitle:'Tune 520 BT 57Hr Playtime Over Ear Bluetooth Headset Black'},req,now);
+ assert.equal(contradictoryTitle.checks.find(c=>c.attribute==='headphone fit')?.outcome,'supported');
 });
 test('vendored verification runtime is pinned to the recorded adapted-file hashes',()=>{
  const root=new URL('../vendor/dealpilot/',import.meta.url);const manifest=JSON.parse(readFileSync(new URL('SOURCE_MANIFEST.json',root),'utf8'));

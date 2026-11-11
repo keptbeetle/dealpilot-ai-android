@@ -24,7 +24,13 @@ export function comparisonMarkdown(reports:any[],request?:ShoppingRequest,now=Da
  for(const row of comparison.rows){
   const budgetFailed=row.verification.checks.some(check=>check.attribute==='regular-price budget'&&check.outcome==='contradicted');
   const displayedPrice=row.observedPriceCents===null?'Unknown':row.currency+' '+(row.observedPriceCents/100).toFixed(2)+(budgetFailed?' (over budget)':row.priceCents===null?' (not qualified)':'');
-  lines.push('| '+[row.title,row.sourceName,displayedPrice,row.matchesRequirements?(row.verification.comparison.partialObservation?'Supported in partial observation':'Supported'):'Unknown or contradicted',row.availability,row.snapshotId||row.sourceRef].map(cell).join(' | ')+' |');
+  const unmet=row.verification.checks.filter(check=>check.outcome!=='supported')
+   .map(check=>check.attribute+': '+check.outcome);
+  const requirements=unmet.length?unmet.slice(0,3).join('; ')
+   :!row.verification.comparison.eligible?'Source identity incomplete'
+   :row.matchesRequirements?(row.verification.comparison.partialObservation?'Supported in partial observation':'Supported')
+   :'Not established';
+  lines.push('| '+[row.title,row.sourceName,displayedPrice,requirements,row.availability,row.snapshotId||row.sourceRef].map(cell).join(' | ')+' |');
  }
  if(comparison.lowestListedPriceCents!==null)lines.push('Lowest listed price among matching observed offers: '+comparison.currency+' '+(comparison.lowestListedPriceCents/100).toFixed(2)+'. This ranks listed prices only.');
  else lines.push('There are not yet two matching, available offers with comparable listed prices.');
