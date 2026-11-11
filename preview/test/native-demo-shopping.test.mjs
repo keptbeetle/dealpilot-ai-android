@@ -17,6 +17,7 @@ test('one DealPilot chat handles explicit sample consent, model results, selecti
  const actions=[];
  const fakeApi=async(path,body={})=>{
   actions.push({path,body});
+  if(path==='/shopping/enter')return {ready:true};
   if(path==='/shopping/state')throw Error('Pairing required');
   if(path==='/shopping/pair')return {state:{...state},messages:[],sandboxReady:true};
   if(path==='/shopping/action'){
@@ -36,6 +37,8 @@ test('one DealPilot chat handles explicit sample consent, model results, selecti
  window.document.querySelector('#shopping-mode').click();
  for(let i=0;i<4;i++)await new Promise(setImmediate);
  assert.equal(demo.active,true);
+ assert.equal(actions[0].path,'/shopping/enter');
+ assert.equal(actions[1].path,'/shopping/state');
  demo.renderAside(window.document.querySelector('#messages'));
  assert.match(window.document.querySelector('#dealpilot-shop-stage').textContent,/Connect DealPilot Demo/);
  const inputs=window.document.querySelectorAll('#dealpilot-shop-stage input');

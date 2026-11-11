@@ -36,7 +36,7 @@ export function mountDemoShopping({api,render,onCheckout}){
  const configure=async()=>{if(s.data?.state?.mode==='sample')return;await requestAction('configure',{mode:'sample',consent:{sources:false,channel3:false}});};
  async function activate(){
   s.active=true;touch();
-  try{update(await api('/shopping/state'));await configure();}
+  try{await api('/shopping/enter');update(await api('/shopping/state'));await configure();}
   catch(e){s.connected=false;s.notice='Connect the local DealPilot demo host to use sample inventory. No real product claims or payments will be made.';touch();}
  }
  async function pair(port,code){
@@ -91,7 +91,7 @@ export function mountDemoShopping({api,render,onCheckout}){
  }
  async function sync(){
   if(!s.active)return;
-  try{update(await api('/shopping/state'));}
+  try{await api('/shopping/enter');update(await api('/shopping/state'));}
   catch{ s.connected=false;touch();}
  }
  function renderAside(parent){
