@@ -50,6 +50,13 @@ test('one DealPilot chat handles explicit sample consent, model results, selecti
  await demo.send('Find Sony and JBL headphones under 100 USD');
  demo.renderAside(window.document.querySelector('#messages'));
  assert.match(window.document.querySelector('#dealpilot-shop-stage').textContent,/Sony Demo Air/);
+ await demo.send('Compare Sony and JBL on price, battery life, and stock');
+ demo.renderAside(window.document.querySelector('#messages'));
+ const comparison=window.document.querySelector('.dealpilot-compare-table');
+ assert.ok(comparison,'a shopper comparison must show a structured table');
+ assert.equal(comparison.querySelectorAll('tbody tr').length,2);
+ assert.match(comparison.textContent,/30 hours/);
+ assert.match(comparison.textContent,/in-stock/);
  await demo.send('I choose Sony Demo Air, prepare my cart');
  assert.equal(demo.getMessages().some(x=>x.role==='assistant'),true);
  demo.renderAside(window.document.querySelector('#messages'));

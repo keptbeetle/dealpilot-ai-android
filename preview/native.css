@@ -49,3 +49,10 @@ body{padding:0;background:var(--canvas);display:block;min-height:0;height:100dvh
 .dealpilot-cart h3{margin:0 0 8px;font-size:18px}
 .dealpilot-cart p{font-size:13px;line-height:1.5;margin:7px 0}
 @media(max-width:520px){.dealpilot-shop-switch{font-size:11px;padding:7px 8px}.dealpilot-header-label{font-size:13px}.topbar{gap:5px}.topbar .chat-threads{padding-left:4px;padding-right:4px}}
+/* Facts come from the shopping state; comparisons do not invent specifications. */
+.dealpilot-shop-stage>h4{font-size:15px;margin:17px 0 8px;color:#d7edff}
+.dealpilot-compare-scroll{max-width:100%;overflow-x:auto;border:1px solid #3b6082;border-radius:12px;background:#0f2037}
+.dealpilot-compare-table{border-collapse:collapse;width:100%;min-width:450px;font-size:12px}
+.dealpilot-compare-table th{text-align:left;background:#214365;color:#eff8ff;font-weight:800;padding:10px 8px}
+.dealpilot-compare-table td{text-align:left;border-top:1px solid #315070;vertical-align:top;padding:10px 8px;line-height:1.35;overflow-wrap:anywhere}
+.dealpilot-compare-table td:nth-child(2){white-space:nowrap;color:#8af4c5;font-weight:700}

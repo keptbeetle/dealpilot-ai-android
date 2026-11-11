@@ -69,6 +69,7 @@ export function mountDemoShopping({api,render,onCheckout}){
   if(payment&&!['completed','cancelled','blocked'].includes(payment.status))throw Error('Resolve the existing PayPal Sandbox order before another shopping request.');
   if(payment&&newCategory(text)){await newPurchase();}
   s.proceed=false;s.pending=text;touch();inFlight=true;
+  let completed=false;
   try{
     const result=await api('/shopping/chat',{message:text});
     update(result);
@@ -76,10 +77,16 @@ export function mountDemoShopping({api,render,onCheckout}){
       const offer=chooseTitle(text,result.state?.offers||[]);
       if(offer)await requestAction('select',{offerId:offer.id,quantity:1});
     }
+    completed=true;
   }catch(e){
     // Keep the message and the backend state: do not synthesize an offer or price.
     s.notice='Shopping request held: '+String(e.message||'Model is unavailable.')+' Your previous results and payment state remain available.';
   }finally{s.pending=null;inFlight=false;touch();}
+  if(completed){
+    const target=isChoose(text)?document.querySelector('#dealpilot-shop-stage .dealpilot-cart'):
+      Array.from(document.querySelectorAll('#messages article[data-role="assistant"]')).at(-1);
+    target?.scrollIntoView?.({block:'start',behavior:'smooth'});
+  }
   return true;
  }
  async function newPurchase(){
@@ -110,6 +117,20 @@ export function mountDemoShopping({api,render,onCheckout}){
    if(!q&&offers.length){
     stage.append(el('h3','','Sample product shortlist'));
     stage.append(el('p','dealpilot-muted','Illustrative inventory for a repeatable payment demonstration — not live retailer prices.'));
+    const latestUser=(s.data.messages||[]).filter(m=>m.role==='user').at(-1);
+    if(/\bcompar(?:e|ison)\b/i.test(textOf(latestUser))){
+      const wrap=el('div','dealpilot-compare-scroll'),table=el('table','dealpilot-compare-table'),head=el('tr');
+      for(const field of ['Product','Price','Details','Stock'])head.append(el('th','',field));
+      const thead=el('thead');thead.append(head);table.append(thead);
+      const tbody=el('tbody');
+      for(const offer of offers.slice(0,5)){
+        const facts=Object.entries(offer.facts||{}).filter(([key])=>!/stock quantity|id|url/i.test(key)).slice(0,2).map(([key,value])=>key+': '+value).join(' / ');
+        const row=el('tr');
+        for(const value of [offer.title,money(offer.priceCents,offer.currency),facts||'Not specified',offer.stock||'Unknown'])row.append(el('td','',value));
+        tbody.append(row);
+      }
+      table.append(tbody);wrap.append(table);stage.append(el('h4','','Side-by-side comparison'),wrap);
+    }
     for(const o of offers.slice(0,6)){
       const row=el('div','dealpilot-sample-product');
       row.append(el('strong','',o.title),el('b','dealpilot-price',money(o.priceCents,o.currency)));
