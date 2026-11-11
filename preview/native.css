@@ -30,3 +30,22 @@ body{padding:0;background:var(--canvas);display:block;min-height:0;height:100dvh
 .comparison-table-scroll td:nth-child(6){display:none}
 .comparison-table-scroll td:last-child{border-bottom:0!important}
 }
+/* DealPilot main-chat buyer journey: no second shopping conversation. */
+.dealpilot-shop-switch{flex:0 0 auto;margin-left:auto;padding:8px 10px;border:1px solid #356ba5;border-radius:999px;background:linear-gradient(115deg,#123b68,#246fb2);color:#eef7ff;font-size:12px;font-weight:750;white-space:nowrap}
+.dealpilot-shop-switch[aria-pressed=true]{background:#1d574b;border-color:#50d3a7;color:#d7ffed}
+.dealpilot-header-label{margin-left:3px;font-size:15px;white-space:nowrap}
+.dealpilot-shop-stage{margin:10px 0 30px;padding:17px;border:1px solid #324f77;background:linear-gradient(150deg,#142438,#132036);border-radius:18px;color:#f2f8ff;overflow-wrap:anywhere}
+.dealpilot-shop-stage>h3{font-size:18px;letter-spacing:-.2px;margin:3px 0 9px}
+.dealpilot-shop-stage label{display:block;font-size:13px;font-weight:700;line-height:1.4;margin:12px 0;color:#d6e6fb}
+.dealpilot-shop-stage input{display:block;width:100%;margin:6px 0;padding:11px 12px;background:#0d1c30;border:1px solid #44688b;border-radius:9px;color:white;font:inherit}
+.dealpilot-shop-stage>button,.dealpilot-cart button{display:block;width:100%;background:linear-gradient(110deg,#70b0ff,#99d1ff);color:#08203a;border:0;border-radius:12px;padding:13px 12px;font-weight:800;font-size:14px;cursor:pointer;margin-top:14px}
+.dealpilot-shop-stage .dealpilot-muted{color:#a9c0d9;font-size:12px;line-height:1.55;margin:9px 0}
+.dealpilot-shop-stage .dealpilot-price{color:#8af4c5;font-size:19px;letter-spacing:-.3px;font-weight:800}
+.dealpilot-sample-product{border:1px solid #315070;border-radius:13px;padding:12px;margin:9px 0;background:#152943}
+.dealpilot-sample-product strong{font-size:14px;display:block;line-height:1.35}
+.dealpilot-sample-product b{display:block;margin:7px 0 2px}
+.dealpilot-sample-product p{color:#bfd0e4;font-size:12px;line-height:1.5;margin:6px 0}
+.dealpilot-cart{margin:10px 0;background:linear-gradient(135deg,#14394a,#132b3d);border:1px solid #3986a1;padding:16px;border-radius:17px}
+.dealpilot-cart h3{margin:0 0 8px;font-size:18px}
+.dealpilot-cart p{font-size:13px;line-height:1.5;margin:7px 0}
+@media(max-width:520px){.dealpilot-shop-switch{font-size:11px;padding:7px 8px}.dealpilot-header-label{font-size:13px}.topbar{gap:5px}.topbar .chat-threads{padding-left:4px;padding-right:4px}}
