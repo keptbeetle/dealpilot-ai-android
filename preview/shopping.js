@@ -32,7 +32,7 @@ function richText(text){
 const checkoutOnly=native&&new URLSearchParams(location.search).has('checkout');
 if(checkoutOnly){
  document.querySelector('.intro h1').textContent='Review your sandbox purchase';
- document.querySelector('.intro p').textContent='Review the listing from your Pocket chat and approve the exact test amount.';
+ document.querySelector('.intro p').textContent='Review the listing from your DealPilot AI chat and approve the exact test amount.';
  document.querySelector('.intro').append($('#readiness'));
  const connection=$('#connection');connection.replaceChildren(el('h2','PayPal sandbox connection'),el('p','Connect once using the HTTPS service and access key supplied by the app owner.'));
  const endpointLabel=el('label','Checkout service URL'),endpoint=el('input');endpoint.id='checkout-endpoint';endpoint.type='url';endpoint.placeholder='https://your-checkout-service.workers.dev';endpoint.autocomplete='url';endpointLabel.append(endpoint);
@@ -108,6 +108,6 @@ run(async()=>{
   }
  }catch(e){if(native&&!state)$('#connection').hidden=false;throw e;}
 });
-if(!checkoutOnly&&location.search.includes('paypal_'))$('#notice').textContent='Returning from PayPal is not payment confirmation. Restore this session, then verify and capture only the matching approved test order. On Android, return to Pocket and use its verification button.';
+if(!checkoutOnly&&location.search.includes('paypal_'))$('#notice').textContent='Returning from PayPal is not payment confirmation. Restore this session, then verify and capture only the matching approved test order. On Android, return to DealPilot AI and use its verification button.';
 
 if(checkoutOnly)void rpc('hosted-settings').then(info=>{$('#checkout-endpoint').value=info.endpoint||'';}).catch(()=>{});
