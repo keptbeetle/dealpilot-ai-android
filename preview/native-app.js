@@ -1,6 +1,5 @@
 import {createRefreshScheduler} from './refresh-scheduler.js';
 import {findPreparedCart,renderPreparedCart} from './native-shopping.js';
-import {mountDemoShopping} from './native-demo-shopping.js';
 import {mountModelPicker} from './model-picker.js';
 import {mountConnection,mountVoiceConnection} from './connection.js';
 import {attachDrawerSwipe} from './drawer-swipe.js';
@@ -70,13 +69,12 @@ function checkoutProposal(message){
    return {text:message.slice(0,marker.index).trim(),listing:{title,url,currency,unitCents,quantity}};
  }catch{return null;}
 }
-let shoppingDemo=null;
 function renderChat(force=false){const state=snapshot.state;
  let work=$('#chat-work-status');if(!work){work=el('div','chat-work-status');work.id='chat-work-status';$('#conversation').append(work);}
  work.replaceChildren();const mainDisplay=displayText(state.displays?.main);if(mainDisplay)work.append(el('p','settings-description',mainDisplay));
  for(const task of chatThreads().filter(task=>['running','queued','stopping'].includes(task.status)||['waiting','preparing','active','releasing'].includes(task.display?.state)))taskCard(work,task);
  work.hidden=!!archive||!work.children.length;
-setThinking(!archive&&(state.busy||!!pendingSend));if(pendingSend&&(pendingSend.threadId!==state.mainThreadId||(state.messages||[]).slice(pendingSend.baseline).some(item=>item.role==='user'&&(item.text||item.content)===pendingSend.text)))pendingSend=null;syncComposer();$('#show-threads').hidden=!state.messages?.length&&!chatThreads().length;$('#show-threads').textContent=chatThreads().length?`Threads · ${chatThreads().length}`:'Threads';const signature=JSON.stringify([state.mainThreadId,state.messages,archive,pendingSend,shoppingDemo?.version]);if(signature===chatSignature&&!force)return;chatSignature=signature;const list=$('#messages'),items=(archive?archive.page.messages:state.messages||[]).filter(item=>!(item.role==='user'&&/^\[Worker completion\]/.test(item.text||item.content||'')));if(pendingSend&&!archive)items.push({role:'user',text:pendingSend.text});if(!archive&&shoppingDemo?.active)items.push(...shoppingDemo.getMessages());const scroller=$('#conversation');const top=scroller.scrollTop,follow=scroller.scrollHeight-top-scroller.clientHeight<100;if(archive)list.replaceChildren();$('#welcome').hidden=items.length>0||!!archive||!!shoppingDemo?.active;list.hidden=!$('#welcome').hidden;
+setThinking(!archive&&(state.busy||!!pendingSend));if(pendingSend&&(pendingSend.threadId!==state.mainThreadId||(state.messages||[]).slice(pendingSend.baseline).some(item=>item.role==='user'&&(item.text||item.content)===pendingSend.text)))pendingSend=null;syncComposer();$('#show-threads').hidden=!state.messages?.length&&!chatThreads().length;$('#show-threads').textContent=chatThreads().length?`Threads · ${chatThreads().length}`:'Threads';const signature=JSON.stringify([state.mainThreadId,state.messages,archive,pendingSend]);if(signature===chatSignature&&!force)return;chatSignature=signature;const list=$('#messages'),items=(archive?archive.page.messages:state.messages||[]).filter(item=>!(item.role==='user'&&/^\[Worker completion\]/.test(item.text||item.content||'')));if(pendingSend&&!archive)items.push({role:'user',text:pendingSend.text});const scroller=$('#conversation');const top=scroller.scrollTop,follow=scroller.scrollHeight-top-scroller.clientHeight<100;if(archive)list.replaceChildren();$('#welcome').hidden=items.length>0||!!archive;list.hidden=!$('#welcome').hidden;
  if(archive){list.append(el('p','settings-native-note','Saved conversation · Read-only archive'),button('Back to current chat',()=>{archive=null;renderChat(true);}));}
  const prepared=!archive?findPreparedCart(items,checkoutProposal):null;
  if(!archive)for(let i=0;i<items.length;i++){
@@ -86,7 +84,7 @@ setThinking(!archive&&(state.busy||!!pendingSend));if(pendingSend&&(pendingSend.
  }
  if(archive)for(const item of items)message(list,item);else reconcileMessages(list,items);
  document.querySelector('#browser-checkout-action')?.remove();
- if(prepared&&!shoppingDemo?.active){
+ if(prepared){
    const cart=renderPreparedCart(prepared,async listing=>{
      await api('/shopping/enter');
      await api('/shopping/enter-checkout');
@@ -95,17 +93,15 @@ setThinking(!archive&&(state.busy||!!pendingSend));if(pendingSend&&(pendingSend.
    });
    cart.id='browser-checkout-action';list.after(cart);
  }
- if(shoppingDemo?.active&&!archive)shoppingDemo.renderAside(list);else document.querySelector('#dealpilot-shop-stage')?.remove();
  if(pendingSend&&list.lastElementChild)list.lastElementChild.dataset.sent='true';
  if(archive){if(archive.page.offset>0)list.append(button('Earlier messages',()=>openArchive(archive.id,archive.title,Math.max(0,archive.page.offset-60))));if(archive.page.offset+60<archive.page.total)list.append(button('More messages',()=>openArchive(archive.id,archive.title,archive.page.offset+60)));}
  $('#copy-chat').disabled=!items.length;input.disabled=!!archive;syncComposer();if(follow||force)scroller.scrollTop=scroller.scrollHeight;else scroller.scrollTop=top;
 }
 function syncComposer(){const busy=snapshot.state.busy||!!pendingSend,voice=!busy&&!input.value.trim(),mode=busy?'stop':voice?'voice':'send';$('#send').disabled=!!archive||!!pendingSend;if($('#send').dataset.mode===mode)return;$('#send').dataset.mode=mode;$('#send').classList.toggle('is-voice',voice);$('#send').setAttribute('aria-label',busy?'Stop response':voice?'Start Codex voice':'Send message');const mark=$('#send [data-icon]');mark.replaceChildren(voice?waveIcon():icon(busy?'stop':'up'));}
 function waveIcon(){const value=icon('mic');value.querySelector('path').setAttribute('d','M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4');return value;}
-shoppingDemo=mountDemoShopping({api,render:()=>renderChat(true),onCheckout:async()=>{await api('/shopping/enter-checkout');location.href='/shopping.html?checkout=1';}});
 input.value=localStorage.getItem('pocket-native-draft')||'';input.oninput=()=>{localStorage.setItem('pocket-native-draft',input.value);syncComposer();resizeComposer();};
 const resizeComposer=mountComposer(input);
-$('#composer').onsubmit=event=>{event.preventDefault();void act(async()=>{if(pendingSend)return;if(snapshot.state.busy){await api('/native/stop');return;}const text=input.value.trim();if(!text){if(!snapshot.connection?.voiceAccount){prefs.stt='codex';openSettings('voice');}else await api('/native/live-voice');return;}if(shoppingDemo?.active){if(!text)return;input.value='';input.oninput();await shoppingDemo.send(text);return;}if(prefs.provider==='none'){openSettings('ai');return;}note('');const draft=input.value;pendingSend={threadId:snapshot.state.mainThreadId,text,baseline:(snapshot.state.messages||[]).length};input.value='';input.oninput();archive=null;renderChat(true);try{await api('/native/send',{text});await refresh();}catch(error){pendingSend=null;if(!input.value){input.value=draft;input.oninput();}renderChat();throw error;}});};
+$('#composer').onsubmit=event=>{event.preventDefault();void act(async()=>{if(pendingSend)return;if(snapshot.state.busy){await api('/native/stop');return;}const text=input.value.trim();if(!text){if(!snapshot.connection?.voiceAccount){prefs.stt='codex';openSettings('voice');}else await api('/native/live-voice');return;}if(prefs.provider==='none'){openSettings('ai');return;}note('');const draft=input.value;pendingSend={threadId:snapshot.state.mainThreadId,text,baseline:(snapshot.state.messages||[]).length};input.value='';input.oninput();archive=null;renderChat(true);try{await api('/native/send',{text});await refresh();}catch(error){pendingSend=null;if(!input.value){input.value=draft;input.oninput();}renderChat();throw error;}});};
 $('#voice-button').setAttribute('aria-label','Dictate a message');$('#voice-button').onclick=()=>void act(async()=>{if((prefs.stt==='groq'||prefs.stt==='deepgram')&&!snapshot.connection?.voice?.[prefs.stt]){openSettings('voice');return;}await api('/native/dictation');});
 $('#voice-button').oncontextmenu=event=>{event.preventDefault();openSettings('voice');};
 $('#voice-feedback button').onclick=()=>void act(()=>api('/native/voice/stop'));
