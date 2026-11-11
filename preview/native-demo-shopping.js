@@ -37,7 +37,7 @@ export function mountDemoShopping({api,render,onCheckout}){
  async function activate(){
   s.active=true;touch();
   try{await api('/shopping/enter');update(await api('/shopping/state'));await configure();}
-  catch(e){s.connected=false;s.notice='Connect the local DealPilot demo host to use sample inventory. No real product claims or payments will be made.';touch();}
+  catch(e){s.connected=false;s.notice='Connect the DealPilot shopping service to start.';touch();}
  }
  async function pair(port,code){
   if(inFlight)return;
@@ -47,7 +47,7 @@ export function mountDemoShopping({api,render,onCheckout}){
    if(!/^[A-Za-z0-9_-]{12}$/.test(code))throw Error('Enter the 12-character code from the DealPilot host.');
    update(await api('/shopping/pair',{port,code}));
    await configure();
-   s.notice='Connected. Search for your products below. Prices and availability will be clearly labeled simulated.';
+   s.notice='Connected. Tell DealPilot what you want to find.';
   }catch(e){s.notice=e.message||'Pairing failed. Restart the host for a fresh code.';}
   finally{inFlight=false;touch();}
  }
@@ -65,7 +65,7 @@ export function mountDemoShopping({api,render,onCheckout}){
   if(!s.connected)throw Error('Connect the local demo host using the code shown in the setup panel.');
   const quote=s.data?.state?.quote,payment=s.data?.state?.payment;
   if(isProceed(text)&&quote&&!payment){s.proceed=true;touch();return true;}
-  if(isProceed(text)&&!quote)throw Error('Choose a product and prepare a simulated cart before payment.');
+  if(isProceed(text)&&!quote)throw Error('Choose a product and prepare the cart before payment.');
   if(payment&&!['completed','cancelled','blocked'].includes(payment.status))throw Error('Resolve the existing PayPal Sandbox order before another shopping request.');
   if(payment&&newCategory(text)){await newPurchase();}
   s.proceed=false;s.pending=text;touch();inFlight=true;
@@ -84,7 +84,7 @@ export function mountDemoShopping({api,render,onCheckout}){
   }finally{s.pending=null;inFlight=false;touch();}
   if(completed){
     const target=isChoose(text)?document.querySelector('#dealpilot-shop-stage .dealpilot-cart'):
-      Array.from(document.querySelectorAll('#messages article[data-role="assistant"]')).at(-1);
+      (/\bcompar(?:e|ison)\b/i.test(text)?document.querySelector('#dealpilot-shop-stage .dealpilot-compare-table'):null) || Array.from(document.querySelectorAll('#messages article[data-role="assistant"]')).at(-1);
     target?.scrollIntoView?.({block:'start',behavior:'smooth'});
   }
   return true;
@@ -106,17 +106,17 @@ export function mountDemoShopping({api,render,onCheckout}){
   if(!s.active)return;
   const stage=el('section','dealpilot-shop-stage');stage.id='dealpilot-shop-stage';
   if(!s.connected){
-   const title=el('h3','','Connect DealPilot Demo');
-   const note=el('p','dealpilot-muted','Pair this phone with the private Windows shopping host. Demo catalogue and merchant carts are simulated; PayPal uses Sandbox test funds.');
+   const title=el('h3','','Connect DealPilot shopping');
+   const note=el('p','dealpilot-muted','Connect the shopping service for product research, comparison and PayPal Sandbox checkout.');
    const portLabel=el('label','','Host port'),port=el('input');port.type='number';port.value='3490';port.min='1024';port.max='65535';portLabel.append(port);
    const codeLabel=el('label','','Pairing code'),code=el('input');code.autocomplete='off';code.maxLength=12;code.placeholder='12 characters';codeLabel.append(code);
-   const message=el('p','dealpilot-muted',s.notice);const go=button('Connect demo host',()=>void pair(Number(port.value),code.value.trim()));
+   const message=el('p','dealpilot-muted',s.notice);const go=button('Connect shopping service',()=>void pair(Number(port.value),code.value.trim()));
    stage.append(title,note,portLabel,codeLabel,go,message);
   }else{
    const st=s.data.state,offers=st.offers||[],q=st.quote,p=st.payment;
    if(!q&&offers.length){
-    stage.append(el('h3','','Sample product shortlist'));
-    stage.append(el('p','dealpilot-muted','Illustrative inventory for a repeatable payment demonstration — not live retailer prices.'));
+    stage.append(el('h3','','Headphone options'));
+    stage.append(el('p','dealpilot-source-note','Example prices and stock for PayPal Sandbox testing.'));
     const latestUser=(s.data.messages||[]).filter(m=>m.role==='user').at(-1);
     if(/\bcompar(?:e|ison)\b/i.test(textOf(latestUser))){
       const wrap=el('div','dealpilot-compare-scroll'),table=el('table','dealpilot-compare-table'),head=el('tr');
@@ -142,9 +142,9 @@ export function mountDemoShopping({api,render,onCheckout}){
    }
    if(q){
     const cart=el('section','dealpilot-cart');
-    cart.append(el('h3','','Prepared demo cart'),el('p','',q.title),el('p','dealpilot-price',money(q.totalCents,q.currency)),
-      el('p','',q.quantity+' purchased unit(s) · simulated merchant cart'),
-      el('p','dealpilot-muted','PayPal payment will use Sandbox test funds. No retailer receives this order, and nothing ships.'));
+    cart.append(el('h3','','Prepared cart'),el('p','',q.title),el('p','dealpilot-price',money(q.totalCents,q.currency)),
+      el('p','',q.quantity+' item at '+money(q.totalCents,q.currency)+' subtotal'),
+      el('p','dealpilot-source-note','Test cart · PayPal Sandbox. No retailer order.'));
     if(p?.status==='completed'){
       cart.append(el('h3','','Sandbox payment completed'),el('p','','PayPal order: '+p.orderId),el('p','','Capture: '+p.captureId),el('p','',p.receiptId||'Test receipt available'));
       cart.append(button('Find another product',()=>void newPurchase()));
@@ -160,7 +160,7 @@ export function mountDemoShopping({api,render,onCheckout}){
  const modeButton=document.getElementById('shopping-mode');
  function renderButton(){
   if(!modeButton)return;
-  modeButton.textContent=s.active?'Demo catalogue: ON':'Use demo catalogue';
+  modeButton.textContent=s.active?'Shopping · Sample':'Shop with DealPilot';
   modeButton.setAttribute('aria-pressed',String(s.active));
  }
  if(modeButton)modeButton.onclick=()=>void(s.active?(s.active=false,touch()):activate());

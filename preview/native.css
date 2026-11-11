@@ -56,3 +56,8 @@ body{padding:0;background:var(--canvas);display:block;min-height:0;height:100dvh
 .dealpilot-compare-table th{text-align:left;background:#214365;color:#eff8ff;font-weight:800;padding:10px 8px}
 .dealpilot-compare-table td{text-align:left;border-top:1px solid #315070;vertical-align:top;padding:10px 8px;line-height:1.35;overflow-wrap:anywhere}
 .dealpilot-compare-table td:nth-child(2){white-space:nowrap;color:#8af4c5;font-weight:700}
+/* Keep source labels concise while preserving the distinction from retailer listings. */
+.dealpilot-shop-stage .dealpilot-source-note{font-size:11px;color:#9cbad0;line-height:1.4;margin:4px 0 12px}
+.dealpilot-shop-stage .dealpilot-sample-product{border:1px solid #38587c;border-radius:13px;padding:12px;margin:7px 0;background:linear-gradient(120deg,#183049,#11243b)}
+.dealpilot-shop-stage .dealpilot-sample-product strong{font-size:14px;letter-spacing:-.15px}
+.dealpilot-shop-stage .dealpilot-compare-scroll{margin:8px 0 15px}

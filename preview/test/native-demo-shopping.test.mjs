@@ -40,7 +40,7 @@ test('one DealPilot chat handles explicit sample consent, model results, selecti
  assert.equal(actions[0].path,'/shopping/enter');
  assert.equal(actions[1].path,'/shopping/state');
  demo.renderAside(window.document.querySelector('#messages'));
- assert.match(window.document.querySelector('#dealpilot-shop-stage').textContent,/Connect DealPilot Demo/);
+ assert.match(window.document.querySelector('#dealpilot-shop-stage').textContent,/Connect DealPilot shopping/);
  const inputs=window.document.querySelectorAll('#dealpilot-shop-stage input');
  inputs[0].value='3490';inputs[1].value='abCD1234efGH';
  window.document.querySelector('#dealpilot-shop-stage>button').click();
@@ -60,7 +60,7 @@ test('one DealPilot chat handles explicit sample consent, model results, selecti
  await demo.send('I choose Sony Demo Air, prepare my cart');
  assert.equal(demo.getMessages().some(x=>x.role==='assistant'),true);
  demo.renderAside(window.document.querySelector('#messages'));
- assert.match(window.document.querySelector('#dealpilot-shop-stage').textContent,/Prepared demo cart/);
+ assert.match(window.document.querySelector('#dealpilot-shop-stage').textContent,/Prepared cart/);
  await demo.send('Proceed to pay');
  demo.renderAside(window.document.querySelector('#messages'));
  assert.equal(checkoutCount,0);
