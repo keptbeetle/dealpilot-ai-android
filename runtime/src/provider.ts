@@ -309,7 +309,20 @@ export function firstShoppingResearchTurn(context:any):boolean{
  return /\b(?:browse|search|research|find|look up|open)\b/i.test(text)&&
   /\b(?:headphones?|earbuds?|laptops?|products?|retailer|walmart|best buy|sony|jbl)\b/i.test(text);
 }
-export function makeStream(config: ProviderConfig, credentials: ProviderCredentials = {}, owner: any, reasoningOverride?: ReasoningEffort, supportedReasoning?: readonly ReasoningEffort[], modelSource = credentials.modelSource): StreamFn {
+// Some agent-loop contexts carry only conversation messages: restore the
+// runtime's actual registered tool declarations before Gemini conversion.
+// Without this step Gemini receives zero functions and can only speculate.
+export function ensureGeminiToolTranscript(context:any,registeredTools:any[]):any{
+ const messages=Array.isArray(context.messages)?context.messages:[];
+ if(messages.some((m:any)=>m.role==='system'&&Array.isArray(m.toolsAdded)&&m.toolsAdded.length))return context;
+ if(!registeredTools?.length)return context;
+ const visible=registeredTools.filter((tool:any)=>GEMINI_VISIBLE_TOOLS.has(tool.name))
+  .map((tool:any)=>({name:tool.name,description:tool.description||tool.label||tool.name,
+   parameters:tool.parameters}));
+ if(!visible.length)return context;
+ return {...context,messages:[{role:'system',content:'',timestamp:0,toolsAdded:visible},...messages]};
+}
+export function makeStream(config: ProviderConfig, credentials: ProviderCredentials = {}, owner: any, reasoningOverride?: ReasoningEffort, supportedReasoning?: readonly ReasoningEffort[], modelSource = credentials.modelSource, registeredTools:any[]=[]): StreamFn {
   if (config.mode === 'scripted') return scriptedStream(owner);
   return async(_model, context, options)=>{
     let model: ProviderModel | undefined;
@@ -371,7 +384,7 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
             },
           })
         : model!.api === 'google-generative-ai'
-          ? googleStream(model!,constrainGeminiTools(context,owner==='main'&&firstShoppingResearchTurn(context)),owner==='main'&&firstShoppingResearchTurn(context)?{...shared,toolChoice:'any'}:shared)
+          ? googleStream(model!,constrainGeminiTools(ensureGeminiToolTranscript(context,registeredTools),owner==='main'&&firstShoppingResearchTurn(context)),owner==='main'&&firstShoppingResearchTurn(context)?{...shared,toolChoice:'any'}:shared)
         : model!.api === 'openai-completions'
           ? completionsStreamSimple(model!,context,{
               ...shared,

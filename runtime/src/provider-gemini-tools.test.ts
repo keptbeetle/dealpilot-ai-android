@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {constrainGeminiTools,firstShoppingResearchTurn} from './provider.js';
+import {constrainGeminiTools,firstShoppingResearchTurn,ensureGeminiToolTranscript} from './provider.js';
 
 test('Gemini sees only source-observing phone tools, never checkout/payment capabilities',()=>{
  const messages=[
@@ -37,4 +37,15 @@ test('explicit shopping research must first use the genuine phone browser tool, 
  assert.equal(firstShoppingResearchTurn({messages:[...messages,{role:'toolResult',content:[]}]}),false);
  const amazon=[messages[0],{role:'user',content:[{type:'text',text:'Find headphones in Amazon app'}]}];
  assert.deepEqual(constrainGeminiTools({messages:amazon},true).messages[0].toolsAdded.map((t:any)=>t.name),['phone_store_app']);
+});
+test('main agent research carries registered tools into a transcript lacking tool declarations',()=>{
+ const context={messages:[{role:'user',content:[{type:'text',text:'Find JBL headphones on Walmart using phone browser'}]}]};
+ const tools=[{name:'phone_browser',parameters:{type:'object',properties:{url:{type:'string'}}}},{name:'phone_shell',parameters:{type:'object',properties:{command:{type:'string'}}}}];
+ const recovered=ensureGeminiToolTranscript(context,tools);
+ assert.equal(recovered.messages[0].role,'system');
+ assert.deepEqual(recovered.messages[0].toolsAdded.map((tool:any)=>tool.name),['phone_browser']);
+ const constrained=constrainGeminiTools(recovered,firstShoppingResearchTurn(context));
+ assert.deepEqual(constrained.messages[0].toolsAdded.map((tool:any)=>tool.name),['phone_browser']);
+ assert.deepEqual(constrained.messages[0].toolsAdded[0].parameters.required,['url']);
+ assert.equal(constrained.messages[1],context.messages[0]);
 });
