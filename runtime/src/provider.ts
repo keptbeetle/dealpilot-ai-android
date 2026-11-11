@@ -267,6 +267,16 @@ function fixedCodexFetch(fetcher: typeof fetch, budget: {attempts:number;error?:
   }) as typeof fetch;
 }
 
+// Keep Gemini's tool declarations small and compatible with its schema limits.
+// The model may navigate only source-observing phone tools; buyer checkout
+// remains a separate host-controlled action after explicit approval.
+const GEMINI_VISIBLE_TOOLS=new Set(['phone_browser','phone_store_app','phone_observe','phone_capabilities']);
+export function constrainGeminiTools(context:any):any {
+ return {...context,messages:(context.messages||[]).map((message:any)=>
+  message.role==='system'&&Array.isArray(message.toolsAdded)
+   ?{...message,toolsAdded:message.toolsAdded.filter((tool:any)=>GEMINI_VISIBLE_TOOLS.has(tool.name))}
+   :message)};
+}
 export function makeStream(config: ProviderConfig, credentials: ProviderCredentials = {}, owner: any, reasoningOverride?: ReasoningEffort, supportedReasoning?: readonly ReasoningEffort[], modelSource = credentials.modelSource): StreamFn {
   if (config.mode === 'scripted') return scriptedStream(owner);
   return async(_model, context, options)=>{
@@ -329,7 +339,7 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
             },
           })
         : model!.api === 'google-generative-ai'
-          ? googleStream(model!,context,shared)
+          ? googleStream(model!,constrainGeminiTools(context),shared)
         : model!.api === 'openai-completions'
           ? completionsStreamSimple(model!,context,{
               ...shared,
@@ -402,7 +412,9 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
                     : requestDeadline?.aborted ? 'The model request timed out. Progress was retained. Retry later.'
                     : /RESOURCE_EXHAUSTED|quota exceeded|\b429\b/i.test(reason) ? 'Gemini reached its request quota (HTTP 429). Retry when your quota is available.'
                     : /UNAVAILABLE|high demand|\b503\b/i.test(reason) ? 'Gemini is temporarily unavailable (HTTP 503). Retry this request later.'
-                    : /API_KEY_INVALID|INVALID_API_KEY|UNAUTHENTICATED|PERMISSION_DENIED/i.test(reason) ? 'Gemini rejected this connection. Check the saved key and its access to the selected model.'
+                    : /API_KEY_INVALID|INVALID_API_KEY|UNAUTHENTICATED|PERMISSION_DENIED|\b403\b/i.test(reason) ? 'Gemini rejected this connection. Check the saved key and its access to the selected model.'
+                    : /INVALID_ARGUMENT|\b400\b|invalid.*schema|function.*declaration/i.test(reason) ? 'Gemini rejected the tool request schema (HTTP 400). Try a supported model or fewer tools.'
+                    : /NOT_FOUND|\b404\b/i.test(reason) ? 'Gemini model was not found or is unavailable for this API key (HTTP 404).'
                     : 'Gemini could not finish this request. Check the model, connection and device network.';
                   delete event.error.diagnostics;
                 } else if(mode==='openrouter'){
