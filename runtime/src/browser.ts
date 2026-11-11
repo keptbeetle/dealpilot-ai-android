@@ -29,7 +29,8 @@ export function inspectBrowserObservation(observation:BrowserObservation,checks:
  const url=sourceAddress(observation.nodes||[]),chrome=observation.package_name==='com.android.chrome';
  const nativeStore=url?nativeStoreForUrl(url):undefined;
  const search=Boolean(url&&(/\/search(?:[/?]|$)|[?&](?:q|k)=/i.test(url)||new URL(url).hostname==='www.google.com'));
- return inspectShoppingObservation(observation,checks,{kind:'browser',bound:chrome&&Boolean(url)&&!nativeStore,url,ref:url,label:'Chrome',pageKind:search?'search-results':'page',holds:[
+ const product=Boolean(url&&!search&&/\/(?:ip|products?|dp|p)(?:\/|$)/i.test(new URL(url).pathname));
+ return inspectShoppingObservation(observation,checks,{kind:'browser',bound:chrome&&Boolean(url)&&!nativeStore,url,ref:url,label:'Chrome',pageKind:search?'search-results':product?'product-page':'page',holds:[
   ...(nativeStore?['Use the '+nativeStore+' Android app through phone_store_app. Website observations are not admitted for this retailer.']:[]),
   ...(!chrome?['The page is outside Chrome. Reopen it with the browser tool.']:[]),
   ...(!url?['The source address is not visible. Show the Chrome address bar before treating this as source-bound evidence.']:[]),
@@ -39,6 +40,16 @@ export function inspectShoppingObservation(observation:BrowserObservation,checks
  const nodes=observation.nodes||[];
  const labels=(items:ObservationNode[])=>[...new Set(items.map(n=>(n.text||n.description||'').trim()).filter(Boolean))];
  const lines=labels(nodes),moneyLines=source.priceNodes?labels(source.priceNodes):lines;
+ // Only use a product name actually visible on the opened merchant detail
+ // page; never construct a title from model recollection or a search snippet.
+ const modelProduct=(s:string)=>s.length>=14&&s.length<=175&&
+  /\b(?:headphones?|earbuds?|headsets?|laptops?|notebooks?)\b/i.test(s)&&
+  /\b(?:sony|jbl|bose|lenovo|asus|samsung|apple|hp|dell|acer)\b/i.test(s)&&
+  /\b[A-Z-]*\d[A-Z0-9-]*\b/i.test(s)&&
+  !/\b(?:search results|similar items|recommended products|customers also|related products)\b/i.test(s);
+ const heading=source.pageKind==='product-page'?nodes.find(n=>/heading/i.test(n.role||'')&&modelProduct((n.text||'').trim())):undefined;
+ const listingTitle=source.pageKind==='product-page'?(heading?.text?.trim()||
+  nodes.map(n=>(n.text||'').trim()).find(modelProduct)||null):null;
  const text=lines.join('\n').slice(0,10000),url=source.url;
  const animatedDigits=lines.some(line=>/\b0,\s*1,\s*2,\s*3,\s*4,\s*5,\s*6,\s*7,\s*8,\s*9\b/.test(line));
  const prices:Price[]=[];
@@ -65,7 +76,8 @@ export function inspectShoppingObservation(observation:BrowserObservation,checks
    if(!/^\d+(?:\.\d{1,2})?$/.test(value))continue;
    const [whole,fraction='']=value.split('.'),amountCents=Number(whole)*100+Number(fraction.padEnd(2,'0'));
    if(!Number.isSafeInteger(amountCents)||amountCents<1||amountCents>200000000)continue;
-   const currency=/₹|INR|Rs/i.test(match[1])?'INR':/USD|US\$/i.test(match[1])?'USD':'dollar-unspecified';
+   const usRetailer=Boolean(url&&/^(?:www\.)?(?:walmart\.com|bestbuy\.com|target\.com|jbl\.com|sony\.com)$/i.test(new URL(url).hostname));
+   const currency=/₹|INR|Rs/i.test(match[1])?'INR':/USD|US\$/i.test(match[1])||usRetailer&&match[1].trim()==='$'?'USD':'dollar-unspecified';
    const before=line.slice(Math.max(previousEnd,start-35),start),after=suffix.slice(0,55);
    // A condition belongs to this amount only when no later amount intervenes.
    const localAfter=after.split(/(?:₹|\$|USD|INR)\s*\d/)[0];
@@ -107,7 +119,7 @@ export function inspectShoppingObservation(observation:BrowserObservation,checks
  ];
  const navigationTargets=nodes.filter(n=>n.clickable&&n.enabled!==false&&(n.text||n.description)).slice(0,20).map(n=>({selector:n.text?{text:n.text.slice(0,300)}:{description:n.description!.slice(0,300)}}));
  return {snapshot_id:observation.snapshot_id,observedAt:observation.captured_at_ms,sourceUrl:url,sourceRef:source.ref,sourceKind:source.kind,sourceLabel:source.label,sourcePackage:observation.package_name,browser:source.kind==='browser'?observation.package_name:undefined,pageKind:source.pageKind,navigationTargets,
-  sourceBound:source.bound&&!blocked,blocked,prices,regularPrice:search||!source.bound||blocked?null:regular,offers:lines.filter(line=>conditions.test(line)).slice(0,8).map(line=>line.slice(0,220)),
+  sourceBound:source.bound&&!blocked,blocked,listingTitle,prices,regularPrice:search||!source.bound||blocked?null:regular,offers:lines.filter(line=>conditions.test(line)).slice(0,8).map(line=>line.slice(0,220)),
   stock,capacitiesGB:{ram,storage},checks:results,holds,visibleText:text,truncated:Boolean(observation.nodes_truncated)||lines.join('\n').length>10000,
   note:'Observed page evidence only. Offers require eligibility checks. Seller cart, delivered total and purchase availability are not verified.'};
 }
@@ -170,6 +182,14 @@ export async function browsePage(execute:Execute,args:{url?:string;action?:Brows
   if(report.blocked||report.browser!=='com.android.chrome'||(substantive>=3&&addressMatches&&(actionChanged||args.action?.kind==='scroll'))||attempt>=4){
    if(args.url&&!addressMatches)report.holds.push('Navigation did not confirm the requested address. The observed URL may be a redirect or an earlier page. Verify it before attributing this evidence to the requested product.');
    if(!actionChanged&&args.action?.kind==='click')report.holds.push('The click was dispatched but a changed page was not observed. Inspect this operation before repeating it.');
+   // Retain only an actually observed search-card selection that led to a
+   // different product page. This cannot be supplied by a model-authored title.
+   const clicked=args.action?.kind==='click'?args.action.selector?.text||args.action.selector?.description||'':'';
+   const fromObservedCard=Boolean(clicked&&beforeAction?.pageKind==='search-results'&&
+     beforeAction.navigationTargets?.some(t=>(t.selector?.text||t.selector?.description)===clicked)&&
+     report.pageKind==='product-page'&&report.listingTitle&&actionChanged&&
+     report.sourceBound&&report.sourceUrl!==beforeAction.sourceUrl);
+   if(fromObservedCard)(report as any).selectedFrom={label:clicked,snapshot_id:beforeAction!.snapshot_id};
    return {...report,...target,...(operationPrefix?{operation_prefix:operationPrefix}:{}),...(actionReceipt?{operation_id:actionReceipt,actionObservedChange:actionChanged}:{}),...(args.url?{requestedUrl:args.url,navigationStatus:addressMatches?'address-matches':'unconfirmed'}:{})};
   }
   await new Promise<void>((resolve,reject)=>{

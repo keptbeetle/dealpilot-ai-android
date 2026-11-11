@@ -149,3 +149,21 @@ test('browser scrolling uses the fresh viewport for a gesture instead of an inva
  await browsePage(execute,{action:{kind:'scroll',direction:'down'}},'scroll');
  const action=calls.find(c=>c.name==='phone_act').args;assert.equal(action.kind,'swipe');assert.equal(action.snapshot_id,'viewport-1');assert.equal(action.x,360);assert.ok(action.y>action.end_y);assert.ok(action.y<1280&&action.end_y>0);
 });
+test('observed US merchant product URLs are recognized without treating search pages as verified listings',()=>{
+ const walmart=page(['JBL Tune 520BT Wireless On Ear Headphones','$34.95','In stock'],'www.walmart.com/ip/5212541979');
+ const report=inspect(walmart,{currency:'USD',budgetCents:10000});
+ assert.equal(report.sourceBound,true);
+ assert.equal(report.pageKind,'product-page');
+ assert.equal(report.listingTitle,'JBL Tune 520BT Wireless On Ear Headphones');
+ assert.equal(report.regularPrice?.amountCents,3495);
+ assert.equal(report.regularPrice?.currency,'USD');
+ assert.equal(report.checks.find(x=>x.attribute==='regular-price budget')?.outcome,'supported');
+ const bestbuy=inspect(page(['Sony WH-CH520 Wireless Headphone','$38.00','In stock'],'www.bestbuy.com/product/-/6533161'));
+ assert.equal(bestbuy.pageKind,'product-page');
+ assert.equal(bestbuy.regularPrice?.currency,'USD');
+ const search=inspect(page(['Sony WH-CH520','$38.00'],'www.google.com/search?q=sony'));
+ assert.equal(search.pageKind,'search-results');
+ assert.equal(search.regularPrice,null);
+ const arbitrary=inspect(page(['Headphones','$38.00'],'shop.unknown.example/product/123'));
+ assert.equal(arbitrary.regularPrice?.currency,'dollar-unspecified');
+});

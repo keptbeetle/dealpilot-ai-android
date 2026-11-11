@@ -291,7 +291,7 @@ export class PocketRuntime {
             const user=session.messages.findLast((m:any)=>m.role==='user');
             const completed=messageText(user).match(/^\[Worker completion\] ([a-z0-9-]+) generation /)?.[1];
             const completedShopping=Boolean(completed&&this.runtime.listConversations().some(c=>c.conversationId===completed&&c.agent.name==='shopping-researcher'));
-            shopping=completedShopping||reports.some(report=>report.sourceKind==='android-app'||report.prices.length>0||/\/(?:products?|dp|p)\//i.test(report.sourceUrl||''));
+            shopping=completedShopping||reports.some(report=>report.sourceKind==='android-app'||report.prices.length>0||/\/(?:products?|dp|p|ip)\//i.test(report.sourceUrl||''));
             if(completedShopping){
               const worker=this.sessions.get(completed!);
               reports=worker?browserReports(worker.messages.slice(worker.messages.findLastIndex((m:any)=>m.role==='user'))):[];

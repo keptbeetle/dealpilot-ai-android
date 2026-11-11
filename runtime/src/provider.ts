@@ -271,11 +271,43 @@ function fixedCodexFetch(fetcher: typeof fetch, budget: {attempts:number;error?:
 // The model may navigate only source-observing phone tools; buyer checkout
 // remains a separate host-controlled action after explicit approval.
 const GEMINI_VISIBLE_TOOLS=new Set(['phone_browser','phone_store_app','phone_observe','phone_capabilities']);
-export function constrainGeminiTools(context:any):any {
+// Gemini rejects the Android browser's full JSON schema (HTTP 400). Expose a
+// small model-facing schema; host-side phone checks and buyer approval stay intact.
+const GEMINI_BROWSER_INITIAL={type:'object',properties:{
+ url:{type:'string',description:'Full HTTPS URL to open in Android Chrome'},
+ display_target:{type:'string',enum:['physical','virtual']}
+},required:['url']};
+const GEMINI_BROWSER_FOLLOWUP={type:'object',properties:{
+ url:{type:'string'},
+ action:{type:'object',properties:{
+  kind:{type:'string',enum:['click','scroll']},
+  selector:{type:'object',properties:{text:{type:'string'},description:{type:'string'}}},
+  direction:{type:'string',enum:['up','down']}
+ },required:['kind']},
+ display_target:{type:'string',enum:['physical','virtual']}
+}};
+function geminiModelFacingTool(tool:any,initialResearch:boolean){
+ if(tool.name==='phone_browser')return {...tool,parameters:initialResearch?GEMINI_BROWSER_INITIAL:GEMINI_BROWSER_FOLLOWUP};
+ if(tool.name==='phone_capabilities')return {...tool,parameters:{type:'object',properties:{}}};
+ if(tool.name==='phone_observe')return {...tool,parameters:{type:'object',properties:{display_target:{type:'string',enum:['physical','virtual']}}}};
+ return tool;
+}
+export function constrainGeminiTools(context:any,initialResearch=false):any {
+ const latest=(context.messages||[]).at(-1);
+ const text=String(latest?.content?.filter?.((part:any)=>part?.type==='text')?.map((part:any)=>part.text)?.join(' ')||latest?.content||'');
+ const shoppingBrowser=initialResearch&&!/\b(?:Amazon|Flipkart)\b/i.test(text);
+ const selected=shoppingBrowser?new Set(['phone_browser']):initialResearch?new Set(['phone_store_app']):GEMINI_VISIBLE_TOOLS;
  return {...context,messages:(context.messages||[]).map((message:any)=>
   message.role==='system'&&Array.isArray(message.toolsAdded)
-   ?{...message,toolsAdded:message.toolsAdded.filter((tool:any)=>GEMINI_VISIBLE_TOOLS.has(tool.name))}
+   ?{...message,toolsAdded:message.toolsAdded.filter((tool:any)=>selected.has(tool.name)).map((tool:any)=>geminiModelFacingTool(tool,initialResearch))}
    :message)};
+}
+export function firstShoppingResearchTurn(context:any):boolean{
+ const message=(context.messages||[]).at(-1);
+ if(message?.role!=='user')return false;
+ const text=String(Array.isArray(message.content)?message.content.filter((p:any)=>p.type==='text').map((p:any)=>p.text).join(' '):message.content||'');
+ return /\b(?:browse|search|research|find|look up|open)\b/i.test(text)&&
+  /\b(?:headphones?|earbuds?|laptops?|products?|retailer|walmart|best buy|sony|jbl)\b/i.test(text);
 }
 export function makeStream(config: ProviderConfig, credentials: ProviderCredentials = {}, owner: any, reasoningOverride?: ReasoningEffort, supportedReasoning?: readonly ReasoningEffort[], modelSource = credentials.modelSource): StreamFn {
   if (config.mode === 'scripted') return scriptedStream(owner);
@@ -339,7 +371,7 @@ export function makeStream(config: ProviderConfig, credentials: ProviderCredenti
             },
           })
         : model!.api === 'google-generative-ai'
-          ? googleStream(model!,constrainGeminiTools(context),shared)
+          ? googleStream(model!,constrainGeminiTools(context,owner==='main'&&firstShoppingResearchTurn(context)),owner==='main'&&firstShoppingResearchTurn(context)?{...shared,toolChoice:'any'}:shared)
         : model!.api === 'openai-completions'
           ? completionsStreamSimple(model!,context,{
               ...shared,

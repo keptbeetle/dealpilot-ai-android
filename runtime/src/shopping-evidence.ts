@@ -66,7 +66,7 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now(),request
   try{const url=new URL(report.sourceUrl);if(url.protocol!=='https:'||url.username||url.password)continue;unique.set(url.href,report);}catch{}
  }
  const freshPages=[...unique.values()];
- const products=freshPages.filter(report=>!report.blocked&&report.sourceBound&&(native(report)?report.pageKind==='product-page'&&Boolean(report.listingTitle):report.pageKind!=='search-results'&&/\/(?:products?|dp|p)\//i.test(new URL(report.sourceUrl!).pathname))).slice(-6);
+ const products=freshPages.filter(report=>!report.blocked&&report.sourceBound&&(native(report)?report.pageKind==='product-page'&&Boolean(report.listingTitle):report.pageKind!=='search-results'&&/\/(?:products?|dp|p|ip)\//i.test(new URL(report.sourceUrl!).pathname))).slice(-6);
  // Search, gallery and session frames must not crowd previously verified product
  // frames out of the limited display budget. They remain independently time-bound.
  const pages=freshPages.slice(-6);
@@ -106,6 +106,23 @@ export function groundedShoppingResearch(reports:Report[],now=Date.now(),request
   for(const reason of verification.reasons.slice(0,8))lines.push('- Verification hold: '+reason);
   return lines.join('\n');
  });
+ const compact=(value:unknown)=>String(value??'Unknown').replace(/[|\r\n<>]/g,' ').trim().slice(0,160);
+ const observedRows=products.map(report=>{
+  const price=report.regularPrice?.currency==='USD'&&report.regularPrice.amountCents>0
+   ?'USD '+(report.regularPrice.amountCents/100).toFixed(2):'Unconfirmed';
+  const text=String(report.visibleText||'');
+  const battery=text.match(/\bbattery(?: life)?[^\n]{0,45}?\b(?:up to\s*)?(\d{1,3})\s*(?:hours?|hrs?|h)\b/i)||
+   text.match(/\b(\d{1,3})\s*(?:hours?|hrs?|h)\b[^\n]{0,35}\bbattery\b/i);
+  const details=battery?battery[1]+' hours battery':'See product page';
+  let retailer=compact(report.sourceLabel||'Observed retailer');
+  if(native(report))retailer='['+retailer+'](pocket-store://'+nativeStoreForPackage(report.sourcePackage!)+')';
+  else try{const url=new URL(report.sourceUrl!);if(url.protocol==='https:')retailer='['+url.hostname+'](<'+url.href+'>)';}catch{}
+  return '| '+[compact(report.listingTitle||'Product listing'),price,details,report.stock||'unknown',retailer].join(' | ')+' |';
+ });
+ const table='| Product | Observed price | Key detail | Availability | Retailer |\n| --- | --- | --- | --- | --- |\n'+observedRows.join('\n');
  const comparison=comparisonMarkdown(products,request,now);
- return 'Source-observed listing evidence follows. This is not a verified purchase recommendation.\n\n'+(comparison?comparison+'\n\n':'')+sections.join('\n\n')+accessText+'\n\nConditional offers require eligibility checks. Exact variant, seller, shipping, taxes and delivered total still require review. This evidence does not establish a cart, payment or merchant order.';
+ return 'Source-observed listing evidence follows. This is not a verified purchase recommendation.\n\n'+table+'\n\n'+
+ (comparison?'Comparison checks:\n'+comparison+'\n\n':'')+
+ 'Source details and verification:\n'+sections.join('\n\n')+accessText+
+ '\n\nOnly directly observed product-page facts are shown. Seller checkout, delivery and final total still require review.';
 }
