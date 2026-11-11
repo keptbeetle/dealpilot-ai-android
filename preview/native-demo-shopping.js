@@ -23,6 +23,7 @@ function button(text,onclick,cls=''){const n=el('button',cls,text);n.type='butto
 function store(){try{return JSON.parse(sessionStorage.getItem('dealpilot-chat-demo-state')||'{}');}catch{return {};}}
 export function mountDemoShopping({api,render,onCheckout}){
  const s={...blank(),...store()};
+ s.localMessages=[];
  s.connected=false;s.data=null;s.pending=null;s.version=0;s.notice='';
  let inFlight=false;
  const touch=()=>{s.version++;try{sessionStorage.setItem('dealpilot-chat-demo-state',JSON.stringify({active:s.active,archived:s.archived,proceed:s.proceed}));}catch{}render();};
@@ -53,7 +54,7 @@ export function mountDemoShopping({api,render,onCheckout}){
  }
  function getMessages(){
   if(!s.active)return [];
-  const out=[...s.archived,...(s.data?.messages||[]).map(m=>({role:m.role,text:textOf(m)}))];
+  const out=[...s.archived,...(s.data?.messages||[]).map(m=>({role:m.role,text:textOf(m)})),...s.localMessages];
   if(s.pending)out.push({role:'user',text:s.pending});
   if(s.proceed&&s.data?.state?.quote)out.push({role:'user',text:'Proceed to pay.'});
   if(s.notice&&s.connected)out.push({role:'assistant',text:s.notice});
@@ -66,7 +67,26 @@ export function mountDemoShopping({api,render,onCheckout}){
   const quote=s.data?.state?.quote,payment=s.data?.state?.payment;
   if(isProceed(text)&&quote&&!payment){s.proceed=true;touch();return true;}
   if(isProceed(text)&&!quote)throw Error('Choose a product and prepare the cart before payment.');
-  if(payment&&!['completed','cancelled','blocked'].includes(payment.status))throw Error('Resolve the existing PayPal Sandbox order before another shopping request.');
+  if(payment&&!['completed','cancelled','blocked'].includes(payment.status))throw Error('Resolve the existing PayPal Sandbox order before another shopping request.');  if(isChoose(text)&&!quote&&!payment){
+    const offer=chooseTitle(text,s.data?.state?.offers||[]);
+    if(offer){
+      inFlight=true;s.pending=text;touch();
+      try{
+        const result=await requestAction('select',{offerId:offer.id,quantity:1});
+        const prepared=result.state?.quote;
+        if(!prepared)throw Error('The shopping service did not confirm the cart.');
+        s.localMessages.push(
+          {role:'user',text},
+          {role:'assistant',text:'Cart prepared: '+prepared.quantity+' x '+prepared.title+'. Subtotal: '+money(prepared.totalCents,prepared.currency)+'. Review the quote and request PayPal checkout when ready.'}
+        );
+        s.notice='';touch();
+        document.querySelector('#dealpilot-shop-stage .dealpilot-cart')?.scrollIntoView?.({block:'start',behavior:'smooth'});
+      }catch(e){
+        s.notice='Could not prepare cart: '+String(e.message||'Please try again.');touch();
+      }finally{inFlight=false;s.pending=null;touch();}
+      return true;
+    }
+  }
   if(payment&&newCategory(text)){await newPurchase();}
   s.proceed=false;s.pending=text;touch();inFlight=true;
   let completed=false;
@@ -92,7 +112,7 @@ export function mountDemoShopping({api,render,onCheckout}){
  async function newPurchase(){
   if(inFlight)throw Error('Complete the active request first.');
   const previous=(s.data?.messages||[]).map(m=>({role:m.role,text:textOf(m)}));
-  if(previous.length)s.archived.push(...previous,{role:'assistant',text:'--- New product search ---'});
+  if(previous.length||s.localMessages.length)s.archived.push(...previous,...s.localMessages,{role:'assistant',text:'--- New product search ---'});s.localMessages=[];
   update(await api('/shopping/new',{operationId:crypto.randomUUID()}));
   await configure();s.proceed=false;touch();
  }

@@ -57,7 +57,11 @@ test('one DealPilot chat handles explicit sample consent, model results, selecti
  assert.equal(comparison.querySelectorAll('tbody tr').length,2);
  assert.match(comparison.textContent,/30 hours/);
  assert.match(comparison.textContent,/in-stock/);
+ const chatsBeforeSelection=actions.filter(x=>x.path==='/shopping/chat').length;
  await demo.send('I choose Sony Demo Air, prepare my cart');
+ assert.equal(actions.filter(x=>x.path==='/shopping/chat').length,chatsBeforeSelection,'an explicit unique product choice should not require another model call');
+ assert.equal(actions.some(x=>x.path==='/shopping/action'&&x.body.action==='select'),true);
+ assert.match(demo.getMessages().at(-1).text,/Cart prepared: 1 x Sony Demo Air/);
  assert.equal(demo.getMessages().some(x=>x.role==='assistant'),true);
  demo.renderAside(window.document.querySelector('#messages'));
  assert.match(window.document.querySelector('#dealpilot-shop-stage').textContent,/Prepared cart/);
