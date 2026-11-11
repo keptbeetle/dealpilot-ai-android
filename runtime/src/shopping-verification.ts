@@ -2,7 +2,7 @@ import {assessSourceIdentity,compareReportedOffers} from '../vendor/dealpilot/so
 import {evaluateReportedCost} from '../vendor/dealpilot/purchase-cost.js';
 import {assessObservationFreshness} from '../vendor/dealpilot/source-freshness.js';
 import {canonicalGtin,normalizePartNumber} from '../vendor/dealpilot/product-identifiers.js';
-import type {ShoppingRequest} from './shopping-request.js';
+import type {ShoppingRequest,HeadphoneFit} from './shopping-request.js';
 import {reportedCostClaims} from './reported-costs.js';
 
 type Result={attribute:string;outcome:'supported'|'contradicted'|'unknown';evidence:string};
@@ -37,6 +37,16 @@ export function verifyShoppingReport(report:any,request?:ShoppingRequest,now=Dat
  if(request?.checks.brand)add('required brand',brand?brand.toLowerCase()===request.checks.brand.toLowerCase():undefined,brand||'Manufacturer unknown.');
  if(request?.requiredBrands?.length)add('allowed brands',brand?request.requiredBrands.some(value=>value.toLowerCase()===brand.toLowerCase()):undefined,brand||'Manufacturer unknown.');
  if(request?.newOnly)add('new condition',condition==='unknown'?undefined:condition==='new',condition==='unknown'?'No explicit selected-item condition.':condition);
+ if(request?.headphoneFits?.length){
+  // Fit claims must identify the selected listing, not unrelated recommendations,
+  // reviews or accessories elsewhere in the native product page.
+  const observedFits:HeadphoneFit[]=[];
+  if(/\b(?:over[- ]ear|around[- ]ear|circumaural)\b/i.test(title))observedFits.push('over-ear');
+  if(/\b(?:on[- ]ear|supra[- ]aural)\b/i.test(title))observedFits.push('on-ear');
+  if(/\b(?:in[- ]ear|intra[- ]aural)\b/i.test(title))observedFits.push('in-ear');
+  const fit=observedFits.length===1?observedFits[0]:undefined;
+  add('headphone fit',fit?request.headphoneFits.includes(fit):undefined,fit||'The selected product title does not establish a unique headphone fit.');
+ }
  const currency=price?.currency==='INR'||price?.currency==='USD'?price.currency:null;
  const reported=currency?reportedCostClaims(text,currency):null;
  const cost=currency&&reported?evaluateReportedCost({priceCents:price.amountCents,currency,costClaims:reported.claims}):null;

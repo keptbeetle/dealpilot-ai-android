@@ -8,7 +8,7 @@ import { completedGeneration,errorGeneration,interruptedGeneration,generationKey
 import { MobileSession } from './session.js';
 import { DisplayPool } from './display-pool.js';
 import {generateChatTitle} from './chat-title.js';
-import {browserReports,groundedShoppingResearch} from './shopping-evidence.js';
+import {browserReports,groundedShoppingResearch,existingShoppingComparisonRequested} from './shopping-evidence.js';
 import {verifyShoppingReport} from './shopping-verification.js';
 import {updateShoppingRequest,restoreShoppingRequest,type ShoppingRequest} from './shopping-request.js';
 import {OfferEvidenceLedger} from './offer-evidence.js';
@@ -309,6 +309,18 @@ export class PocketRuntime {
                   report.sourceKind==='android-app'&&report.pageKind==='product-page'&&verifyShoppingReport(report,request).comparison.rankable
                 );
                 reports=[...retained.slice(-6),...reports];
+              }
+            }
+            if(!completedShopping){
+              const latestInput=session.messages.findLast((m:any)=>m.role==='user'&&m.inputSource);
+              if(latestInput&&this.shoppingRequest('main')&&existingShoppingComparisonRequested(messageText(latestInput))){
+                // A read-only comparison of previous offers can finish without any
+                // tool call this turn. Ground it in the same-chat worker records;
+                // never treat the model's recollection as proof of price or condition.
+                const prior=this.runtime.listConversations().filter(c=>c.agent.name==='shopping-researcher'&&
+                  this.workerMainThreads.get(c.conversationId)===this.mainThreadId);
+                reports=[...prior.flatMap(c=>browserReports(this.sessions.get(c.conversationId)?.messages??[])),...reports];
+                shopping=true;
               }
             }
             // A separately buyer-requested sandbox proposal follows its existing

@@ -42,6 +42,37 @@ test('shopping completion and main delivery withhold unsupported drafts while re
  assert.ok(runtime.state().messages.some((m:any)=>m.role==='assistant'&&m.text.startsWith('Research is incomplete.')),'main completion is grounded too');
 });
 
+test('budget refinement of existing offers is independently grounded, never inventing new condition',async()=>{
+ const runtime=new PocketRuntime(new Bridge());
+ command(runtime,{action:'send',text:'Find new wireless headphones under INR 5000'});
+ await until(()=>!runtime.busy&&runtime.state().messages.some(m=>m.role==='assistant'));
+ const started=runtime.startTasks([{kind:'spawn',agent:'shopping-researcher',label:'Native evidence',prompt:'Read capabilities'}],{initiatedBy:'user'});
+ await started.completion;await until(()=>!runtime.busy&&!runtime.state().active,8000);
+ const id=(started.starts[0] as any).conversationId,worker=runtime.sessions.get(id)!;
+ for(const [title,price] of [['Sony WH-CH520 headphones',3590],['Soundcore Q20i headphones',4998]] as const){
+  const report=inspectStoreObservation({package_name:'in.amazon.mShop.android.shopping',snapshot_id:title,captured_at_ms:Date.now(),nodes:[
+   {resource_id:'productTitle',text:title},{text:'Buy now'},{text:'INR '+price},{text:'In stock'}
+  ]},'amazon',{selectedLabel:title,selectedFromSnapshot:'results'});
+  worker.agent.state.messages.push({role:'toolResult',toolCallId:title,toolName:'phone_store_app',
+   content:[{type:'text',text:JSON.stringify(report)}],isError:false,timestamp:Date.now()} as any);
+ }
+ runtime.main.agent.streamFunction=((model:any)=>{
+  const stream=new AssistantMessageEventStream();
+  const message:any={role:'assistant',content:[{type:'text',text:'Both offers are VERIFIED NEW and the Soundcore is in budget.'}],api:model.api,
+   provider:model.provider,model:model.id,timestamp:Date.now(),stopReason:'stop',
+   usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}};
+  stream.push({type:'done',reason:'stop',message});stream.end(message);return stream;
+ }) as any;
+ const beforeMessages=runtime.main.messages.length;
+ command(runtime,{action:'send',text:'Now lower my budget to INR 4000, keeping NEW headphones. Compare only the two existing verified observations from this chat.'});
+ await until(()=>!runtime.busy&&runtime.main.messages.length>=beforeMessages+2&&runtime.main.messages.at(-1)?.role==='assistant',8000);
+ const answer=messageText(runtime.main.messages.at(-1));
+ assert.match(answer,/3590\.00/);assert.match(answer,/4998\.00/);assert.match(answer,/over budget/);
+ assert.match(answer,/new condition: unknown/i);
+ assert.doesNotMatch(answer,/offers are VERIFIED NEW|Soundcore is in budget/);
+ assert.equal(runtime.shoppingRequest('main')?.checks.budgetCents,400000);
+ assert.equal(runtime.shoppingRequest('main')?.newOnly,true);
+});
 test('a comparison follow-up combines two fresh native offers from workers in the same chat',async()=>{
  const runtime=new PocketRuntime(new Bridge());
  command(runtime,{action:'send',text:'Find wireless on-ear headphones under INR 5000'});
@@ -55,15 +86,15 @@ test('a comparison follow-up combines two fresh native offers from workers in th
   worker.agent.state.messages.push({role:'toolResult',toolCallId:title,toolName:'phone_store_app',content:[{type:'text',text:JSON.stringify(report)}],isError:false,timestamp:Date.now()} as any);
   return id;
  }
- await source('Sony X100 headphones',2999);
+ await source('Sony X100 On-Ear headphones',2999);
  command(runtime,{action:'send',text:'Compare the Sony with another available headphone'});
  await until(()=>!runtime.busy&&runtime.state().messages.at(-1)?.role==='assistant');
- const current=await source('JBL X200 headphones',2499);
+ const current=await source('JBL X200 On-Ear headphones',2499);
  runtime.main.agent.state.messages.push({role:'user',content:[{type:'text',text:'[Worker completion] '+current+' generation 1: source results'}],timestamp:Date.now()} as any);
  await runtime.main.continue();
  const answer=messageText(runtime.main.messages.at(-1));
- assert.match(answer,/Sony X100 headphones/);
- assert.match(answer,/JBL X200 headphones/);
+ assert.match(answer,/Sony X100 On-Ear headphones/);
+ assert.match(answer,/JBL X200 On-Ear headphones/);
  assert.match(answer,/Lowest listed price among matching observed offers: INR 2499.00/);
 });
 

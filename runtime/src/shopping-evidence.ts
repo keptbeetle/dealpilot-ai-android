@@ -6,6 +6,14 @@ import {comparisonMarkdown} from './shopping-comparison.js';
 
 type Report=ReturnType<typeof inspectBrowserObservation>&{store?:string;listingTitle?:string;query?:string;identityObservation?:{snapshot_id:string;observedAt:number};accessHold?:boolean;evidenceObservedAt?:number;offer_id?:string;stockOcrEvidence?:{colour:string;claim:string};evidenceFields?:Record<string,Array<{snapshotId:string;observedAt:number}>>};
 function native(report:Report){return report.sourceKind==='android-app'&&Boolean(report.sourcePackage&&nativeStoreForPackage(report.sourcePackage))&&report.sourceRef?.startsWith('android-app://'+report.sourcePackage+'/observations/');}
+/** Re-evaluating earlier observed offers must use the evidence ledger, not a model recollection. */
+export function existingShoppingComparisonRequested(text:string):boolean {
+ if(typeof text!=='string'||text.length>12000)return false;
+ const prior=/\b(?:existing|earlier|previous|already|observed|verified|those|these|both)\b|\bfrom this chat\b|\bcurrent (?:source )?evidence\b/i.test(text);
+ const comparison=/\b(?:compare|comparison|rank|cheapest|cheaper|which|budget|under|below|meets?|qualif(?:y|ies)|listed price)\b/i.test(text);
+ const fresh=/\b(?:fresh|new|latest)\s+(?:search|research|lookup|listings?|offers?|results?)\b|\b(?:search|research|browse|refresh|rerun|recheck)\s+(?:again|now|fresh|new|latest)\b/i.test(text);
+ return prior&&comparison&&!fresh;
+}
 export function browserReports(messages:any[]):Report[]{
  const reports:Report[]=[];
  for(const message of messages){

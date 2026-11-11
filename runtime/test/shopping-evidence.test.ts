@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {inspectBrowserObservation} from '../src/browser.js';
-import {browserReports,groundedShoppingResearch} from '../src/shopping-evidence.js';
+import {browserReports,groundedShoppingResearch,existingShoppingComparisonRequested} from '../src/shopping-evidence.js';
 import {inspectStoreObservation} from '../src/native-store.js';
 const now=1793948000000;
 const observation=(url:string,text:string[])=>inspectBrowserObservation({package_name:'com.android.chrome',snapshot_id:'fixture',captured_at_ms:now,nodes:[{resource_id:'com.android.chrome:id/url_bar',text:url},...text.map(text=>({text}))]});
 
+test('read-only comparisons of previous shopping evidence are grounded without triggering a new search',()=>{
+ assert.equal(existingShoppingComparisonRequested('Now lower the maximum budget to INR 4000. Compare only the two existing verified product observations from this chat.'),true);
+ assert.equal(existingShoppingComparisonRequested('Which of those two listings is cheapest under INR 4000?'),true);
+ assert.equal(existingShoppingComparisonRequested('Compare two NEW headphones under INR 5000 by visiting Amazon'),false);
+ assert.equal(existingShoppingComparisonRequested('Compare the earlier listings, but do a fresh search now'),false);
+ assert.equal(existingShoppingComparisonRequested('What is two plus two?'),false);
+});
 test('scrolling to specifications does not erase earlier price evidence or silently merge eligibility',()=>{
  const frame=(id:string,lines:string[])=>inspectStoreObservation({package_name:'in.amazon.mShop.android.shopping',snapshot_id:id,captured_at_ms:now,nodes:[{resource_id:'product_title',text:'Sony wireless headphones X100'},{text:'About this item'},...lines.map(text=>({text}))]},'amazon');
  const answer=groundedShoppingResearch([frame('price',['INR 2999','INR 3999 MRP']),frame('details',['Condition: New','Bluetooth'])],now);
