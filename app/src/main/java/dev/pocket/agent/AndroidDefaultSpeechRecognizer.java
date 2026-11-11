@@ -13,7 +13,7 @@ import java.util.ArrayList;
  * Thin wrapper around Android's system-default SpeechRecognizer.
  *
  * Unlike the hybrid experiment, this recognizer owns the microphone itself. That deliberately
- * matches the standalone Android Default STT Test path instead of injecting Pocket Agent PCM.
+ * matches the standalone Android Default STT Test path instead of injecting DealPilot AI PCM.
  */
 final class AndroidDefaultSpeechRecognizer implements AutoCloseable {
     interface Callback {

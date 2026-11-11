@@ -363,7 +363,7 @@ public final class SubscriptionVoiceService extends Service implements AgentServ
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Pocket Agent · Codex voice")
+            .setContentTitle("DealPilot AI · Codex voice")
             .setContentText(message).setOngoing(true).setContentIntent(open)
             .addAction(new Notification.Action.Builder(null, "Disconnect voice", stop).build()).build();
     }
@@ -379,10 +379,10 @@ public final class SubscriptionVoiceService extends Service implements AgentServ
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification failure = new Notification.Builder(this, FAILURE_CHANNEL)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle("Pocket Agent voice stopped")
+            .setContentTitle("DealPilot AI voice stopped")
             .setContentText(reason)
             .setStyle(new Notification.BigTextStyle().bigText(
-                reason + ". Open Pocket Agent settings for the last startup phase and build."))
+                reason + ". Open DealPilot AI settings for the last startup phase and build."))
             .setContentIntent(open).setAutoCancel(true).build();
         getSystemService(NotificationManager.class).notify(FAILURE_NOTIFICATION_ID, failure);
     }

@@ -132,7 +132,7 @@ public final class RuntimeHost implements AutoCloseable {
         closeRuntimeOnly();fail(message,error);
         try {
             JSONObject event=new JSONObject().put("type","runtime_terminal_failure")
-                .put("error","Runtime recovery exhausted; restart Pocket Agent to retry");
+                .put("error","Runtime recovery exhausted; restart DealPilot AI to retry");
             store.record(event);listener.accept(event);
         } catch(Throwable ignored) {}
     }
@@ -197,7 +197,7 @@ public final class RuntimeHost implements AutoCloseable {
         boolean accepted=handler.post(() -> {
             if (closed || closing || runtime == null) {
                 result.completeExceptionally(new IllegalStateException(terminalRuntimeFailure
-                    ?"Runtime recovery is exhausted; restart Pocket Agent to retry":"Runtime is not running")); return;
+                    ?"Runtime recovery is exhausted; restart DealPilot AI to retry":"Runtime is not running")); return;
             }
             try {
                 String response = runtime.getExecutor("(()=>{const value=PocketAgent.dispatch(" + JSONObject.quote(serialized) + ");return typeof value==='string'?value:JSON.stringify(value)})()").executeString();

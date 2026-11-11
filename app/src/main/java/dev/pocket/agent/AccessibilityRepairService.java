@@ -36,7 +36,7 @@ public final class AccessibilityRepairService extends Service {
         NotificationManager manager=getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel(CHANNEL,"Accessibility repair",NotificationManager.IMPORTANCE_MIN));
         Notification notification=new Notification.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.ic_menu_manage)
-            .setContentTitle("Pocket Agent accessibility repair").setContentText("Restoring the enabled accessibility connection")
+            .setContentTitle("DealPilot AI accessibility repair").setContentText("Restoring the enabled accessibility connection")
             .setOngoing(true).setOnlyAlertOnce(true).build();
         if(android.os.Build.VERSION.SDK_INT>=34)startForeground(NOTIFICATION,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         else startForeground(NOTIFICATION,notification);

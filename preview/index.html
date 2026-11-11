@@ -2,8 +2,8 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="A live design preview of Pocket Agent, your personal Android assistant.">
-  <meta name="theme-color" content="#000000"><title>Pocket Agent · Local companion</title>
+  <meta name="description" content="A live design preview of DealPilot AI, your personal Android assistant.">
+  <meta name="theme-color" content="#000000"><title>DealPilot AI · Local companion</title>
   <link rel="icon" href="/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css">
   <script src="/app.js" type="module"></script>
 </head>
@@ -11,16 +11,16 @@
 <a class="skip" href="#message">Skip to message</a>
 <div class="workspace">
   <main class="main">
-    <header class="topbar"><button type="button" class="icon-button" id="open-chats" aria-label="Open chat sidebar" aria-controls="chat-drawer" aria-expanded="false"><span data-icon="menu"></span></button><button type="button" class="chat-threads" id="show-threads" hidden>Threads</button></header>
+    <header class="topbar"><button type="button" class="icon-button" id="open-chats" aria-label="Open chat sidebar" aria-controls="chat-drawer" aria-expanded="false"><span data-icon="menu"></span></button><button type="button" class="chat-threads" id="show-threads" hidden>Threads</button><span class="dealpilot-header-label">DealPilot AI</span></header>
     <section id="conversation" class="conversation" aria-label="Conversation">
       <section class="welcome" id="welcome">
-        <img class="welcome-logo" src="/mark.svg" width="64" height="64" alt="Pocket Agent">
-        <h1>What can I help with?</h1>
-        <p class="intro">Ask a question or give Pocket a task.</p>
+        <img class="welcome-logo" src="/mark.svg" width="64" height="64" alt="DealPilot AI">
+        <h1>What should we find today?</h1>
+        <p class="intro">Discover products. Compare clearly. Approve before paying.</p>
       </section>
       <section id="messages" class="messages" aria-live="polite" aria-label="Messages" hidden></section>
     </section>
-    <div class="composer-area"><form id="composer" class="composer"><label class="sr-only" for="message">Message Pocket Agent</label><textarea id="message" rows="2" maxlength="12000" placeholder="Message"></textarea><div class="composer-bottom"><button type="button" class="composer-note provider-picker" id="provider-picker" aria-label="Choose AI provider"><span data-icon="pocket"></span><span id="provider-label">Pocket Agent</span><span data-icon="chevron"></span></button><div class="composer-actions"><button type="button" class="icon-button voice-button" id="voice-button" aria-label="Start voice conversation" aria-pressed="false"><span data-icon="mic"></span></button><button class="send" id="send" type="submit" aria-label="Send message" disabled><span data-icon="up"></span></button></div></div></form><div class="voice-feedback" id="voice-feedback" hidden><span id="voice-status" role="status"></span><button type="button" class="connection-button">Cancel voice</button><audio id="voice-playback" controls hidden></audio></div><div class="composer-caption"><span>Local companion · Phone tools run in the Android app.</span><span class="keyboard-hint">Enter to send <span>↵</span></span></div><p class="notice" id="notice" role="status"></p></div>
+    <div class="composer-area"><form id="composer" class="composer"><label class="sr-only" for="message">Message DealPilot AI</label><textarea id="message" rows="2" maxlength="12000" placeholder="Message"></textarea><div class="composer-bottom"><button type="button" class="composer-note provider-picker" id="provider-picker" aria-label="Choose AI provider"><span data-icon="pocket"></span><span id="provider-label">DealPilot AI</span><span data-icon="chevron"></span></button><div class="composer-actions"><button type="button" class="icon-button voice-button" id="voice-button" aria-label="Start voice conversation" aria-pressed="false"><span data-icon="mic"></span></button><button class="send" id="send" type="submit" aria-label="Send message" disabled><span data-icon="up"></span></button></div></div></form><div class="voice-feedback" id="voice-feedback" hidden><span id="voice-status" role="status"></span><button type="button" class="connection-button">Cancel voice</button><audio id="voice-playback" controls hidden></audio></div><div class="composer-caption"><span>Local companion · Phone tools run in the Android app.</span><span class="keyboard-hint">Enter to send <span>↵</span></span></div><p class="notice" id="notice" role="status"></p></div>
   </main>
   <section id="settings-screen" class="settings-screen" aria-label="Settings" hidden></section>
   <section id="activity-screen" class="settings-screen" aria-label="Activity" hidden></section>
@@ -28,8 +28,8 @@
 <div class="drawer-layer" id="drawer-layer">
 <button type="button" class="drawer-backdrop" id="drawer-backdrop" aria-label="Dismiss chat sidebar" tabindex="-1"></button>
 <dialog id="chat-drawer" class="chat-drawer" aria-modal="true" aria-labelledby="drawer-title">
-  <div class="drawer-top"><button type="button" class="drawer-brand" data-action="new" aria-label="Pocket Agent, new chat"><span id="drawer-title">Pocket Agent</span></button><button type="button" class="icon-button" id="open-search" aria-label="Search chats"><span data-icon="search"></span></button><button type="button" class="icon-button" id="close-chats" aria-label="Close chat sidebar" hidden><span data-icon="close"></span></button></div>
-  <div class="drawer-navigation"><button type="button" id="shopping-demo">Shopping sandbox demo</button><button type="button" data-action="activity"><span data-icon="activity"></span>Activity</button><button type="button" data-action="copy" id="copy-chat" disabled><span data-icon="copy"></span>Copy conversation</button></div>
+  <div class="drawer-top"><button type="button" class="drawer-brand" data-action="new" aria-label="DealPilot AI, new chat"><span id="drawer-title">DealPilot AI</span></button><button type="button" class="icon-button" id="open-search" aria-label="Search chats"><span data-icon="search"></span></button><button type="button" class="icon-button" id="close-chats" aria-label="Close chat sidebar" hidden><span data-icon="close"></span></button></div>
+  <div class="drawer-navigation"><button type="button" data-action="activity"><span data-icon="activity"></span>Activity</button><button type="button" data-action="copy" id="copy-chat" disabled><span data-icon="copy"></span>Copy conversation</button></div>
   <input id="chat-search" type="hidden" value="">
   <div class="drawer-label">Recents</div>
   <nav id="history" class="drawer-history" aria-label="Saved chats"></nav>

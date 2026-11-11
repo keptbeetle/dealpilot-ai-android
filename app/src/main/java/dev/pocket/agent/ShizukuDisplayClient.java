@@ -129,7 +129,7 @@ final class ShizukuDisplayClient implements AutoCloseable {
                 ? "Shizuku is running, but its privileged UserService failed to start within 35 seconds. Check device and MediaTek compatibility."
                 : "binding".equals(state)
                     ? "Shizuku display UserService startup is still pending; retry after startup completes."
-                    : "Virtual display backend "+state+"; start Shizuku and authorize Pocket Agent in its UI");
+                    : "Virtual display backend "+state+"; start Shizuku and authorize DealPilot AI in its UI");
         return remote;
     }
     int createDisplay() throws ControlException {
@@ -162,7 +162,7 @@ final class ShizukuDisplayClient implements AutoCloseable {
     void openBrowserUrl(int displayId,String url) throws ControlException {
         try {if(!require().openBrowserUrl(displayId,url))
             throw new ControlException(ControlException.Code.ACTION_REJECTED,"Chrome could not open a private browser session. Existing personal tasks were preserved. Verify Chrome is installed and available.");
-        }catch(RemoteException e){loseService();throw new ControlException(ControlException.Code.NOT_READY,"Browser backend disconnected; start Shizuku and authorize Pocket.");}
+        }catch(RemoteException e){loseService();throw new ControlException(ControlException.Code.NOT_READY,"Browser backend disconnected; start Shizuku and authorize DealPilot.");}
     }
     void openStoreUrl(int displayId,String url,String packageName) throws ControlException {
         try {if(!require().openStoreUrl(displayId,url,packageName))throw new ControlException(ControlException.Code.ACTION_REJECTED,"The selected store app could not open a private listing. Personal tasks were preserved. No browser fallback was used.");}

@@ -154,7 +154,7 @@ public final class VoiceListeningService extends Service implements AgentService
         }
         if (key.isEmpty()) {
             Log.w("PocketVoice", "Speech requires configured Deepgram credentials");
-            AgentService.reportVoiceFailure(this, requestId, "Configure a Deepgram voice key in Pocket Agent Settings");
+            AgentService.reportVoiceFailure(this, requestId, "Configure a Deepgram voice key in DealPilot AI Settings");
             stopSelf(); return false;
         }
         try {
@@ -527,7 +527,7 @@ public final class VoiceListeningService extends Service implements AgentService
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle(microphoneEnabled ? "Pocket Agent · Microphone active" : "Pocket Agent · Speaking")
+            .setContentTitle(microphoneEnabled ? "DealPilot AI · Microphone active" : "DealPilot AI · Speaking")
             .setContentText(status).setContentIntent(open)
             .setOngoing(true).setOnlyAlertOnce(true)
             .addAction(new Notification.Action.Builder(null, "Stop voice", stop).build())

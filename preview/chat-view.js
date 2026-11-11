@@ -27,6 +27,21 @@ function appendLinks(body,text){
 }
 function messageText(body,text,linkify){
   body.replaceChildren();if(!linkify){body.textContent=text;return;}
+  // Keep the full source audit available, while making the buying comparison
+  // readable on a real phone rather than leading with snapshot IDs and logs.
+  if(text.startsWith('Source-observed listing evidence follows.')&&text.includes('| Product |')){
+    const at=text.indexOf('| Product |'),end=text.indexOf('\n\n',at);
+    const excerpt=text.slice(at,end>at?end:text.length);
+    const introduction=document.createElement('p');introduction.className='dealpilot-evidence-intro';
+    introduction.textContent='Products observed on the phone. Prices are listing amounts; delivery fees and seller checkout remain unverified.';
+    const comparison=document.createElement('div');
+    messageText(comparison,'## Product comparison\n'+excerpt,true);
+    const expand=document.createElement('details');expand.className='dealpilot-evidence-details';
+    const summary=document.createElement('summary');summary.textContent='View sources and verification details';
+    const audit=document.createElement('div');
+    messageText(audit,text.slice(end>at?end:text.length).trim(),true);
+    expand.append(summary,audit);body.append(introduction,comparison,expand);return;
+  }
   const lines=text.split('\n'),cells=line=>line.trim().replace(/^\||\|$/g,'').split(/(?<!\\)\|/).map(s=>s.trim().replace(/\\([|<>\[\]*_`])/g,'$1'));
   let plain=[];const flush=(final=false)=>{
     if(!plain.length)return;
@@ -43,8 +58,8 @@ function messageText(body,text,linkify){
   for(let i=0;i<lines.length;i++){
     if(lines[i].startsWith('|')&&/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(lines[i+1]||'')){
       flush();const wrap=document.createElement('div');wrap.className='comparison-table-scroll';const table=document.createElement('table');table.setAttribute('aria-label','Product comparison');
-      const head=document.createElement('thead'),tr=document.createElement('tr');for(const value of cells(lines[i]).slice(0,6)){const th=document.createElement('th');th.textContent=value;tr.append(th);}head.append(tr);table.append(head);const tbody=document.createElement('tbody');i+=2;let count=0;
-      for(;i<lines.length&&lines[i].startsWith('|')&&count<30;i++,count++){const row=document.createElement('tr');for(const value of cells(lines[i]).slice(0,6)){const td=document.createElement('td');td.textContent=value;row.append(td);}tbody.append(row);}i--;table.append(tbody);wrap.append(table);body.append(wrap);
+      const columns=cells(lines[i]).slice(0,6);const head=document.createElement('thead'),tr=document.createElement('tr');for(const value of columns){const th=document.createElement('th');th.textContent=value;tr.append(th);}head.append(tr);table.append(head);const tbody=document.createElement('tbody');i+=2;let count=0;
+      for(;i<lines.length&&lines[i].startsWith('|')&&count<30;i++,count++){const row=document.createElement('tr');for(const [index,value] of cells(lines[i]).slice(0,6).entries()){const td=document.createElement('td');td.dataset.label=columns[index]||'Detail';td.textContent=value;row.append(td);}tbody.append(row);}i--;table.append(tbody);wrap.append(table);body.append(wrap);
     }else plain.push(lines[i]);
   }
   flush(true);

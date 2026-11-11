@@ -103,7 +103,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             if(controller!=null)controller.setSystemBarsAppearance(dark ? 0 : appearance, appearance);
             view.setPadding(dp(20)+bars.left,dp(12)+bars.top,dp(20)+bars.right,dp(12)+bars.bottom);return insets;
         });
-        LinearLayout toolbar = row(); TextView title = text("Pocket Agent"); title.setTextSize(20); title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        LinearLayout toolbar = row(); TextView title = text("DealPilot AI"); title.setTextSize(20); title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         toolbar.setGravity(Gravity.CENTER_VERTICAL); toolbar.setPadding(0, 0, 0, dp(12));
         toolbar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         toolbar.addView(button("Activity", this::autonomyActivity));
@@ -224,7 +224,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         super.onStart(); AgentService.observe(this); SubscriptionVoiceService.observe(this); state = store.load(); render();
         android.content.SharedPreferences guard=getSharedPreferences("memory-guard",0);
         if(guard.getLong("lastIncidentAt",0)>0) {
-            toast("Pocket Agent stopped an unsafe memory spike. Saved chats are preserved; retry the interrupted work.");
+            toast("DealPilot AI stopped an unsafe memory spike. Saved chats are preserved; retry the interrupted work.");
             guard.edit().remove("lastIncidentAt").apply();
         }
         JSONArray events = store.recentEvents();
@@ -420,7 +420,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         if (workerTranscript != null && viewedWorker != null) workerTranscript.setText(workerMessages(viewedWorker));
     }
     private String formatMessages(JSONArray messages) {
-        if (messages == null || messages.length() == 0) return "A little help.\nA lot more done.\n\nA thought, a question, a thing to take care of.\nStart here. Pocket will take it from there.";
+        if (messages == null || messages.length() == 0) return "A little help.\nA lot more done.\n\nA thought, a question, a thing to take care of.\nStart here. DealPilot will take it from there.";
         StringBuilder text = new StringBuilder();
         for (int i = 0; i < messages.length(); i++) { JSONObject message = messages.optJSONObject(i); if (message == null) continue; text.append(message.optString("role")).append(message.has("inputSource") ? " (" + message.optString("inputSource") + ")" : "").append(":\n").append(message.optString("text", message.optString("content"))).append("\n\n"); }
         return text.toString();
@@ -503,7 +503,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     private void copyHistory() {
         ClipboardManager clipboard = getSystemService(ClipboardManager.class);
         if (clipboard == null) { toast("Clipboard unavailable"); return; }
-        clipboard.setPrimaryClip(ClipData.newPlainText("Pocket Agent debug history", debugHistory(state)));
+        clipboard.setPrimaryClip(ClipData.newPlainText("DealPilot AI debug history", debugHistory(state)));
         toast("Conversation history copied");
     }
     static String debugHistory(JSONObject snapshot) {
@@ -698,7 +698,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         if (automationStatus.optBoolean("batteryRestricted")) {
             LinearLayout battery = activityCard(panel); battery.addView(text("Background runs may be delayed"));
             battery.addView(activityMeta("Allow unrestricted battery use for more reliable screen-off work."));
-            battery.addView(button("Battery settings", () -> { try { startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); } catch (RuntimeException unavailable) { toast("Open Pocket Agent battery settings in Android"); } }));
+            battery.addView(button("Battery settings", () -> { try { startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); } catch (RuntimeException unavailable) { toast("Open DealPilot AI battery settings in Android"); } }));
         }
         String startupIssue = automationStatus.optString("lastFailure");
         if (!startupIssue.isEmpty()) { LinearLayout issue = activityCard(panel); issue.addView(text("Background work needs attention")); issue.addView(activityMeta(startupIssue)); }
@@ -721,7 +721,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         if (!pending) panel.addView(activityMeta("Nothing needs your attention."));
         activitySection(panel, "Schedules");
         JSONArray schedules = saved.optJSONArray("schedules");
-        if (schedules == null || schedules.length() == 0) panel.addView(activityMeta("Ask Pocket to schedule a task. Its next run and pause control will appear here."));
+        if (schedules == null || schedules.length() == 0) panel.addView(activityMeta("Ask DealPilot to schedule a task. Its next run and pause control will appear here."));
         else for (int i = 0; i < schedules.length(); i++) {
             JSONObject schedule = schedules.optJSONObject(i); if (schedule == null) continue;
             String id = schedule.optString("id"); boolean active = schedule.optBoolean("enabled");
@@ -814,18 +814,18 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         LinearLayout welcome = column(); welcome.setGravity(Gravity.CENTER); welcome.setPadding(dp(12), 0, dp(12), dp(24));
         android.widget.ImageView mark = new android.widget.ImageView(this); mark.setImageDrawable(new PocketIcon("brand", getColor(R.color.pocket_on_accent), getColor(R.color.pocket_accent))); welcome.addView(mark, new LinearLayout.LayoutParams(dp(64), dp(64)));
         TextView greeting = text("What can I help with?"); greeting.setTextSize(22); greeting.setGravity(Gravity.CENTER); greeting.setPadding(0, dp(24), 0, dp(12)); welcome.addView(greeting);
-        TextView help = activityMeta("Ask a question or give Pocket a task."); help.setGravity(Gravity.CENTER); welcome.addView(help);
+        TextView help = activityMeta("Ask a question or give DealPilot a task."); help.setGravity(Gravity.CENTER); welcome.addView(help);
         conversationFrame.addView(welcome, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER)); welcomeView = welcome;
         voicePanel = column(); voicePanel.setPadding(dp(12), dp(8), dp(12), dp(8)); voicePanel.setBackground(surface(R.color.pocket_surface, 14)); voicePanel.addView(voiceConversation); voicePanel.addView(voiceConversationStatus); voicePanel.addView(button("Close voice", () -> { stopService(new Intent(this, SubscriptionVoiceService.class)); voicePanel.setVisibility(View.GONE); })); voicePanel.setVisibility(View.GONE); root.addView(voicePanel);
         LinearLayout composer = column(); composer.setPadding(dp(12), dp(12), dp(12), dp(8)); composer.setBackground(surface(R.color.pocket_surface, 16)); input.setHint("What’s on your mind?"); composer.addView(input, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout actions = row(); actions.setGravity(Gravity.CENTER_VERTICAL); providerLabel = button("Pocket Agent", this::settings); providerLabel.setBackgroundColor(android.graphics.Color.TRANSPARENT); actions.addView(providerLabel, new LinearLayout.LayoutParams(0, dp(48), 1));
+        LinearLayout actions = row(); actions.setGravity(Gravity.CENTER_VERTICAL); providerLabel = button("DealPilot AI", this::settings); providerLabel.setBackgroundColor(android.graphics.Color.TRANSPARENT); actions.addView(providerLabel, new LinearLayout.LayoutParams(0, dp(48), 1));
         View mic = iconControl("mic", "Voice input; hold for voice modes", this::startDictation); mic.setOnLongClickListener(view -> { showVoiceChoices(); return true; }); actions.addView(mic);
         send.setText(""); send.setContentDescription("Send message"); PocketIcon arrow = new PocketIcon("send", getColor(R.color.pocket_on_accent), getColor(R.color.pocket_accent)); arrow.setBounds(0, 0, dp(20), dp(20)); send.setCompoundDrawables(arrow, null, null, null); send.setPadding(dp(14), 0, dp(14), 0); send.setGravity(Gravity.CENTER); LinearLayout.LayoutParams sendParams = new LinearLayout.LayoutParams(dp(48), dp(48)); sendParams.setMargins(dp(8), 0, 0, 0); actions.addView(send, sendParams); composer.addView(actions); root.addView(composer);
         updateProviderLabel();
     }
     private void updateProviderLabel() {
         if (providerLabel == null) return;
-        try { String mode = new CredentialStore(this).get().optString("authMode"); providerLabel.setText(switch (mode) { case "openrouter" -> "OpenRouter"; case "gemini" -> "Gemini"; case "nebius" -> "Nebius"; case "opencode" -> "OpenCode"; case "codex-account" -> "Codex"; default -> "Pocket Agent"; }); }
+        try { String mode = new CredentialStore(this).get().optString("authMode"); providerLabel.setText(switch (mode) { case "openrouter" -> "OpenRouter"; case "gemini" -> "Gemini"; case "nebius" -> "Nebius"; case "opencode" -> "OpenCode"; case "codex-account" -> "Codex"; default -> "DealPilot AI"; }); }
         catch (Exception unavailable) { providerLabel.setText("Connect provider"); }
     }
     private void renderNativeMessages(JSONArray items) {
@@ -836,7 +836,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             JSONObject message = items.optJSONObject(i); if (message == null) continue;
             LinearLayout card = column(); card.setPadding(dp(12), dp(12), dp(12), dp(16));
             boolean user = "user".equals(message.optString("role")); if (user) card.setBackground(surface(R.color.pocket_raised, 16));
-            TextView label = activityMeta(user ? "You" : "Pocket"); label.setTextSize(12); card.addView(label);
+            TextView label = activityMeta(user ? "You" : "DealPilot"); label.setTextSize(12); card.addView(label);
             TextView body = text(message.optString("text", message.optString("content"))); body.setTextIsSelectable(true); body.setLineSpacing(dp(4), 1); card.addView(body);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.setMargins(user ? dp(24) : 0, dp(8), 0, dp(12)); nativeMessages.addView(card, params);
         }
@@ -850,10 +850,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             JSONObject message = messages.optJSONObject(i);
             if (message == null) continue;
             if (result.length() > 0) result.append("\n\n");
-            result.append("user".equals(message.optString("role")) ? "You: " : "Pocket: ");
+            result.append("user".equals(message.optString("role")) ? "You: " : "DealPilot: ");
             result.append(message.optString("text", message.optString("content")));
         }
-        clipboard.setPrimaryClip(ClipData.newPlainText("Pocket Agent conversation", result.toString()));
+        clipboard.setPrimaryClip(ClipData.newPlainText("DealPilot AI conversation", result.toString()));
         toast("Conversation copied");
     }
     private JSONObject webStatus() throws Exception {
@@ -957,7 +957,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 reply.complete(json("ready",true),null);return;
             }
             if(action.equals("close")){browserCheckoutOpen=false;getSharedPreferences("shopping-host",0).edit().putBoolean("active",false).apply();reply.complete(json("closed",true),null);return;}
-            if(!browserCheckoutOpen&&!getSharedPreferences("shopping-host",0).getBoolean("active",false))throw new IllegalStateException("Enter the shopping demo from Pocket first");
+            if(!browserCheckoutOpen&&!getSharedPreferences("shopping-host",0).getBoolean("active",false))throw new IllegalStateException("Enter the shopping demo from DealPilot first");
             if(action.equals("open")){ShoppingConnection.open(this,body.getString("url"));reply.complete(json("opened",true),null);return;}
             ShoppingConnection.handle(this,action,body,reply);return;
         }
@@ -966,7 +966,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             case "/native/snapshot" -> {
                 // Retailer navigation backgrounds this Activity and unregisters its event
                 // observer. Read the service's persisted snapshot on the I/O executor;
-                // the Activity field may be stale until the user returns to Pocket.
+                // the Activity field may be stale until the user returns to DealPilot.
                 uiReads.submit(()->{try {reply.complete(webSnapshot(store.load()),null);}
                     catch(Exception failure){reply.complete(null,"Could not refresh the phone state. Try again.");}});
                 return;
@@ -1013,7 +1013,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 int flags=android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS|android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
                 if(controller!=null)controller.setSystemBarsAppearance(light?flags:0,flags);
             }
-            case "/native/copy" -> {ClipboardManager clipboard=getSystemService(ClipboardManager.class);if(clipboard!=null)clipboard.setPrimaryClip(ClipData.newPlainText("Pocket Agent conversation",body.optString("text")));}
+            case "/native/copy" -> {ClipboardManager clipboard=getSystemService(ClipboardManager.class);if(clipboard!=null)clipboard.setPrimaryClip(ClipData.newPlainText("DealPilot AI conversation",body.optString("text")));}
             case "/native/preferences" -> {
                 if(body.has("name"))getSharedPreferences("pocket-ui",0).edit().putString("name",body.optString("name").substring(0,Math.min(120,body.optString("name").length()))).apply();
                 if(body.has("instructions")){savePersonalInstructions(body.optString("instructions"),reply);return;}
@@ -1160,9 +1160,9 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     }
     private void settingsHome() {
         phonePage("Settings", body -> {
-            String name = getSharedPreferences("pocket-ui", 0).getString("name", "Your Pocket"); settingsRow(body, name.trim().isEmpty() ? "Your Pocket" : name, "Personal preferences", () -> phonePage("Your profile", profile -> { EditText value = field(profile, "Your name", name.equals("Your Pocket") ? "" : name); profile.addView(button("Save name", () -> { getSharedPreferences("pocket-ui", 0).edit().putString("name", value.getText().toString().trim()).apply(); toast("Profile saved"); })); }));
+            String name = getSharedPreferences("pocket-ui", 0).getString("name", "Your DealPilot"); settingsRow(body, name.trim().isEmpty() ? "Your DealPilot" : name, "Personal preferences", () -> phonePage("Your profile", profile -> { EditText value = field(profile, "Your name", name.equals("Your DealPilot") ? "" : name); profile.addView(button("Save name", () -> { getSharedPreferences("pocket-ui", 0).edit().putString("name", value.getText().toString().trim()).apply(); toast("Profile saved"); })); }));
             activitySection(body, "Your assistant"); settingsRow(body, "AI & model", "Provider connection, sign-in, models & reasoning", this::settings);
-            settingsRow(body, "Personal instructions", "Tone, priorities and preferences", () -> phonePage("Personal instructions", page -> { EditText value = field(page, "Instructions for Pocket", state.optString("personalInstructions")); value.setSingleLine(false); value.setMinLines(6); value.setGravity(Gravity.TOP); page.addView(button("Save instructions", () -> { String prompt = value.getText().toString().trim(); if (prompt.length() > 50000) { toast("Instructions must be 50000 characters or fewer"); return; } savePersonalInstructions(prompt,(result,error)->toast(error==null?"Instructions saved":error)); })); }));
+            settingsRow(body, "Personal instructions", "Tone, priorities and preferences", () -> phonePage("Personal instructions", page -> { EditText value = field(page, "Instructions for DealPilot", state.optString("personalInstructions")); value.setSingleLine(false); value.setMinLines(6); value.setGravity(Gravity.TOP); page.addView(button("Save instructions", () -> { String prompt = value.getText().toString().trim(); if (prompt.length() > 50000) { toast("Instructions must be 50000 characters or fewer"); return; } savePersonalInstructions(prompt,(result,error)->toast(error==null?"Instructions saved":error)); })); }));
             settingsRow(body, "Voice & wake word", "System speech, Groq Whisper, Deepgram & Codex voice", this::voiceSettingsPage);
             activitySection(body, "On your phone"); settingsRow(body, "Phone access", "Permissions, Accessibility & virtual displays", this::phoneAccessPage); settingsRow(body, "Connections", "Remote MCP servers & tool discovery", this::mcpSettings); settingsRow(body, "Background work", "Schedules, approvals and run history", this::autonomyActivity);
             activitySection(body, "Appearance"); Spinner theme = new Spinner(this); String[] labels = {"System", "Warm charcoal", "Soft paper"}; String[] values = {"system", "dark", "light"}; theme.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels)); String savedTheme = getSharedPreferences("pocket-ui", 0).getString("theme", "system"); theme.setSelection(java.util.Arrays.asList(values).indexOf(savedTheme)); body.addView(theme); theme.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() { public void onNothingSelected(AdapterView<?> parent) { } public void onItemSelected(AdapterView<?> parent, View view, int position, long id) { if (!values[position].equals(getSharedPreferences("pocket-ui", 0).getString("theme", "system"))) { getSharedPreferences("pocket-ui", 0).edit().putString("theme", values[position]).apply(); recreate(); } } });
@@ -1195,7 +1195,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 }
             });
             settingsRow(body, "Advanced voice controls", "Hybrid thresholds, calibration, account security & audio troubleshooting", () -> { showAllSettings = true; settings(); });
-            settingsRow(body, "Default assistant", "Choose Pocket in Android settings", this::chooseAssistant);
+            settingsRow(body, "Default assistant", "Choose DealPilot in Android settings", this::chooseAssistant);
         });
     }
     private void groqKeySettings() {
@@ -1225,7 +1225,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     private void openChats() {
         android.app.Dialog drawer = new android.app.Dialog(this, R.style.PocketTheme); LinearLayout panel = column(); panel.setPadding(dp(16), dp(24), dp(16), dp(20)); panel.setBackgroundColor(getColor(R.color.pocket_surface));
         panel.setOnApplyWindowInsetsListener((view, insets) -> { android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.ime()); view.setPadding(dp(16) + bars.left, dp(16) + bars.top, dp(16) + bars.right, dp(16) + bars.bottom); return insets; });
-        LinearLayout header = row(); TextView brand = text("Pocket Agent"); brand.setTextSize(20); header.addView(brand, new LinearLayout.LayoutParams(0, dp(48), 1)); header.addView(iconControl("close", "Close sidebar", drawer::dismiss)); panel.addView(header);
+        LinearLayout header = row(); TextView brand = text("DealPilot AI"); brand.setTextSize(20); header.addView(brand, new LinearLayout.LayoutParams(0, dp(48), 1)); header.addView(iconControl("close", "Close sidebar", drawer::dismiss)); panel.addView(header);
         panel.addView(button("New chat", () -> { drawer.dismiss(); newMainThread(); })); EditText search = new EditText(this); search.setSingleLine(true); search.setHint("Search chats"); search.setTextSize(16); search.setPadding(dp(12), dp(12), dp(12), dp(12)); search.setBackground(surface(R.color.pocket_raised, 10)); search.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(300)}); panel.addView(search);
         ScrollView scroll = new ScrollView(this); LinearLayout list = column(); scroll.addView(list); panel.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         panel.addView(button("Schedules & activity", () -> { drawer.dismiss(); autonomyActivity(); })); panel.addView(button("Connections & tools", () -> { drawer.dismiss(); mcpSettings(); })); panel.addView(button("Settings", () -> { drawer.dismiss(); settingsHome(); }));
@@ -1252,7 +1252,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         });
     }
     private void phoneAccessPage() {
-        phonePage("Phone access", page -> { settingsRow(page, "Phone permissions", "Contacts, calls, SMS, calendar & notifications", this::permissions); settingsRow(page, "Accessibility", "Read and control the visible screen", () -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))); settingsRow(page, "Virtual displays", "Start Shizuku, then authorize background screen tools", this::enableVirtualDisplays); settingsRow(page, "Notification access", "Allow Pocket to read notifications", () -> startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))); settingsRow(page, "Default assistant", "Use Pocket as your phone assistant", this::chooseAssistant); });
+        phonePage("Phone access", page -> { settingsRow(page, "Phone permissions", "Contacts, calls, SMS, calendar & notifications", this::permissions); settingsRow(page, "Accessibility", "Read and control the visible screen", () -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))); settingsRow(page, "Virtual displays", "Start Shizuku, then authorize background screen tools", this::enableVirtualDisplays); settingsRow(page, "Notification access", "Allow DealPilot to read notifications", () -> startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))); settingsRow(page, "Default assistant", "Use DealPilot as your phone assistant", this::chooseAssistant); });
     }
     private void settings() {
         final boolean advanced = showAllSettings; showAllSettings = false;
@@ -1408,7 +1408,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             }
             catch (Exception error) { toast("Unable to clear the protected account"); }
         }));
-        TextView connectionHelp = text("OpenCode Free uses OpenCode's fixed external inference API and requires a Console service-account key. Pocket Agent sends it only as Authorization: Bearer to opencode.ai; no OpenCode client identity headers are spoofed. Nebius Token Factory uses its fixed API endpoint and requires a Nebius key; its default GLM-5.3-Flash supports vision and tool use. Codex relay uses http://10.0.2.2:port/v1 on an emulator. Codex account mode needs no API key or endpoint."); panel.addView(connectionHelp);
+        TextView connectionHelp = text("OpenCode Free uses OpenCode's fixed external inference API and requires a Console service-account key. DealPilot AI sends it only as Authorization: Bearer to opencode.ai; no OpenCode client identity headers are spoofed. Nebius Token Factory uses its fixed API endpoint and requires a Nebius key; its default GLM-5.3-Flash supports vision and tool use. Codex relay uses http://10.0.2.2:port/v1 on an emulator. Codex account mode needs no API key or endpoint."); panel.addView(connectionHelp);
         java.util.function.IntConsumer renderProviderFields = position -> {
             String selectedMode = modes[position];
             boolean account = selectedMode.equals(CredentialStore.CODEX_ACCOUNT);
@@ -1646,7 +1646,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             thresholdReset.setAlpha(hybrid ? 1.0f : 0.45f);
             updateShortThreshold.accept(shortThreshold.getProgress());
             if (selectedMode == VoiceSttSettings.Mode.ANDROID_DEFAULT_ONLY) {
-                sttModeHelp.setText("Android default only uses the phone's normal system SpeechRecognizer for normal turns, matching the standalone test path. Hybrid arbitration stays disabled. While Pocket Agent is thinking or speaking, Deepgram Flux temporarily provides full-duplex barge-in so you can interrupt without waiting for playback to finish; an interrupted utterance is completed on that same stream before Android recognition resumes.");
+                sttModeHelp.setText("Android default only uses the phone's normal system SpeechRecognizer for normal turns, matching the standalone test path. Hybrid arbitration stays disabled. While DealPilot AI is thinking or speaking, Deepgram Flux temporarily provides full-duplex barge-in so you can interrupt without waiting for playback to finish; an interrupted utterance is completed on that same stream before Android recognition resumes.");
             } else if (selectedMode == VoiceSttSettings.Mode.DEEPGRAM_ONLY) {
                 sttModeHelp.setText("Deepgram only uses the existing streaming Deepgram STT path. Android recognition, parallel arbitration, and the switch threshold are disabled.");
             } else {
@@ -1683,7 +1683,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                     String.format(java.util.Locale.US, "%.2f", ms / 1000f) + " s");
             }
         });
-        panel.addView(text("For better proper-name recognition, Hybrid mode requests Android quality formatting and device-context/contact hints. Android default only deliberately uses the normal system recognizer microphone path instead of Pocket Agent PCM injection. STT mode changes apply to the next voice session."));
+        panel.addView(text("For better proper-name recognition, Hybrid mode requests Android quality formatting and device-context/contact hints. Android default only deliberately uses the normal system recognizer microphone path instead of DealPilot AI PCM injection. STT mode changes apply to the next voice session."));
         panel.addView(button("Deepgram voice key", this::voiceKeySettings));
         panel.addView(text("Hey Jarvis runs locally at 16 kHz. The wake-word sensitivity below is saved across restarts and applies immediately to an active listener."));
         TextView wakeConfidenceLabel = text("");
@@ -1698,7 +1698,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         java.util.function.IntConsumer updateWakeLabel = percent -> {
             wakeConfidenceLabel.setText("Hey Jarvis confidence threshold: " + percent + "%");
             thresholdExplanation.setText(percent < 30
-                ? "Very sensitive · experimental: unrelated speech may activate Pocket Agent"
+                ? "Very sensitive · experimental: unrelated speech may activate DealPilot AI"
                 : percent < 65 ? "More sensitive · more wake-ups, but greater false-trigger risk"
                 : percent > 85 ? "Strict · fewer false triggers, but may miss your voice"
                 : "Balanced · higher requires stronger wake-word confidence");
@@ -2039,11 +2039,11 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             if(!rikka.shizuku.Shizuku.pingBinder()) {
                 Intent open=getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
                 if(open!=null)startActivity(open);
-                else toast("Install and start Shizuku, then return to authorize Pocket Agent");
+                else toast("Install and start Shizuku, then return to authorize DealPilot AI");
             } else if(rikka.shizuku.Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED) {
                 rikka.shizuku.Shizuku.requestPermission(1001);
             } else toast("Shizuku permission granted; up to three background displays are available on demand");
-        }catch(Exception error){toast("Shizuku unavailable; start it and authorize Pocket Agent");}
+        }catch(Exception error){toast("Shizuku unavailable; start it and authorize DealPilot AI");}
     }
     private void startDictation() {
         startDictation(getSharedPreferences("pocket-ui",0).getString("voiceEngine","system"));
@@ -2059,7 +2059,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             try {
                 startActivityForResult(new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                     .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Speak to Pocket"), DICTATE_MESSAGE);
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Speak to DealPilot"), DICTATE_MESSAGE);
             } catch (android.content.ActivityNotFoundException unavailable) { toast("No system speech recognizer is installed. Choose another speech engine in settings."); }
             return;
         }

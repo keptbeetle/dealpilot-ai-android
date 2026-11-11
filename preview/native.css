@@ -4,3 +4,29 @@ body{padding:0;background:var(--canvas);display:block;min-height:0;height:100dvh
 .comparison-table-scroll td:nth-child(2),
 .comparison-table-scroll th:nth-child(4),
 .comparison-table-scroll td:nth-child(4){white-space:nowrap;overflow-wrap:normal}
+
+/* DealPilot entry in the installed Android application */
+.dealpilot-shop-entry{margin-left:auto;border:1px solid #387ac1;background:linear-gradient(115deg,#123b68,#246fb2);color:#eef7ff;font-weight:650;font-size:12px;border-radius:999px;padding:9px 13px;white-space:nowrap;box-shadow:0 4px 16px #0003}.dealpilot-shop-entry:active{transform:scale(.98)}@media(max-width:380px){.dealpilot-shop-entry{font-size:11px;padding:8px}}
+/* Chat-first DealPilot cart and phone-readable comparison cards. */
+.dealpilot-header-label{margin-left:auto;font-size:16px;font-weight:750;letter-spacing:-.2px;color:var(--text,#fff)}
+.dealpilot-cart{margin:14px 0 20px;background:linear-gradient(145deg,#102e45,#172332);border:1px solid #387bb2;border-radius:18px;padding:15px;color:#f5fbff}
+.dealpilot-cart h3{font-size:16px;margin:0 0 10px}
+.dealpilot-cart .price{font-size:22px;color:#8decbd;font-weight:800}
+.dealpilot-cart p{font-size:13px;line-height:1.55;margin:7px 0}
+.dealpilot-cart button{width:100%;margin-top:10px;background:#499df0;color:#061827;font-size:15px;font-weight:800;border-radius:10px;padding:12px}
+.dealpilot-cart .muted{color:#b7cadb}
+.dealpilot-evidence-intro{background:var(--surface,#16243c);border-left:3px solid #65a7fa;border-radius:8px;padding:10px;font-size:12px;line-height:1.5}
+.dealpilot-evidence-details{margin:14px 0;border-top:1px solid var(--line,#34465a);padding:12px 0;font-size:12px}
+.dealpilot-evidence-details summary{cursor:pointer;font-weight:650;color:var(--accent,#7cbbff);padding:6px}
+.comparison-table-scroll{overflow:visible;white-space:normal}
+.comparison-table-scroll table{min-width:0}
+.comparison-table-scroll th:nth-child(6),.comparison-table-scroll td:nth-child(6){display:none}
+@media(max-width:600px){
+.comparison-table-scroll thead{display:none}
+.comparison-table-scroll,.comparison-table-scroll table,.comparison-table-scroll tbody{display:block;width:100%}
+.comparison-table-scroll tr{display:block;border:1px solid #384b66;border-radius:14px;padding:9px;background:#152135;margin:12px 0;overflow:hidden}
+.comparison-table-scroll td{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px;border:0!important;border-bottom:1px solid #2b3b53!important;padding:8px 5px!important;min-width:0!important;white-space:normal!important;overflow-wrap:anywhere!important}
+.comparison-table-scroll td:before{content:attr(data-label);font-weight:700;color:#9cbae0;font-size:11px}
+.comparison-table-scroll td:nth-child(6){display:none}
+.comparison-table-scroll td:last-child{border-bottom:0!important}
+}

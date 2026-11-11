@@ -18,8 +18,7 @@ async function screen(search='?checkout=1',connected=false,order=null,proposal=n
  const bridge={request(id,path,raw){
   const body=JSON.parse(raw);calls.push({path,body});
   queueMicrotask(()=>{
-   if(path==='/shopping/hosted-settings')window.pocketReply(id,{configured:connected,endpoint:connected?'https://checkout.example.org':''},null);
-   else if(path==='/shopping/hosted-configure'){connected=true;window.pocketReply(id,{state,sandboxReady:true},null);}
+   if(path==='/shopping/pair'){connected=true;window.pocketReply(id,{state,sandboxReady:true},null);}
    else if(!connected)window.pocketReply(id,null,'Set up your PayPal checkout connection first.');
    else window.pocketReply(id,{state,sandboxReady:true},null);
   });
@@ -30,22 +29,22 @@ async function screen(search='?checkout=1',connected=false,order=null,proposal=n
  await settle();
  return {document:window.document,calls,settle,state,storage};
 }
-test('native checkout configures HTTPS service without the Windows pairing flow',async()=>{
+test('native sandbox checkout pairs with the private local buyer host without showing a second shopping chat',async()=>{
  const view=await screen();
  assert.equal(view.document.querySelector('#connection').hidden,false);
- assert.equal(view.document.querySelector('#host-port'),null);
- assert.equal(view.document.querySelector('#pair-code'),null);
  assert.equal(view.document.querySelector('.controls').hidden,true);
- view.document.querySelector('#checkout-endpoint').value='https://checkout.example.org';
- view.document.querySelector('#checkout-key').value='A'.repeat(43);
- Array.from(view.document.querySelectorAll('button')).find(b=>b.textContent==='Connect checkout').click();
+ assert.equal(view.document.querySelector('#shop-composer').hidden,true);
+ assert.equal(view.document.querySelector('#new-chat').hidden,true);
+ assert.ok(view.document.querySelector('#checkout-port'));
+ assert.ok(view.document.querySelector('#checkout-pair-code'));
+ view.document.querySelector('#checkout-port').value='3490';
+ view.document.querySelector('#checkout-pair-code').value='valid-pair-code';
+ Array.from(view.document.querySelectorAll('button')).find(b=>b.textContent==='Connect Sandbox').click();
  await view.settle();
- assert.equal(view.document.querySelector('#checkout-key').value,'');
+ assert.equal(view.document.querySelector('#checkout-pair-code').value,'');
  assert.equal(view.document.querySelector('#connection').hidden,true);
- assert.ok(view.calls.some(c=>c.path==='/shopping/hosted-configure'&&c.body.hosted===true));
- assert.ok(!view.calls.some(c=>c.path==='/shopping/pair'));
- view.document.querySelector('#new-chat').click();await view.settle();
- assert.equal(view.calls.at(-1).body.operationId,'test-operation');
+ assert.ok(view.calls.some(c=>c.path==='/shopping/pair'&&c.body.port===3490&&c.body.code==='valid-pair-code'));
+ assert.ok(!view.calls.some(c=>c.body.hosted===true));
 });
 test('a forged PayPal return never captures or reconciles a different purchase',async()=>{
  const view=await screen('?checkout=1&paypal_return=FORGED1234',true,'TEST12345678');

@@ -90,7 +90,7 @@ public final class AccessibilityGuardianService extends Service {
     }
     private Notification notification(String text) {
         return new Notification.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.ic_menu_manage)
-            .setContentTitle("Pocket Agent accessibility recovery").setContentText(text)
+            .setContentTitle("DealPilot AI accessibility recovery").setContentText(text)
             .setOngoing(true).setOnlyAlertOnce(true).build();
     }
     private void updateNotification(String text) {
@@ -109,7 +109,7 @@ public final class AccessibilityGuardianService extends Service {
         if(intent!=null&&ACTION_REPAIR_RESULT.equals(intent.getAction())) {
             String result=intent.getStringExtra(EXTRA_REPAIR_RESULT);
             if("shizuku_unavailable".equals(result)||"permission_required".equals(result))
-                updateNotification("Recovery blocked by Shizuku · start Shizuku and grant Pocket Agent");
+                updateNotification("Recovery blocked by Shizuku · start Shizuku and grant DealPilot AI");
             else if("deferred_unlocked".equals(result)) {
                 repairAttempts=repairAttemptsAfterResult(repairAttempts,result);
                 nextRepairAt=android.os.SystemClock.elapsedRealtime()+2_000;

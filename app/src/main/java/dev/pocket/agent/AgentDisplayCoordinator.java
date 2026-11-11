@@ -112,7 +112,7 @@ final class AgentDisplayCoordinator implements AutoCloseable {
         } catch(RuntimeException error) {
             if(!leases.release(owner,generation,active::removeDisplay))
                 throw new ControlException(RESULT_UNKNOWN,"Display bootstrap failed; native cleanup unconfirmed and lease retained");
-            throw new ControlException(NOT_READY,"Virtual display backend failed while launching Pocket Agent");
+            throw new ControlException(NOT_READY,"Virtual display backend failed while launching DealPilot AI");
         }
         return Json.obj("status","acquired","display_id",id,"owner",owner);
     }
@@ -140,7 +140,7 @@ final class AgentDisplayCoordinator implements AutoCloseable {
         if(state==AccessibilityProxyBackend.ConnectionState.DISCONNECTED)recoverAccessibility();
         state=AccessibilityProxyBackend.connectionState(context);
         if(state!=AccessibilityProxyBackend.ConnectionState.CONNECTED)
-            throw new ControlException(NOT_READY,"Pocket Agent accessibility has not rebound yet; retry after recovery");
+            throw new ControlException(NOT_READY,"DealPilot AI accessibility has not rebound yet; retry after recovery");
         return backend;
     }
 
@@ -159,11 +159,11 @@ final class AgentDisplayCoordinator implements AutoCloseable {
         boolean enabled=accessibilityEnabledByUser(component);
         boolean pending=AccessibilityRepairState.pending(context);
         if(!enabled&&!pending)
-            throw new ControlException(PERMISSION_REQUIRED,"Enable Pocket Agent accessibility to control Android displays");
+            throw new ControlException(PERMISSION_REQUIRED,"Enable DealPilot AI accessibility to control Android displays");
         try {
             context.startForegroundService(new Intent(context,AccessibilityRepairService.class));
         } catch(RuntimeException failure) {
-            throw new ControlException(NOT_READY,"Pocket Agent accessibility recovery could not be started");
+            throw new ControlException(NOT_READY,"DealPilot AI accessibility recovery could not be started");
         }
         long deadline=android.os.SystemClock.elapsedRealtime()+4500;
         while(android.os.SystemClock.elapsedRealtime()<deadline) {
@@ -174,7 +174,7 @@ final class AgentDisplayCoordinator implements AutoCloseable {
             }
         }
         if(!accessibilityEnabledByUser(component)&&!AccessibilityRepairState.pending(context))
-            throw new ControlException(PERMISSION_REQUIRED,"Pocket Agent accessibility is disabled");
+            throw new ControlException(PERMISSION_REQUIRED,"DealPilot AI accessibility is disabled");
     }
 
     private void startPhysical(String owner,Intent source) throws ControlException {
