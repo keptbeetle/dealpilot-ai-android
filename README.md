@@ -1,4 +1,9 @@
-# Pocket Agent
+# DealPilot Agent
+
+**DealPilot Agent native checkout edition.** This branch preserves the original
+[ru-aish/pocket-agent](https://github.com/ru-aish/pocket-agent) Android assistant
+and adds PayPal Sandbox checkout only after explicit cart and payment prompts.
+See [Android setup and Sandbox integration](docs/DEALPILOT-NATIVE-PAYPAL.md).
 
 An Android assistant that delegates phone work to background agents while you keep talking to the main conversation. Pi and the adapted `@pi9/subagent` runtime run inside the app; workers call native Android tools directly. Settings can route speech-to-text three ways: **Hybrid**, **Android default only**, or **Deepgram only**. Hybrid sends the same PCM to Deepgram and, on Android 13+, an available system recognizer in parallel; its configurable switch threshold defaults to 3 seconds, with Android preferred below the threshold and Deepgram at or above it. Android default only uses the phone's normal `SpeechRecognizer` microphone path with no hybrid arbitration or threshold. Deepgram only skips Android recognition entirely. Deepgram continues to provide speech synthesis in every mode.
 
