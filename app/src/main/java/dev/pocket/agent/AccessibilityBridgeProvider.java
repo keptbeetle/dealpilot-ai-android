@@ -90,7 +90,7 @@ public final class AccessibilityBridgeProvider extends ContentProvider {
                 if(service!=null&&extras!=null&&extras.getInt("displayId",-1)>0)service.release(extras.getInt("displayId"));
                 return new Bundle();
             }
-            if(service==null)throw new ControlException(ControlException.Code.PERMISSION_REQUIRED,"Pocket Agent accessibility is enabled but not currently bound");
+            if(service==null)throw new ControlException(ControlException.Code.PERMISSION_REQUIRED,"DealPilot Agent accessibility is enabled but not currently bound");
             if(extras==null)throw new ControlException(ControlException.Code.INVALID_ARGUMENT,"Missing accessibility bridge arguments");
             if("startActivity".equals(method)) {
                 int displayId=extras.getInt("displayId",-1);

@@ -43,7 +43,7 @@
             "physical"
           ],
           "default": "virtual",
-          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants Pocket Agent to inspect, control, or present content on the visible device screen."
+          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants DealPilot Agent to inspect, control, or present content on the visible device screen."
         }
       },
       "required": [],
@@ -178,7 +178,7 @@
             "physical"
           ],
           "default": "virtual",
-          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants Pocket Agent to inspect, control, or present content on the visible device screen."
+          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants DealPilot Agent to inspect, control, or present content on the visible device screen."
         }
       },
       "required": [
@@ -236,7 +236,7 @@
             "physical"
           ],
           "default": "virtual",
-          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants Pocket Agent to inspect, control, or present content on the visible device screen."
+          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants DealPilot Agent to inspect, control, or present content on the visible device screen."
         }
       },
       "required": [
@@ -277,7 +277,7 @@
             "physical"
           ],
           "default": "virtual",
-          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants Pocket Agent to inspect, control, or present content on the visible device screen."
+          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants DealPilot Agent to inspect, control, or present content on the visible device screen."
         }
       },
       "required": [
@@ -582,7 +582,7 @@
             "physical"
           ],
           "default": "virtual",
-          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants Pocket Agent to inspect, control, or present content on the visible device screen."
+          "description": "Target the private agent virtual display by default. Use physical only when the user explicitly wants DealPilot Agent to inspect, control, or present content on the visible device screen."
         }
       },
       "required": [

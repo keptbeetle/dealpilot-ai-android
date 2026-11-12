@@ -103,7 +103,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             if(controller!=null)controller.setSystemBarsAppearance(dark ? 0 : appearance, appearance);
             view.setPadding(dp(20)+bars.left,dp(12)+bars.top,dp(20)+bars.right,dp(12)+bars.bottom);return insets;
         });
-        LinearLayout toolbar = row(); TextView title = text("Pocket Agent"); title.setTextSize(20); title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        LinearLayout toolbar = row(); TextView title = text("DealPilot Agent"); title.setTextSize(20); title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         toolbar.setGravity(Gravity.CENTER_VERTICAL); toolbar.setPadding(0, 0, 0, dp(12));
         toolbar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         toolbar.addView(button("Activity", this::autonomyActivity));
@@ -185,14 +185,21 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         AutonomyScheduler.arm(this);
         if(getIntent().getBooleanExtra("openAutonomy",false))root.post(this::autonomyActivity);
         pendingVoiceInvitation = saved == null ? null : saved.getString("voiceInvitation");
-        root.post(() -> handleVoiceInvitation(getIntent()));
+        root.post(() -> {handleVoiceInvitation(getIntent());handlePayPalReturn(getIntent());});
     }
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        getWindow().getDecorView().post(() -> handleVoiceInvitation(intent));
+        getWindow().getDecorView().post(() -> {handleVoiceInvitation(intent);handlePayPalReturn(intent);});
     }
-    @Override protected void onSaveInstanceState(Bundle saved) {
+    private void handlePayPalReturn(Intent intent) {
+        if(!"dev.pocket.agent.PAYPAL_RETURN".equals(intent.getAction()))return;
+        String token=intent.getStringExtra("paypalOrder");
+        String result=intent.getStringExtra("paypalOutcome");
+        intent.setAction(null);
+        if(token==null||!token.matches("[A-Z0-9]{6,40}")||!java.util.Set.of("return","cancel").contains(result))return;
+        if(pocketUi!=null)pocketUi.event("checkout-return",json("token",token,"outcome",result));
+    }    @Override protected void onSaveInstanceState(Bundle saved) {
         super.onSaveInstanceState(saved);
         saved.putString("voiceInvitation", pendingVoiceInvitation);
         if (input != null) saved.putString("composeDraft", input.getText().toString());
@@ -489,7 +496,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     private void copyHistory() {
         ClipboardManager clipboard = getSystemService(ClipboardManager.class);
         if (clipboard == null) { toast("Clipboard unavailable"); return; }
-        clipboard.setPrimaryClip(ClipData.newPlainText("Pocket Agent debug history", debugHistory(state)));
+        clipboard.setPrimaryClip(ClipData.newPlainText("DealPilot Agent debug history", debugHistory(state)));
         toast("Conversation history copied");
     }
     static String debugHistory(JSONObject snapshot) {
@@ -684,7 +691,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         if (automationStatus.optBoolean("batteryRestricted")) {
             LinearLayout battery = activityCard(panel); battery.addView(text("Background runs may be delayed"));
             battery.addView(activityMeta("Allow unrestricted battery use for more reliable screen-off work."));
-            battery.addView(button("Battery settings", () -> { try { startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); } catch (RuntimeException unavailable) { toast("Open Pocket Agent battery settings in Android"); } }));
+            battery.addView(button("Battery settings", () -> { try { startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); } catch (RuntimeException unavailable) { toast("Open DealPilot Agent battery settings in Android"); } }));
         }
         String startupIssue = automationStatus.optString("lastFailure");
         if (!startupIssue.isEmpty()) { LinearLayout issue = activityCard(panel); issue.addView(text("Background work needs attention")); issue.addView(activityMeta(startupIssue)); }
@@ -804,14 +811,14 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         conversationFrame.addView(welcome, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER)); welcomeView = welcome;
         voicePanel = column(); voicePanel.setPadding(dp(12), dp(8), dp(12), dp(8)); voicePanel.setBackground(surface(R.color.pocket_surface, 14)); voicePanel.addView(voiceConversation); voicePanel.addView(voiceConversationStatus); voicePanel.addView(button("Close voice", () -> { stopService(new Intent(this, SubscriptionVoiceService.class)); voicePanel.setVisibility(View.GONE); })); voicePanel.setVisibility(View.GONE); root.addView(voicePanel);
         LinearLayout composer = column(); composer.setPadding(dp(12), dp(12), dp(12), dp(8)); composer.setBackground(surface(R.color.pocket_surface, 16)); input.setHint("What’s on your mind?"); composer.addView(input, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout actions = row(); actions.setGravity(Gravity.CENTER_VERTICAL); providerLabel = button("Pocket Agent", this::settings); providerLabel.setBackgroundColor(android.graphics.Color.TRANSPARENT); actions.addView(providerLabel, new LinearLayout.LayoutParams(0, dp(48), 1));
+        LinearLayout actions = row(); actions.setGravity(Gravity.CENTER_VERTICAL); providerLabel = button("DealPilot Agent", this::settings); providerLabel.setBackgroundColor(android.graphics.Color.TRANSPARENT); actions.addView(providerLabel, new LinearLayout.LayoutParams(0, dp(48), 1));
         View mic = iconControl("mic", "Voice input; hold for voice modes", this::startDictation); mic.setOnLongClickListener(view -> { showVoiceChoices(); return true; }); actions.addView(mic);
         send.setText(""); send.setContentDescription("Send message"); PocketIcon arrow = new PocketIcon("send", getColor(R.color.pocket_on_accent), getColor(R.color.pocket_accent)); arrow.setBounds(0, 0, dp(20), dp(20)); send.setCompoundDrawables(arrow, null, null, null); send.setPadding(dp(14), 0, dp(14), 0); send.setGravity(Gravity.CENTER); LinearLayout.LayoutParams sendParams = new LinearLayout.LayoutParams(dp(48), dp(48)); sendParams.setMargins(dp(8), 0, 0, 0); actions.addView(send, sendParams); composer.addView(actions); root.addView(composer);
         updateProviderLabel();
     }
     private void updateProviderLabel() {
         if (providerLabel == null) return;
-        try { String mode = new CredentialStore(this).get().optString("authMode"); providerLabel.setText(switch (mode) { case "nebius" -> "Nebius"; case "opencode" -> "OpenCode"; case "codex-account" -> "Codex"; default -> "Pocket Agent"; }); }
+        try { String mode = new CredentialStore(this).get().optString("authMode"); providerLabel.setText(switch (mode) { case "nebius" -> "Nebius"; case "opencode" -> "OpenCode"; case "codex-account" -> "Codex"; default -> "DealPilot Agent"; }); }
         catch (Exception unavailable) { providerLabel.setText("Connect provider"); }
     }
     private void renderNativeMessages(JSONArray items) {
@@ -822,7 +829,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             JSONObject message = items.optJSONObject(i); if (message == null) continue;
             LinearLayout card = column(); card.setPadding(dp(12), dp(12), dp(12), dp(16));
             boolean user = "user".equals(message.optString("role")); if (user) card.setBackground(surface(R.color.pocket_raised, 16));
-            TextView label = activityMeta(user ? "You" : "Pocket"); label.setTextSize(12); card.addView(label);
+            TextView label = activityMeta(user ? "You" : "DealPilot Agent"); label.setTextSize(12); card.addView(label);
             TextView body = text(message.optString("text", message.optString("content"))); body.setTextIsSelectable(true); body.setLineSpacing(dp(4), 1); card.addView(body);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.setMargins(user ? dp(24) : 0, dp(8), 0, dp(12)); nativeMessages.addView(card, params);
         }
@@ -839,7 +846,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             result.append("user".equals(message.optString("role")) ? "You: " : "Pocket: ");
             result.append(message.optString("text", message.optString("content")));
         }
-        clipboard.setPrimaryClip(ClipData.newPlainText("Pocket Agent conversation", result.toString()));
+        clipboard.setPrimaryClip(ClipData.newPlainText("DealPilot Agent conversation", result.toString()));
         toast("Conversation copied");
     }
     private JSONObject webStatus() throws Exception {
@@ -878,6 +885,14 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             });});
     }
     private void webRequest(String path,JSONObject body,PocketWebUi.Reply reply) throws Exception {
+        if(path.startsWith("/checkout/")){
+            String action=path.substring("/checkout/".length());
+            if(action.equals("open")){
+                ShoppingConnection.openPayPal(this,body.getString("url"));
+                reply.complete(json("opened",true),null);
+            }else ShoppingConnection.handle(this,action,body,reply);
+            return;
+        }
         CredentialStore credentials=new CredentialStore(this);
         switch(path) {
             case "/native/snapshot" -> {
@@ -928,7 +943,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                 int flags=android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS|android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
                 if(controller!=null)controller.setSystemBarsAppearance(light?flags:0,flags);
             }
-            case "/native/copy" -> {ClipboardManager clipboard=getSystemService(ClipboardManager.class);if(clipboard!=null)clipboard.setPrimaryClip(ClipData.newPlainText("Pocket Agent conversation",body.optString("text")));}
+            case "/native/copy" -> {ClipboardManager clipboard=getSystemService(ClipboardManager.class);if(clipboard!=null)clipboard.setPrimaryClip(ClipData.newPlainText("DealPilot Agent conversation",body.optString("text")));}
             case "/native/preferences" -> {
                 if(body.has("name"))getSharedPreferences("pocket-ui",0).edit().putString("name",body.optString("name").substring(0,Math.min(120,body.optString("name").length()))).apply();
                 if(body.has("instructions")){savePersonalInstructions(body.optString("instructions"),reply);return;}
@@ -1140,7 +1155,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
     private void openChats() {
         android.app.Dialog drawer = new android.app.Dialog(this, R.style.PocketTheme); LinearLayout panel = column(); panel.setPadding(dp(16), dp(24), dp(16), dp(20)); panel.setBackgroundColor(getColor(R.color.pocket_surface));
         panel.setOnApplyWindowInsetsListener((view, insets) -> { android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.ime()); view.setPadding(dp(16) + bars.left, dp(16) + bars.top, dp(16) + bars.right, dp(16) + bars.bottom); return insets; });
-        LinearLayout header = row(); TextView brand = text("Pocket Agent"); brand.setTextSize(20); header.addView(brand, new LinearLayout.LayoutParams(0, dp(48), 1)); header.addView(iconControl("close", "Close sidebar", drawer::dismiss)); panel.addView(header);
+        LinearLayout header = row(); TextView brand = text("DealPilot Agent"); brand.setTextSize(20); header.addView(brand, new LinearLayout.LayoutParams(0, dp(48), 1)); header.addView(iconControl("close", "Close sidebar", drawer::dismiss)); panel.addView(header);
         panel.addView(button("New chat", () -> { drawer.dismiss(); newMainThread(); })); EditText search = new EditText(this); search.setSingleLine(true); search.setHint("Search chats"); search.setTextSize(16); search.setPadding(dp(12), dp(12), dp(12), dp(12)); search.setBackground(surface(R.color.pocket_raised, 10)); search.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(300)}); panel.addView(search);
         ScrollView scroll = new ScrollView(this); LinearLayout list = column(); scroll.addView(list); panel.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         panel.addView(button("Schedules & activity", () -> { drawer.dismiss(); autonomyActivity(); })); panel.addView(button("Connections & tools", () -> { drawer.dismiss(); mcpSettings(); })); panel.addView(button("Settings", () -> { drawer.dismiss(); settingsHome(); }));
@@ -1323,7 +1338,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             }
             catch (Exception error) { toast("Unable to clear the protected account"); }
         }));
-        TextView connectionHelp = text("OpenCode Free uses OpenCode's fixed external inference API and requires a Console service-account key. Pocket Agent sends it only as Authorization: Bearer to opencode.ai; no OpenCode client identity headers are spoofed. Nebius Token Factory uses its fixed API endpoint and requires a Nebius key; its default GLM-5.3-Flash supports vision and tool use. Codex relay uses http://10.0.2.2:port/v1 on an emulator. Codex account mode needs no API key or endpoint."); panel.addView(connectionHelp);
+        TextView connectionHelp = text("OpenCode Free uses OpenCode's fixed external inference API and requires a Console service-account key. DealPilot Agent sends it only as Authorization: Bearer to opencode.ai; no OpenCode client identity headers are spoofed. Nebius Token Factory uses its fixed API endpoint and requires a Nebius key; its default GLM-5.3-Flash supports vision and tool use. Codex relay uses http://10.0.2.2:port/v1 on an emulator. Codex account mode needs no API key or endpoint."); panel.addView(connectionHelp);
         java.util.function.IntConsumer renderProviderFields = position -> {
             String selectedMode = modes[position];
             boolean account = selectedMode.equals(CredentialStore.CODEX_ACCOUNT);
@@ -1557,7 +1572,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             thresholdReset.setAlpha(hybrid ? 1.0f : 0.45f);
             updateShortThreshold.accept(shortThreshold.getProgress());
             if (selectedMode == VoiceSttSettings.Mode.ANDROID_DEFAULT_ONLY) {
-                sttModeHelp.setText("Android default only uses the phone's normal system SpeechRecognizer for normal turns, matching the standalone test path. Hybrid arbitration stays disabled. While Pocket Agent is thinking or speaking, Deepgram Flux temporarily provides full-duplex barge-in so you can interrupt without waiting for playback to finish; an interrupted utterance is completed on that same stream before Android recognition resumes.");
+                sttModeHelp.setText("Android default only uses the phone's normal system SpeechRecognizer for normal turns, matching the standalone test path. Hybrid arbitration stays disabled. While DealPilot Agent is thinking or speaking, Deepgram Flux temporarily provides full-duplex barge-in so you can interrupt without waiting for playback to finish; an interrupted utterance is completed on that same stream before Android recognition resumes.");
             } else if (selectedMode == VoiceSttSettings.Mode.DEEPGRAM_ONLY) {
                 sttModeHelp.setText("Deepgram only uses the existing streaming Deepgram STT path. Android recognition, parallel arbitration, and the switch threshold are disabled.");
             } else {
@@ -1594,7 +1609,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
                     String.format(java.util.Locale.US, "%.2f", ms / 1000f) + " s");
             }
         });
-        panel.addView(text("For better proper-name recognition, Hybrid mode requests Android quality formatting and device-context/contact hints. Android default only deliberately uses the normal system recognizer microphone path instead of Pocket Agent PCM injection. STT mode changes apply to the next voice session."));
+        panel.addView(text("For better proper-name recognition, Hybrid mode requests Android quality formatting and device-context/contact hints. Android default only deliberately uses the normal system recognizer microphone path instead of DealPilot Agent PCM injection. STT mode changes apply to the next voice session."));
         panel.addView(button("Deepgram voice key", this::voiceKeySettings));
         panel.addView(text("Hey Jarvis runs locally at 16 kHz. The wake-word sensitivity below is saved across restarts and applies immediately to an active listener."));
         TextView wakeConfidenceLabel = text("");
@@ -1609,7 +1624,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
         java.util.function.IntConsumer updateWakeLabel = percent -> {
             wakeConfidenceLabel.setText("Hey Jarvis confidence threshold: " + percent + "%");
             thresholdExplanation.setText(percent < 30
-                ? "Very sensitive · experimental: unrelated speech may activate Pocket Agent"
+                ? "Very sensitive · experimental: unrelated speech may activate DealPilot Agent"
                 : percent < 65 ? "More sensitive · more wake-ups, but greater false-trigger risk"
                 : percent > 85 ? "Strict · fewer false triggers, but may miss your voice"
                 : "Balanced · higher requires stronger wake-word confidence");
@@ -1950,11 +1965,11 @@ public final class MainActivity extends androidx.activity.ComponentActivity impl
             if(!rikka.shizuku.Shizuku.pingBinder()) {
                 Intent open=getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
                 if(open!=null)startActivity(open);
-                else toast("Install and start Shizuku, then return to authorize Pocket Agent");
+                else toast("Install and start Shizuku, then return to authorize DealPilot Agent");
             } else if(rikka.shizuku.Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED) {
                 rikka.shizuku.Shizuku.requestPermission(1001);
             } else toast("Shizuku permission granted; up to three background displays are available on demand");
-        }catch(Exception error){toast("Shizuku unavailable; start it and authorize Pocket Agent");}
+        }catch(Exception error){toast("Shizuku unavailable; start it and authorize DealPilot Agent");}
     }
     private void startDictation() {
         startDictation(getSharedPreferences("pocket-ui",0).getString("voiceEngine","system"));

@@ -22,7 +22,7 @@ public final class AutonomyAlarmService extends Service {
         PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,AgentService.class).setAction(AgentService.ACTION_STOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         Notification notification=new Notification.Builder(this,"autonomy-running").setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Pocket Agent is running scheduled work").setContentIntent(open).setOngoing(true)
+            .setContentTitle("DealPilot Agent is running scheduled work").setContentIntent(open).setOngoing(true)
             .addAction(new Notification.Action.Builder(null,"Stop all",stop).build()).build();
         if(Build.VERSION.SDK_INT>=34)startForeground(34,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         else startForeground(34,notification);

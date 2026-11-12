@@ -166,7 +166,7 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
         throw new IllegalStateException("Trusted virtual display unavailable: "+(last==null?"unknown":last.getClass().getSimpleName()),last);
     }
     private void owned(int id) {
-        if(id<=Display.DEFAULT_DISPLAY || !displays.containsKey(id)) throw new SecurityException("Display is not owned by Pocket Agent");
+        if(id<=Display.DEFAULT_DISPLAY || !displays.containsKey(id)) throw new SecurityException("Display is not owned by DealPilot Agent");
         if(reservations.isRemoving(id)) throw new IllegalStateException("Display cleanup is in progress");
     }
     @Override public void removeDisplay(int id) {
@@ -266,7 +266,7 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
         android.content.ComponentName component=android.content.ComponentName.unflattenFromString(componentName);
         if(component==null||!BuildConfig.APPLICATION_ID.equals(component.getPackageName())
             ||!"dev.pocket.agent.AgentAccessibility".equals(component.getClassName()))
-            throw new SecurityException("Only Pocket Agent accessibility may be repaired");
+            throw new SecurityException("Only DealPilot Agent accessibility may be repaired");
         if(!"1".equals(execOutput("/system/bin/settings","get","secure","accessibility_enabled").trim()))return false;
         Set<String> current=accessibilityServices(execOutput("/system/bin/settings","get","secure","enabled_accessibility_services"));
         if(!containsComponent(current,component)) {
@@ -282,7 +282,7 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
         try {Thread.sleep(450);} catch(InterruptedException interrupted) {Thread.currentThread().interrupt();return false;}
         // If the phone became unlocked while our own temporary removal was in flight,
         // refuse to re-add the service. That transition creates a real opportunity for
-        // the user to have intentionally disabled Pocket Agent during recovery.
+        // the user to have intentionally disabled DealPilot Agent during recovery.
         if(!safeForAccessibilityRepair())return false;
         if(!"1".equals(execOutput("/system/bin/settings","get","secure","accessibility_enabled").trim()))return false;
         Set<String> after=accessibilityServices(execOutput("/system/bin/settings","get","secure","enabled_accessibility_services"));

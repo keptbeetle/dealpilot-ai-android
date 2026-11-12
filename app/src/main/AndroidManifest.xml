@@ -44,7 +44,15 @@
         <activity android:enableOnBackInvokedCallback="true" android:name=".MainActivity" android:exported="true" android:theme="@style/PocketTheme" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|screenSize|smallestScreenSize">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
-        <service android:name=".PocketVoiceInteractionService" android:label="Pocket Agent" android:exported="true"
+        <activity android:name=".PayPalReturnActivity" android:exported="true" android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="dealpilotagent" android:host="paypal" android:path="/return" />
+                <data android:scheme="dealpilotagent" android:host="paypal" android:path="/cancel" />
+            </intent-filter>
+        </activity>        <service android:name=".PocketVoiceInteractionService" android:label="DealPilot Agent" android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
             <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
             <meta-data android:name="android.voice_interaction" android:resource="@xml/pocket_voice_interaction" />
@@ -61,18 +69,18 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started conversational agent completing explicitly requested background phone tasks, with ongoing notification and Stop all control" />
         </service>
         <service android:name=".AgentAccessibility" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true"
-            android:process=":accessibility" android:label="Pocket Agent phone tools">
+            android:process=":accessibility" android:label="DealPilot Agent phone tools">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service" />
         </service>
         <service android:name=".AccessibilityGuardianService" android:exported="false" android:process=":guardian"
             android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Crash recovery for the user-enabled Pocket Agent accessibility service" />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Crash recovery for the user-enabled DealPilot Agent accessibility service" />
         </service>
         <service android:name=".AccessibilityRepairService" android:exported="false" android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Scoped repair of the still-enabled Pocket Agent accessibility service after a crash" />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Scoped repair of the still-enabled DealPilot Agent accessibility service after a crash" />
         </service>
-        <service android:name=".PhoneNotifications" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true" android:label="Pocket Agent notification tools">
+        <service android:name=".PhoneNotifications" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true" android:label="DealPilot Agent notification tools">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
         <service android:name=".AutonomyAlarmService" android:exported="false" android:foregroundServiceType="specialUse">

@@ -149,7 +149,7 @@ public final class WakeWordService extends Service {
             .setAction(ACTION_DISABLE), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Pocket Agent · Hey Jarvis enabled")
+            .setContentTitle("DealPilot Agent · Hey Jarvis enabled")
             .setContentText(description).setContentIntent(open)
             .setOngoing(true).setOnlyAlertOnce(true)
             .addAction(new Notification.Action.Builder(null, "Disable wake word", stop).build()).build();

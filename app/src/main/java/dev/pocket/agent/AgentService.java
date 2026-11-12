@@ -47,7 +47,7 @@ public final class AgentService extends Service {
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop = PendingIntent.getService(this, 1, new Intent(this, AgentService.class).setAction(ACTION_STOP), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, "agent").setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("Pocket Agent is available").setContentText("User-started runtime · tap to chat").setContentIntent(open)
+                .setContentTitle("DealPilot Agent is available").setContentText("User-started runtime · tap to chat").setContentIntent(open)
                 .setOngoing(true).addAction(new Notification.Action.Builder(null, "Stop all", stop).build()).build();
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -106,7 +106,7 @@ public final class AgentService extends Service {
                 notifications.createNotificationChannel(new NotificationChannel("agent", "Agent runtime", NotificationManager.IMPORTANCE_LOW));
                 notifications.notify(33, new Notification.Builder(context, "agent")
                     .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                    .setContentTitle("Pocket Agent couldn't speak")
+                    .setContentTitle("DealPilot Agent couldn't speak")
                     .setContentText(reason)
                     .setContentIntent(PendingIntent.getActivity(context, 33, new Intent(context, MainActivity.class),
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
@@ -143,7 +143,7 @@ public final class AgentService extends Service {
                 } catch (Exception failure) {
                     Log.w("PocketVoice", "Agent-initiated speech could not be started", failure);
                     reportVoiceFailure(this, event.optString("id"),
-                        "Speech service could not start; check Pocket Agent voice permissions");
+                        "Speech service could not start; check DealPilot Agent voice permissions");
                 }
             }
             for (Observer observer : observers) {

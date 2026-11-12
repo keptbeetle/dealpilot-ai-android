@@ -34,7 +34,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Feeds Pocket Agent's existing PCM capture into Android's system recognizer.
+ * Feeds DealPilot Agent's existing PCM capture into Android's system recognizer.
  * This class never opens a microphone, so Deepgram remains the single AudioRecord owner.
  */
 final class AndroidShortSpeechRecognizer implements AutoCloseable, DeepgramVoice.PcmObserver {

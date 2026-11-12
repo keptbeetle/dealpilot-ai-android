@@ -1,6 +1,6 @@
 export async function api(path,body,{signal}={}){
   if(window.PocketNative)return window.pocketRequest(path,body||{},signal);
-  const response=await fetch(path,{method:body===undefined?'GET':'POST',signal,headers:{'X-Pocket-Request':'1',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
+  const response=await fetch(path,{method:body===undefined?'GET':'POST',signal,headers:{'X-DealPilot-Request':'1',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
   let result;try{result=await response.json();}catch{throw Error('The local connection service is unavailable. Refresh and try again.');}
   if(!response.ok)throw Error(result.error||'Connection request failed.');return result;
 }

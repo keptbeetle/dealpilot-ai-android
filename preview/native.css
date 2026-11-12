@@ -1,1 +1,27 @@
 body{padding:0;background:var(--canvas);display:block;min-height:0;height:100dvh}.workspace{max-width:none;max-height:none;min-height:0;height:100dvh;border:0;border-radius:0;box-shadow:none}.composer-caption{font-size:9px}.keyboard-hint{display:none}.native-task{display:block;width:100%;text-align:left;padding:16px;background:var(--surface);border-radius:14px;margin:12px 0}.native-task strong{display:block;font-size:14px;font-weight:500}.native-task small{display:block;color:var(--muted);font-size:11px;line-height:1.7;margin-top:4px}.native-task-actions{display:flex;gap:8px;flex-wrap:wrap}.native-task-actions button{flex:1}.native-inline-status{color:var(--muted);font-size:12px;line-height:1.7}.native-danger{color:var(--error)}.native-details{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted)}.native-check{accent-color:var(--accent)}.settings-field select{appearance:auto}.connection-card input,.settings-body input{max-width:100%}
+
+/* PayPal Sandbox review lives inside the original native chat, not the browsing UI. */
+#dealpilot-checkout{margin:15px 10px 25px;padding:0;border:1px solid #365879;background:linear-gradient(135deg,#10253e,#173352);border-radius:16px;box-shadow:0 6px 20px #0005;color:#f1f7ff}
+#dealpilot-checkout[hidden]{display:none}
+.checkout-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #375574}
+.checkout-head strong{font-size:15px}
+.checkout-head span{margin-left:auto;background:#1b578a;border-radius:999px;padding:4px 9px;font-size:11px;color:#eaf5ff}
+.checkout-state{padding:14px;display:grid;gap:8px}
+.checkout-state h3{margin:0;color:#eaf5ff;font-size:17px}
+.checkout-name{font-weight:650;font-size:15px;margin:0}
+.checkout-amount{font-size:25px;color:#91eeb9;font-weight:800;margin:0}
+.checkout-detail{font-size:13px;color:#d0ddeb;line-height:1.45;margin:0}
+.checkout-footnote{font-size:11px;color:#a8bfda;margin:0}
+.checkout-label{font-size:12px;font-weight:650;color:#d0e3f8;display:grid;gap:5px}
+.checkout-input{width:100%;padding:11px;border:1px solid #48729b;border-radius:9px;background:#0d1c32;color:#fff;font:inherit;box-sizing:border-box}
+.checkout-button{background:#263f5b;color:#fff;padding:11px 13px;border:1px solid #4c6b88;border-radius:11px;font-weight:650;font-size:13px;cursor:pointer}
+.checkout-button.primary{background:linear-gradient(110deg,#0475cc,#1462af);border-color:#61b4f4}
+.checkout-button.close{background:transparent;border:0;padding:2px 6px;font-size:22px}
+.checkout-ack{display:flex;align-items:start;gap:8px;font-size:12px;line-height:1.45;color:#d9e9f9}
+.checkout-error{padding:0 14px;color:#f4bbbb;font-size:12px}
+/* Full-width modal for Android phone viewport; no second flex column. */
+#dealpilot-checkout{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(calc(100vw - 24px),450px);max-height:calc(100dvh - 42px);overflow-y:auto;overscroll-behavior:contain;z-index:9999;margin:0;box-sizing:border-box;isolation:isolate}
+#dealpilot-checkout::before{content:"";position:fixed;inset:-100vh -100vw;background:#0009;z-index:-1;pointer-events:none}
+#dealpilot-checkout .checkout-head{position:sticky;top:0;z-index:2;background:#112b45}
+#dealpilot-checkout .checkout-state{padding:15px}
+#dealpilot-checkout .checkout-button.primary{min-height:46px}

@@ -51,7 +51,7 @@ export function createVoice({button,feedback,status,audio,onTranscript,getConfig
         try{
           controller=new AbortController();setPhase('transcribing',engine==='groq'?'Transcribing with Groq Whisper…':'Transcribing with Deepgram…');
           const recording=new Blob(chunks,{type:recorder.mimeType});chunks=[];
-          const response=await fetch('/api/voice/transcribe',{method:'POST',headers:{'X-Pocket-Request':'1','X-Pocket-Speech-Engine':engine,'Content-Type':recording.type},body:recording,signal:controller.signal});
+          const response=await fetch('/api/voice/transcribe',{method:'POST',headers:{'X-DealPilot-Request':'1','X-DealPilot-Speech-Engine':engine,'Content-Type':recording.type},body:recording,signal:controller.signal});
           const result=await response.json();if(!response.ok)throw Error(result.error||'Voice transcription failed.');if(selected!==generation)return;
           onTranscript(result.text);setPhase('idle');
         }catch(error){if(selected===generation)failure(error.name==='AbortError'?'Voice cancelled.':error.message);}
@@ -67,7 +67,7 @@ export function createVoice({button,feedback,status,audio,onTranscript,getConfig
         const utterance=new SpeechSynthesisUtterance(text);utterance.onend=()=>{if(selected===generation)setPhase('idle');};utterance.onerror=()=>{if(selected===generation)failure('Speech playback failed.');};
         status.textContent='Reading the reply aloud';window.speechSynthesis.speak(utterance);return;
       }
-      controller=new AbortController();const response=await fetch('/api/voice/speak',{method:'POST',headers:{'X-Pocket-Request':'1','Content-Type':'application/json'},body:JSON.stringify({text}),signal:controller.signal});
+      controller=new AbortController();const response=await fetch('/api/voice/speak',{method:'POST',headers:{'X-DealPilot-Request':'1','Content-Type':'application/json'},body:JSON.stringify({text}),signal:controller.signal});
       if(!response.ok){const result=await response.json();throw Error(result.error||'Spoken reply is unavailable.');}
       const blob=await response.blob();if(selected!==generation)return;audioUrl=URL.createObjectURL(blob);audio.src=audioUrl;audio.hidden=false;status.textContent='Reading the reply aloud';
       try{await audio.play();}catch{if(selected===generation)status.textContent='Tap play to hear the reply.';}

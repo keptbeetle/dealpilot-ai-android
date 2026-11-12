@@ -12,7 +12,7 @@ export function createActivity({screen,onClose}){
     const heading=element('h2','activity-heading',({schedules:'Work that runs later.',workers:'A little help in parallel.',displays:'Room for phone tasks.'})[tab]);body.append(heading);
     if(tab==='schedules'){
       body.append(element('p','settings-description','Manage scheduled phone tasks in the Android app.'));
-      const card=element('section','activity-info-card');card.append(element('h3','','Upcoming schedules'),element('p','','No phone schedule data is available here. Open Pocket Agent on Android to view the next run or pause a schedule.'));body.append(card);
+      const card=element('section','activity-info-card');card.append(element('h3','','Upcoming schedules'),element('p','','No phone schedule data is available here. Open DealPilot Agent on Android to view the next run or pause a schedule.'));body.append(card);
       const history=element('section','activity-info-card');history.append(element('h3','','Recent runs'),element('p','','Run results are stored on your phone. Completed runs show a short summary, with details available separately.'));body.append(history);
     }else if(tab==='workers'){
       body.append(element('p','settings-description','On Android, delegated work stays visible in the conversation while you keep talking.'));
@@ -23,7 +23,7 @@ export function createActivity({screen,onClose}){
       const pool=element('div','display-slots');for(let i=1;i<=3;i++){const slot=element('div','display-slot');slot.append(element('span','','Slot '+i),element('small','','No phone connection'));pool.append(slot);}body.append(pool);
       body.append(element('p','settings-native-note','Virtual displays require Shizuku in the Android app. Visible-screen tasks can use Accessibility instead. The browser does not allocate displays or control your phone.'));
     }
-    body.append(element('p','settings-preview-note','Phone tasks run in Pocket Agent on Android.'));
+    body.append(element('p','settings-preview-note','Phone tasks run in DealPilot Agent on Android.'));
     screen.append(header,tabs,body);title.focus({preventScroll:true});
   }
   function close(){screen.hidden=true;onClose();}

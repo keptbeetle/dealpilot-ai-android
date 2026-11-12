@@ -262,7 +262,7 @@ final class DeepgramVoice implements AutoCloseable {
     synchronized void listen() {
         if (closed || listening) return;
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            safeStatus("Microphone permission required. Open Pocket Agent settings.");
+            safeStatus("Microphone permission required. Open DealPilot Agent settings.");
             return;
         }
         listening = true;

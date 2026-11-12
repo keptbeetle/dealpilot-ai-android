@@ -161,7 +161,7 @@ function openPanel(name) {
     const results = document.createElement('div'); results.className = 'search-results'; search.oninput = () => renderHistory(results, search.value);
     panelBody.append(label, search, results); renderHistory(results);
   } else {
-    const text = document.createElement('p'); text.className = 'dialog-copy'; text.textContent = 'No active tasks in this design preview. In the Android app, background tasks appear here while you continue talking to Pocket.';
+    const text = document.createElement('p'); text.className = 'dialog-copy'; text.textContent = 'No active tasks in this design preview. In the Android app, background tasks appear here while you continue talking to DealPilot.';
     const footer = document.createElement('p'); footer.className = 'dialog-footer'; footer.textContent = 'This page previews the interface. It does not connect to your phone, send messages to a model, or start voice listening.';
     panelBody.append(text, footer);
   }

@@ -22,13 +22,13 @@ android {
     compileSdk = 36
     ndkVersion = "27.2.12479018"
     defaultConfig {
-        applicationId = if (providers.gradleProperty("uiPreview").isPresent) "dev.pocket.agent.uipreview" else if (providers.gradleProperty("isolatedDeviceValidation").isPresent)
+        applicationId = if (providers.gradleProperty("finalDealPilot").isPresent) "dev.pocket.agent.dealpilot" else if (providers.gradleProperty("uiPreview").isPresent) "dev.pocket.agent.uipreview" else if (providers.gradleProperty("isolatedDeviceValidation").isPresent)
             "dev.pocket.agent.historyvalidation" else "dev.pocket.agent"
         minSdk = 31
         targetSdk = 36
         versionCode = 31
         versionName = "0.1.31-local-shell.2"
-        resValue("string", "app_name", if (providers.gradleProperty("uiPreview").isPresent) "Pocket Agent Preview" else "Pocket Agent")
+        resValue("string", "app_name", if (providers.gradleProperty("uiPreview").isPresent) "DealPilot Agent Preview" else "DealPilot Agent")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "DEVELOPMENT_TOOLS", "false")
     }
