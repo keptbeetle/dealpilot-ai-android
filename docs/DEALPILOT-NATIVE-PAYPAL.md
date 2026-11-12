@@ -1,6 +1,6 @@
 # DealPilot Agent — native Android and PayPal Sandbox
 
-This project preserves the original Pocket Agent Android app's model providers, conversations, phone browsing, accessibility and Shizuku integrations. DealPilot Agent adds cart preparation and explicit buyer-controlled PayPal Sandbox checkout inside the native app's chat.
+DealPilot Agent combines native Android conversations, phone browsing, accessibility and Shizuku integrations with buyer-controlled cart preparation and explicit PayPal Sandbox checkout inside the main chat interface.
 
 ## Build and install
 
