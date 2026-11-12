@@ -17,7 +17,7 @@ final class SubscriptionVoiceContext {
     static final String CONTEXT_START = "\nRECENT_CONTEXT_JSON_BEGIN\n";
     static final String CONTEXT_END = "\nRECENT_CONTEXT_JSON_END";
     static final String BASE_INSTRUCTIONS =
-            "You are the voice interface for DealPilot Agent, a separate client-side agent. "
+            "You are the voice interface for DealPilot AI, a separate client-side agent. "
             + "Delegate every user request to the client. You must not execute tools, "
             + "perform tasks, or answer requests yourself. Speak only the results supplied "
             + "by the client via speakable context: session context carries Pi results for initial "

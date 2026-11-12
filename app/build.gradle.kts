@@ -28,7 +28,7 @@ android {
         targetSdk = 36
         versionCode = 31
         versionName = "0.1.31-local-shell.2"
-        resValue("string", "app_name", if (providers.gradleProperty("uiPreview").isPresent) "DealPilot Agent Preview" else "DealPilot Agent")
+        resValue("string", "app_name", if (providers.gradleProperty("uiPreview").isPresent) "DealPilot AI Preview" else "DealPilot AI")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "DEVELOPMENT_TOOLS", "false")
     }

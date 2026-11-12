@@ -4,15 +4,15 @@ The signed Android workflow now emits **release** and **development** APKs from 
 
 ## Downloads and schedule
 
-Bookmark the [**Development prerelease**](https://github.com/ru-aish/pocket-agent/releases/tag/development). Under **Assets**, download:
+Open this project's [releases](https://github.com/keptbeetle/dealpilot-ai-android/releases). A successful scheduled development publication produces these assets:
 
-- **`Pocket-Agent-development-arm64.apk`** for an ARM64 phone ([direct download](https://github.com/ru-aish/pocket-agent/releases/download/development/Pocket-Agent-development-arm64.apk)).
-- **`Pocket-Agent-development-x86_64.apk`** for an x86_64 emulator.
-- **`Pocket-Agent-development-universal.apk`** if unsure which architecture to use.
+- **`DealPilot-AI-development-arm64.apk`** for an ARM64 phone.
+- **`DealPilot-AI-development-x86_64.apk`** for an x86_64 emulator.
+- **`DealPilot-AI-development-universal.apk`** if unsure which architecture to use.
 
 The **Scheduled development APK** workflow runs at **00:17, 03:17, 06:17, 09:17, 12:17, 15:17, 18:17 and 21:17 UTC** (`17 */3 * * *`). It pins the current `main` commit and compares it with the source recorded in the last complete, published development release. If unchanged, the APK build job is skipped. A missing/incomplete release is rebuilt; a failed build or publication does not record a successful source, so the next run retries. The first successful run creates the prerelease; later runs replace its assets and move only the `development` tag to the built commit. Stable releases keep their existing tags and Latest status.
 
-The schedule becomes active once `.github/workflows/development-apk.yml` is merged into `main` (the default branch). GitHub may delay scheduled runs. To check status or trigger an earlier check, open [**Actions → Scheduled development APK**](https://github.com/ru-aish/pocket-agent/actions/workflows/development-apk.yml), choose **Run workflow** on **main**, and open the run. Manual runs use the same unchanged-source check. A successful build also has a **`pocket-agent-development`** artifact at the bottom of its run page, retained for 30 days; extract that ZIP to get the APKs. Release assets remain available at the bookmark above until replaced.
+The schedule becomes active once `.github/workflows/development-apk.yml` is merged into `main` (the default branch). GitHub may delay scheduled runs. To check status or trigger an earlier check, open [Actions](https://github.com/keptbeetle/dealpilot-ai-android/actions), select **Scheduled development APK** and choose **Run workflow** on **main**. Manual runs use the same unchanged-source check. A successful build also has a **`dealpilot-ai-development`** artifact at the bottom of its run page, retained for 30 days. Extract that ZIP to get the APKs. Publication requires this repository's signing configuration. Earlier release files keep their published names.
 
 No new secrets are required: this workflow uses the existing `APK_KEYSTORE_BASE64`, `APK_STORE_PASSWORD` and `APK_KEY_PASSWORD` repository secrets and the workflow's `GITHUB_TOKEN` with `contents: write` for publication. It runs the runtime tests, builds and lints the development variant, and verifies APK signatures and ARM64 ngrok packaging. These scheduled snapshots do not run the full emulator suite; the existing **Signed Android APK** workflow continues its validation on pushes.
 
@@ -23,7 +23,7 @@ No new secrets are required: this workflow uses the existing `APK_KEYSTORE_BASE6
 ## Start it
 
 1. Install the CI-signed `Pocket-Agent-development-arm64.apk` (or x86_64 for emulator). The CI signs release and development with the same key and verifies both packages.
-2. In Pocket Agent, open **Settings → Development MCP and ngrok**. A visible foreground-service notification remains while enabled.
+2. In DealPilot AI, open **Settings → Development MCP and ngrok**. A visible foreground-service notification remains while enabled.
 3. Tap **Start USB / localhost server** to bind `127.0.0.1:8767` on the phone.
 4. On Fedora, run `adb -s <device-serial> forward tcp:8767 tcp:8767` (omit `-s <device-serial>` if only one device is connected). The PC MCP endpoint is `http://127.0.0.1:8767/mcp`.
 5. USB/localhost MCP requests require no Authorization header. This is intentional for local debugging; any process that can reach the forwarded host port can control the phone, so keep the ADB forward local and stop the bridge when finished.

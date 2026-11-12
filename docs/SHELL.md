@@ -2,7 +2,7 @@
 
 `phone_shell` is available to the main assistant and every subagent, including researchers, nested workers and autonomous runs. It executes arbitrary shell code locally through the existing Shizuku UserService under Android shell UID. It has no command allowlist, display filter, or per-command approval dialog. Ordinary Android/SELinux shell permissions still apply; this is not automatically root.
 
-No PC, USB cable, remote terminal server or ADB network connection is needed during use. Start Shizuku on the phone and authorize Pocket Agent. On an unrooted phone, Shizuku can be started through the phone's wireless-debugging pairing flow; it may need restarting after a reboot. Internet access for the configured model provider remains separate from local shell execution.
+No PC, USB cable, remote terminal server or ADB network connection is needed during use. Start Shizuku on the phone and authorize DealPilot AI. On an unrooted phone, Shizuku can be started through the phone's wireless-debugging pairing flow; it may need restarting after a reboot. Internet access for the configured model provider remains separate from local shell execution.
 
 ## Discover the environment
 

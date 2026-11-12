@@ -12,7 +12,7 @@ const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className
 const btn=(text,fn,style='')=>{const n=el('button','checkout-button '+style,text);n.type='button';n.onclick=fn;return n;};
 const field=(parent,caption,value,type='text')=>{const label=el('label','checkout-label',caption),input=el('input','checkout-input');input.type=type;input.value=value;label.append(input);parent.append(label);return input;};
 export function mountNativePayPal({api,getMessages,onNotice}){
- const root=el('section','dealpilot-checkout');root.id='dealpilot-checkout';root.setAttribute('role','dialog');root.setAttribute('aria-label','DealPilot Agent cart and PayPal Sandbox');root.setAttribute('aria-modal','true');document.body.append(root);
+ const root=el('section','dealpilot-checkout');root.id='dealpilot-checkout';root.setAttribute('role','dialog');root.setAttribute('aria-label','DealPilot AI cart and PayPal Sandbox');root.setAttribute('aria-modal','true');document.body.append(root);
  let state=null,connected=false,busy=false,mode='',notice='',pendingCart=null,returnToken='';
  const saved=()=>{try{return JSON.parse(sessionStorage.getItem('dealpilot-paypal-draft')||'null');}catch{return null;}};
  pendingCart=saved();
@@ -87,7 +87,7 @@ export function mountNativePayPal({api,getMessages,onNotice}){
   root.replaceChildren();root.hidden=!mode;
   if(root.hidden)return;
   const header=el('div','checkout-head');
-  header.append(el('strong','','DealPilot Agent'),el('span','',mode==='payment'||state?.payment?'PayPal Sandbox':'Cart preparation'));
+  header.append(el('strong','','DealPilot AI'),el('span','',mode==='payment'||state?.payment?'PayPal Sandbox':'Cart preparation'));
   header.append(btn('×',()=>{mode='';draw();},'close'));root.append(header);
   if(notice)root.append(el('p','checkout-error',notice));
   if(!connected)root.append(setup());

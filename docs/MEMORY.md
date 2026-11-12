@@ -1,6 +1,6 @@
 # Personal memory (Android)
 
-Pocket Agent uses one app-private `personal-memory.db` store in the Android process. It does not run a local language model, vector daemon, or background service, and does not depend on hosted Supermemory, Honcho, or OpenClaw deployments.
+DealPilot AI uses one app-private `personal-memory.db` store in the Android process. It does not run a local language model, vector daemon, or background service, and does not depend on hosted Supermemory, Honcho, or OpenClaw deployments.
 
 ## Design
 

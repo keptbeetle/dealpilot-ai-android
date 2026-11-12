@@ -36,7 +36,7 @@ public class MemoryLoopDeviceTest {
             if(h!=null)try{h.dispatch(new JSONObject().put("action","state")).get(2,TimeUnit.SECONDS);break;}catch(Exception ignored){}
             Thread.sleep(100);
         }
-        assertNotNull("Pocket Agent service failed to start",h);
+        assertNotNull("DealPilot AI service failed to start",h);
         StateStore state=new StateStore(c);
         MemoryStore memory=new MemoryStore(c);
         int original=state.load().optInt("mainTurns");

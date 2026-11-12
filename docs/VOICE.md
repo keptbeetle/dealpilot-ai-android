@@ -1,8 +1,8 @@
-# Pocket Agent voice assistant (Android)
+# DealPilot AI voice assistant (Android)
 
 ## Product contract
 
-Pocket Agent remains the assistant and subagent host. Android's selected digital-assistant
+DealPilot AI remains the assistant and subagent host. Android's selected digital-assistant
 gesture activates a microphone-type Android foreground service with an ongoing
 notification, without leaving an overlay on screen. Settings choose one of three STT modes:
 **Hybrid**, **Android default only**, or **Deepgram only**. Hybrid preserves the parallel path:
@@ -12,7 +12,7 @@ configurable from Settings and defaults to three seconds. Flux word timestamps a
 spoken-duration measurement; Android wins below the threshold when available and Deepgram wins at
 or above it. **Android default only** keeps the normal system `SpeechRecognizer` as the
 transcript source for ordinary turns, matching the standalone Android test path, and keeps hybrid
-arbitration disabled. While Pocket Agent is thinking or speaking, Flux temporarily owns the
+arbitration disabled. While DealPilot AI is thinking or speaking, Flux temporarily owns the
 microphone as a full-duplex interruption bridge; if the user barges in, that stream finishes the
 interrupted utterance before Android recognition resumes. **Deepgram only** disables Android
 recognition and threshold logic. Deepgram TTS remains common to all three modes.
@@ -38,7 +38,7 @@ and explicit first-response latency event timing. Its demonstration **does** use
 Deepgram's Agent SDK and has a different orchestration path; those SDK calls were
 not copied into this Android implementation.
 
-Pocket Agent instead uses directly documented Deepgram APIs:
+DealPilot AI instead uses directly documented Deepgram APIs:
 
 - STT: `wss://api.deepgram.com/v2/listen` using Flux `flux-general-en`, raw
   16 kHz signed PCM16 mono with 80 ms microphone packets (the Deepgram-recommended
@@ -51,7 +51,7 @@ Pocket Agent instead uses directly documented Deepgram APIs:
   audio window. This excludes endpointing silence while preserving pauses between recognized
   words. Android's transcript wins below the configured threshold when available; at or above it,
   Deepgram's transcript wins when available. Android begin/end-of-speech timing is only a fallback
-  if Flux omits complete word timestamps. Duplicate finals are suppressed. On Android 13+, Pocket Agent
+  if Flux omits complete word timestamps. Duplicate finals are suppressed. On Android 13+, DealPilot AI
   also requests quality formatting and recognition biasing; when Contacts permission is granted,
   up to 128 contact display names are supplied as explicit bias strings to improve proper-name
   recognition. Flux provisional updates do not initiate model inference.
@@ -71,9 +71,9 @@ Pocket Agent instead uses directly documented Deepgram APIs:
 ## Android activation
 
 1. Install the new APK built by GitHub Actions.
-2. Configure a model provider for Pocket Agent and a Deepgram voice API key.
-3. Grant **Microphone** from Pocket Agent's settings.
-4. Select **Choose default assistant** or set Pocket Agent under Android's
+2. Configure a model provider for DealPilot AI and a Deepgram voice API key.
+3. Grant **Microphone** from DealPilot AI's settings.
+4. Select **Choose default assistant** or set DealPilot AI under Android's
    Settings → Apps → Default apps → Digital assistant app.
 5. Configure the power-button long-press to **Digital assistant** if that
    device supports it. Some OEMs reserve this gesture for the power menu.
@@ -138,7 +138,7 @@ is needed. Default-assistant support and key mapping depend on OEM firmware.
 
 On the separate Arch Linux test runner, Deepgram Aura synthesized a 4.96-second
 spoken question, which was resampled and streamed to Flux in paced 80 ms PCM frames.
-Flux finalized the correct utterance, and Pocket Agent's **real Pi main thread with
+Flux finalized the correct utterance, and DealPilot AI's **real Pi main thread with
 an existing Codex-account model connection** answered: **“Two plus two is four.”**
 Deepgram Aura streamed 38 PCM response chunks totaling 1.52 seconds of audio.
 The resulting response audio was re-transcribed over another live Flux stream as

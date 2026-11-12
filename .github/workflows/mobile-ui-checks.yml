@@ -54,7 +54,7 @@ jobs:
       - name: Preserve installable APKs
         uses: actions/upload-artifact@v6
         with:
-          name: Pocket-Agent-preview-APKs
+          name: DealPilot-AI-preview-APKs
           path: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/development/*.apk

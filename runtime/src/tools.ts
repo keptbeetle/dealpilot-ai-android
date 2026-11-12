@@ -236,14 +236,14 @@ export function requestVoiceConversationTool(host:any,owner:string):any {
 export function sendMessageTool(host:any,owner:string):any {
   return {
     name:'send_message',label:'Send message',
-    description:'Send the user a text message in Pocket Agent Activity inbox and attempt a notification. This never starts voice or contacts another person. Use for useful updates; ordinary final answers can remain in chat. Saved or posted does not mean read.',
+    description:'Send the user a text message in DealPilot AI Activity inbox and attempt a notification. This never starts voice or contacts another person. Use for useful updates; ordinary final answers can remain in chat. Saved or posted does not mean read.',
     parameters:Type.Object({message:Type.String({minLength:1,maxLength:2000})},{additionalProperties:false}),
     execute:async(id:string,args:{message:string},signal?:AbortSignal)=>{
       if(signal?.aborted)throw Error('Message cancelled before dispatch');
       const message=args.message.trim();
       if(!message||message.length>2000)throw Error('Message must be 1..2000 characters');
       host.authorizeAutonomy?.(owner,'notify_user',args);
-      return toolResult(host.autonomy.execute('notify_user',{title:'Pocket Agent',message},
+      return toolResult(host.autonomy.execute('notify_user',{title:'DealPilot AI',message},
         host.autonomyOwner?.(owner)??owner,owner+':'+id));
     },
   };

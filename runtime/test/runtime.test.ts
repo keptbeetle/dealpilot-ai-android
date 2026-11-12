@@ -427,20 +427,20 @@ test('fixture never retries unknown mutations or stale errors without a pre-disp
 
 test('personal instructions supplement the core and persist through turns, restart and provider reconfiguration',async()=>{
  const bridge=new Bridge(),runtime=new PocketRuntime(bridge);
- const custom='You are the custom main Pocket Agent. Keep replies concise and verified.';
+ const custom='You are the custom main DealPilot AI. Keep replies concise and verified.';
  command(runtime,{action:'set_personal_instructions',text:custom});
  assert.equal(runtime.state().personalInstructions,custom);
- assert.match(runtime.main.agent.state.systemPrompt,/custom main Pocket Agent/);
+ assert.match(runtime.main.agent.state.systemPrompt,/custom main DealPilot AI/);
  command(runtime,{action:'send',text:'hello custom prompt'});
  await until(()=>!runtime.state().active);
- assert.match(String((runtime.main.messages[0] as any).content),/custom main Pocket Agent/,'memory injection must preserve the custom main prompt');
+ assert.match(String((runtime.main.messages[0] as any).content),/custom main DealPilot AI/,'memory injection must preserve the custom main prompt');
  bridge.credentials={authMode:'scripted',model:'scripted'};
  command(runtime,{action:'configure'});
  assert.equal(runtime.state().personalInstructions,custom);
- assert.match(runtime.main.agent.state.systemPrompt,/custom main Pocket Agent/,'provider rebuild must reuse the custom prompt');
+ assert.match(runtime.main.agent.state.systemPrompt,/custom main DealPilot AI/,'provider rebuild must reuse the custom prompt');
  const restored=new PocketRuntime(bridge);
  assert.equal(restored.state().personalInstructions,custom,'durable state restores the custom prompt');
- assert.match(restored.main.agent.state.systemPrompt,/custom main Pocket Agent/);
+ assert.match(restored.main.agent.state.systemPrompt,/custom main DealPilot AI/);
  command(restored,{action:'set_personal_instructions',reset:true});
  assert.equal(restored.state().personalInstructions,'');
  assert.ok(restored.main.agent.state.systemPrompt.startsWith(DEFAULT_MAIN_PROMPT));

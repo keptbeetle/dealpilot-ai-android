@@ -26,7 +26,7 @@ def main():
     if not a.serial.startswith('emulator-'):raise SystemExit('Explicit emulator serial required; physical phones are excluded.')
     def adb(*args,**kw):return run('adb','-s',a.serial,*args,**kw)
     if adb('shell','getprop','ro.kernel.qemu').stdout.strip()!='1':raise SystemExit('Selected serial is not an emulator')
-    apk=a.artifacts/'Pocket-Agent-x86_64.apk';fixture=a.artifacts/'Pocket-Agent-fixture.apk';tests=a.artifacts/'Pocket-Agent-tests.apk'
+    apk=a.artifacts/'DealPilot-AI-x86_64.apk';fixture=a.artifacts/'DealPilot-AI-fixture.apk';tests=a.artifacts/'DealPilot-AI-tests.apk'
     adb('uninstall','dev.pocket.agent.fixture',check=False)
     for file in (apk,fixture,tests):adb('install','-r',str(file))
     if a.fresh:adb('shell','pm','clear','dev.pocket.agent')

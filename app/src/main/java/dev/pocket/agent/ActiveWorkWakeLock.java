@@ -8,7 +8,7 @@ final class ActiveWorkWakeLock {
     private final PowerManager.WakeLock lock;
     private long renewAfter;
     ActiveWorkWakeLock(Context context) {
-        lock=context.getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"PocketAgent:ActiveWork");
+        lock=context.getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"DealPilotAI:ActiveWork");
         lock.setReferenceCounted(false);
     }
     synchronized void setActive(boolean active) {

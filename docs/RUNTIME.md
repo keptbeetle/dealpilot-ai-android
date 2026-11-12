@@ -1,4 +1,4 @@
-# Pocket Agent runtime
+# DealPilot AI runtime
 
 The Android host loads `runtime.cjs` in one Javet Node engine. Main and workers are logical Pi Agent sessions sharing model services, native tools and Pi9's in-process scheduler. They do not launch separate engines or shells. See `runtime/SOURCE_PINS.json` and the npm lockfile for exact pins.
 
@@ -24,7 +24,7 @@ A `phone_act` stale-screen rejection recorded with `dispatch_status: "not_dispat
 
 Mutation IDs use the current `phone_capabilities.operation_prefix`, an underscore, and a unique 8..48 character nonce containing only ASCII letters, digits, underscores or hyphens. The same format is declared in each mutation argument's anchored JSON Schema pattern and enforced by the persistent native ledger. Capabilities expose nonce bounds; validation failures explain that dispatch did not occur. Historical `phone_operation` lookup does not impose current-prefix rules.
 
-`PocketAgent.dispatch(json)` returns synchronous `{ok,accepted}` or `{ok:false,error}`; model work runs asynchronously. Supported commands:
+`DealPilotAI.dispatch(json)` returns synchronous `{ok,accepted}` or `{ok:false,error}`; model work runs asynchronously. Supported commands:
 
 - `send {text,conversationId?}`: main message, or a worker follow-up. Active worker follow-ups steer; terminal follow-ups collect for the user and request a new generation.
 - `stop_main`: abort only the current main response.

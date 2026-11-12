@@ -43,9 +43,9 @@ jobs:
               }
             }
             const required = [
-              'Pocket-Agent-development-arm64.apk',
-              'Pocket-Agent-development-x86_64.apk',
-              'Pocket-Agent-development-universal.apk',
+              'DealPilot-AI-development-arm64.apk',
+              'DealPilot-AI-development-x86_64.apk',
+              'DealPilot-AI-development-universal.apk',
               'SHA256SUMS.txt', 'source-commit.txt', 'development-signature.txt', 'runtime-manifest.json'
             ];
             const complete = release && !release.draft && required.every(name =>
@@ -67,7 +67,7 @@ jobs:
       contents: write
     env:
       SOURCE_SHA: ${{ needs.check.outputs.source_sha }}
-      APK_KEYSTORE: /tmp/pocket-agent-development-signing.jks
+      APK_KEYSTORE: /tmp/dealpilot-ai-development-signing.jks
       APK_STORE_PASSWORD: ${{ secrets.APK_STORE_PASSWORD }}
       APK_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
     steps:
@@ -106,16 +106,16 @@ jobs:
       - name: Collect and verify development APKs
         run: |
           mkdir -p artifacts
-          cp app/build/outputs/apk/development/app-arm64-v8a-development.apk artifacts/Pocket-Agent-development-arm64.apk
-          cp app/build/outputs/apk/development/app-x86_64-development.apk artifacts/Pocket-Agent-development-x86_64.apk
-          cp app/build/outputs/apk/development/app-universal-development.apk artifacts/Pocket-Agent-development-universal.apk
+          cp app/build/outputs/apk/development/app-arm64-v8a-development.apk artifacts/DealPilot-AI-development-arm64.apk
+          cp app/build/outputs/apk/development/app-x86_64-development.apk artifacts/DealPilot-AI-development-x86_64.apk
+          cp app/build/outputs/apk/development/app-universal-development.apk artifacts/DealPilot-AI-development-universal.apk
           for apk in artifacts/*.apk; do
             "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk"
           done > artifacts/development-signature.txt
           python3 - <<'PY'
           from zipfile import ZipFile
           for name in ['arm64', 'universal']:
-              with ZipFile(f'artifacts/Pocket-Agent-development-{name}.apk') as archive:
+              with ZipFile(f'artifacts/DealPilot-AI-development-{name}.apk') as archive:
                   assert 'lib/arm64-v8a/libngrok_java.so' in archive.namelist(), name
           PY
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
@@ -124,7 +124,7 @@ jobs:
           (cd artifacts && sha256sum *.apk > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
       - uses: actions/upload-artifact@v6
         with:
-          name: pocket-agent-development
+          name: dealpilot-ai-development
           path: artifacts/
           retention-days: 30
           if-no-files-found: error
@@ -147,9 +147,9 @@ jobs:
           run = f"https://github.com/{repo}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
           Path('development-notes.md').write_text(f'''Automated development build from `main`, checked every three hours.
 
-          - **ARM64 phone:** download `Pocket-Agent-development-arm64.apk` below.
-          - **x86_64 emulator:** download `Pocket-Agent-development-x86_64.apk`.
-          - **Universal APK:** download `Pocket-Agent-development-universal.apk` if unsure.
+          - **ARM64 phone:** download `DealPilot-AI-development-arm64.apk` below.
+          - **x86_64 emulator:** download `DealPilot-AI-development-x86_64.apk`.
+          - **Universal APK:** download `DealPilot-AI-development-universal.apk` if unsure.
 
           Source: [{sha}](https://github.com/{repo}/commit/{sha})
           Build: [Actions run]({run})

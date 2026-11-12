@@ -1,6 +1,6 @@
 # Hey Jarvis local detection
 
-Pocket Agent supports an optional, user-enabled Android microphone foreground service that
+DealPilot AI supports an optional, user-enabled Android microphone foreground service that
 runs openWakeWord entirely on-device. The detector uses 16 kHz mono PCM and evaluates one
 80 ms frame at a time with a default decision threshold of **0.75**. Settings exposes an adjustable 1–99% confidence threshold,
 persisted separately from cloud credentials and applied to active listening without restarting.

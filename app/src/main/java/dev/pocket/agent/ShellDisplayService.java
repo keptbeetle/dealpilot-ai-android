@@ -61,8 +61,8 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
             }
             if(acquire==null)throw new NoSuchMethodException("Display-scoped wake locks unavailable");
             Object[] args=acquire.getParameterCount()==8
-                ?new Object[]{token,0x1000000a,"PocketAgent-PrivateDisplay","com.android.shell",null,null,display.getDisplayId(),null}
-                :new Object[]{token,0x1000000a,"PocketAgent-PrivateDisplay","com.android.shell",null,null,display.getDisplayId()};
+                ?new Object[]{token,0x1000000a,"DealPilotAI-PrivateDisplay","com.android.shell",null,null,display.getDisplayId(),null}
+                :new Object[]{token,0x1000000a,"DealPilotAI-PrivateDisplay","com.android.shell",null,null,display.getDisplayId()};
             try {acquire.invoke(power,args);}catch(Exception failure){close();throw failure;}
         }
         @Override public void close(){try {release.invoke(power,token,0);}catch(Exception failure){android.util.Log.w("PocketDisplayShizuku","Private display wake lock release failed");}}
@@ -133,7 +133,7 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
             DisplayManager dm=displayManager();
             for(int flags:choices) {
                 try {
-                    VirtualDisplay display=dm.createVirtualDisplay("PocketAgent-Worker",width,height,dpi,reader.getSurface(),flags);
+                    VirtualDisplay display=dm.createVirtualDisplay("DealPilotAI-Worker",width,height,dpi,reader.getSurface(),flags);
                     if(display==null || display.getDisplay()==null || display.getDisplay().getDisplayId()<=Display.DEFAULT_DISPLAY) {
                         if(display!=null) display.release();
                         throw new IllegalStateException("Android returned no independent display");
@@ -166,7 +166,7 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
         throw new IllegalStateException("Trusted virtual display unavailable: "+(last==null?"unknown":last.getClass().getSimpleName()),last);
     }
     private void owned(int id) {
-        if(id<=Display.DEFAULT_DISPLAY || !displays.containsKey(id)) throw new SecurityException("Display is not owned by DealPilot Agent");
+        if(id<=Display.DEFAULT_DISPLAY || !displays.containsKey(id)) throw new SecurityException("Display is not owned by DealPilot AI");
         if(reservations.isRemoving(id)) throw new IllegalStateException("Display cleanup is in progress");
     }
     @Override public void removeDisplay(int id) {
@@ -266,7 +266,7 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
         android.content.ComponentName component=android.content.ComponentName.unflattenFromString(componentName);
         if(component==null||!BuildConfig.APPLICATION_ID.equals(component.getPackageName())
             ||!"dev.pocket.agent.AgentAccessibility".equals(component.getClassName()))
-            throw new SecurityException("Only DealPilot Agent accessibility may be repaired");
+            throw new SecurityException("Only DealPilot AI accessibility may be repaired");
         if(!"1".equals(execOutput("/system/bin/settings","get","secure","accessibility_enabled").trim()))return false;
         Set<String> current=accessibilityServices(execOutput("/system/bin/settings","get","secure","enabled_accessibility_services"));
         if(!containsComponent(current,component)) {
@@ -282,7 +282,7 @@ public final class ShellDisplayService extends IDisplayShell.Stub {
         try {Thread.sleep(450);} catch(InterruptedException interrupted) {Thread.currentThread().interrupt();return false;}
         // If the phone became unlocked while our own temporary removal was in flight,
         // refuse to re-add the service. That transition creates a real opportunity for
-        // the user to have intentionally disabled DealPilot Agent during recovery.
+        // the user to have intentionally disabled DealPilot AI during recovery.
         if(!safeForAccessibilityRepair())return false;
         if(!"1".equals(execOutput("/system/bin/settings","get","secure","accessibility_enabled").trim()))return false;
         Set<String> after=accessibilityServices(execOutput("/system/bin/settings","get","secure","enabled_accessibility_services"));

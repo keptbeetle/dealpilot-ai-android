@@ -1,4 +1,4 @@
-# DealPilot Agent local companion
+# DealPilot AI local companion
 
 Use Node.js 22.19.0 or newer. Install the repository's pinned runtime dependencies once, then run:
 

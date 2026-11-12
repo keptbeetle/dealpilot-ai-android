@@ -23,7 +23,7 @@ from playwright.sync_api import sync_playwright
 
 CALL_URL = "https://chatgpt.com/backend-api/codex/realtime/calls?intent=quicksilver&architecture=avas"
 INSTRUCTIONS = (
-    "You are a voice interface for the external Pocket Agent. "
+    "You are a voice interface for the external DealPilot AI. "
     "Every spoken user request must trigger a client delegation. Never "
     "independently answer, invent tool results, or finish a turn without "
     "waiting for the delegated agent result. When the client answers, "
@@ -89,7 +89,7 @@ def run(authfile):
         Path(page_path).write_text("<!doctype html><title>Voice smoke</title>", encoding="utf-8")
         subprocess.run(
             ["espeak-ng", "-s", "125", "-w", raw,
-             "Hey Jarvis, delegate to Pocket Agent. Ask your client to check my phone and confirm the voice test. Please wait for the client result."],
+             "Hey Jarvis, delegate to DealPilot AI. Ask your client to check my phone and confirm the voice test. Please wait for the client result."],
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         subprocess.run(
@@ -167,7 +167,7 @@ def run(authfile):
                                           "type": "delegation.context.append",
                                           "delegation_item_id": item["id"],
                                           "channel": "speakable",
-                                          "content": [{"type": "input_text", "text": "Pocket Agent completed the voice test."}]
+                                          "content": [{"type": "input_text", "text": "DealPilot AI completed the voice test."}]
                                         }))
                                 if len(sideband_state["events"]) >= 1000: break
                     except Exception as error:

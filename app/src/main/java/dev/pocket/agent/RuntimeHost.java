@@ -120,7 +120,7 @@ public final class RuntimeHost implements AutoCloseable {
         closeRuntimeOnly();fail(message,error);
         try {
             JSONObject event=new JSONObject().put("type","runtime_terminal_failure")
-                .put("error","Runtime recovery exhausted; restart DealPilot Agent to retry");
+                .put("error","Runtime recovery exhausted; restart DealPilot AI to retry");
             store.record(event);listener.accept(event);
         } catch(Throwable ignored) {}
     }
@@ -185,10 +185,10 @@ public final class RuntimeHost implements AutoCloseable {
         boolean accepted=handler.post(() -> {
             if (closed || closing || runtime == null) {
                 result.completeExceptionally(new IllegalStateException(terminalRuntimeFailure
-                    ?"Runtime recovery is exhausted; restart DealPilot Agent to retry":"Runtime is not running")); return;
+                    ?"Runtime recovery is exhausted; restart DealPilot AI to retry":"Runtime is not running")); return;
             }
             try {
-                String response = runtime.getExecutor("(()=>{const value=PocketAgent.dispatch(" + JSONObject.quote(serialized) + ");return typeof value==='string'?value:JSON.stringify(value)})()").executeString();
+                String response = runtime.getExecutor("(()=>{const value=DealPilotAI.dispatch(" + JSONObject.quote(serialized) + ");return typeof value==='string'?value:JSON.stringify(value)})()").executeString();
                 runtime.await(V8AwaitMode.RunNoWait); schedulePump();
                 JSONObject outcome = response == null ? new JSONObject().put("ok", true) : new JSONObject(response);
                 if (outcome.optBoolean("ok") && ("new_main".equals(command.optString("action")) || "stop_all".equals(command.optString("action"))))
@@ -348,7 +348,7 @@ public final class RuntimeHost implements AutoCloseable {
             if (!BuildConfig.DEVELOPMENT_TOOLS || closed || runtime == null) {
                 future.completeExceptionally(new IllegalStateException("Development bridge unavailable")); return;
             }
-            try { future.complete(new org.json.JSONArray(runtime.getExecutor("JSON.stringify(PocketAgent.debugList())").executeString())); }
+            try { future.complete(new org.json.JSONArray(runtime.getExecutor("JSON.stringify(DealPilotAI.debugList())").executeString())); }
             catch (Throwable error) {handleRuntimeEntryFailure("Development tool listing failed",error);future.completeExceptionally(error);}
         });
         if(!accepted)future.completeExceptionally(new IllegalStateException("Runtime thread is unavailable"));
@@ -363,7 +363,7 @@ public final class RuntimeHost implements AutoCloseable {
             String id = java.util.UUID.randomUUID().toString();
             debugPending.put(id, future);
             try {
-                String command = "PocketAgent.debugCall(" + JSONObject.quote(id) + "," + JSONObject.quote(name) + "," + "JSON.parse(" + JSONObject.quote(args.toString()) + ")" + ")";
+                String command = "DealPilotAI.debugCall(" + JSONObject.quote(id) + "," + JSONObject.quote(name) + "," + "JSON.parse(" + JSONObject.quote(args.toString()) + ")" + ")";
                 runtime.getExecutor(command).executeVoid();
                 runtime.await(V8AwaitMode.RunNoWait);
                 schedulePump();
@@ -408,7 +408,7 @@ public final class RuntimeHost implements AutoCloseable {
         if(current==null)return true;
         shutdownAcknowledged=false;shutdownClean=false;
         try {
-            current.getExecutor("PocketAgent.dispatch('{\"action\":\"prepare_shutdown\"}')").executeVoid();
+            current.getExecutor("DealPilotAI.dispatch('{\"action\":\"prepare_shutdown\"}')").executeVoid();
         } catch(Throwable error) {return false;}
         long deadline=android.os.SystemClock.elapsedRealtime()+2200;
         while(runtime==current&&!shutdownAcknowledged&&android.os.SystemClock.elapsedRealtime()<deadline) {

@@ -4,8 +4,8 @@ import argparse,io,json,subprocess,zipfile,zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import requests
-p=argparse.ArgumentParser();p.add_argument('--run',required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--repo',default='ru-aish/pocket-agent');p.add_argument('--all',action='store_true');p.add_argument('--include',action='append');a=p.parse_args()
-items=json.loads(subprocess.check_output(['gh','api',f'repos/{a.repo}/actions/runs/{a.run}/artifacts']))['artifacts'];artifact=next(x for x in items if x['name']=='pocket-agent-release')
+p=argparse.ArgumentParser();p.add_argument('--run',required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--repo',default='keptbeetle/dealpilot-ai-android');p.add_argument('--all',action='store_true');p.add_argument('--include',action='append');a=p.parse_args()
+items=json.loads(subprocess.check_output(['gh','api',f'repos/{a.repo}/actions/runs/{a.run}/artifacts']))['artifacts'];artifact=next(x for x in items if x['name']=='dealpilot-ai-release')
 token=subprocess.check_output(['gh','auth','token'],text=True).strip()
 response=requests.get(artifact['archive_download_url'],headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json'},allow_redirects=False,timeout=30)
 if response.status_code!=302:raise SystemExit(f'Artifact redirect failed ({response.status_code})')
@@ -38,7 +38,7 @@ class RemoteZip(io.RawIOBase):
    with ThreadPoolExecutor(max_workers=4) as pool:data=b''.join(pool.map(fetch_range,ranges))
   else:data=fetch_range((self.pos,n))
   self.pos+=n;return data
-wanted={'Pocket-Agent-x86_64.apk','Pocket-Agent-tests.apk','Pocket-Agent-fixture.apk','source-commit.txt','runtime-manifest.json','SHA256SUMS.txt','signature.txt','payload-report.jsonl','lint.txt','native-stripping.json'}
+wanted={'DealPilot-AI-x86_64.apk','DealPilot-AI-tests.apk','DealPilot-AI-fixture.apk','source-commit.txt','runtime-manifest.json','SHA256SUMS.txt','signature.txt','payload-report.jsonl','lint.txt','native-stripping.json'}
 if a.include:wanted=set(a.include)
 a.output.mkdir(parents=True,exist_ok=True)
 with zipfile.ZipFile(RemoteZip()) as archive:

@@ -1,7 +1,7 @@
 import {mountConnection,mountVoiceConnection} from './connection.js';
 const defaults = {name:'',provider:'none',model:'',reasoning:'low',instructions:'',stt:'android',wake:false,autonomy:false,servers:[]};
 const providers = [['none','Not configured'],['nebius','Nebius Token Factory'],['opencode','OpenCode Free'],['codex-account','Codex account']];
-const composerLabels = {none:'DealPilot Agent',nebius:'Nebius',opencode:'OpenCode','codex-account':'Codex'};
+const composerLabels = {none:'DealPilot AI',nebius:'Nebius',opencode:'OpenCode','codex-account':'Codex'};
 const glyphs = {back:'m14 6-6 6 6 6',arrow:'m9 6 6 6-6 6',user:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-2a8 8 0 0 1 16 0v2',model:'M7 3h10v18H7V3ZM3 8h4M17 8h4M3 16h4M17 16h4M10 8h4M10 12h4M10 16h2',edit:'m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6Z',voice:'M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0V5ZM5 11v1a7 7 0 0 0 14 0v-1M12 19v3',phone:'M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM10 17h4',link:'m10 14 4-4M8 16l-2 2a4 4 0 0 1-6-6l4-4M16 8l2-2a4 4 0 0 1 6 6l-4 4',activity:'M3 12h4l3-8 4 16 3-8h4',look:'M12 3a9 9 0 1 0 0 18V3Z',plus:'M12 5v14M5 12h14'};
 function el(tag, className, text) { const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node; }
 function icon(name) { const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');const path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('d',glyphs[name]||glyphs.user);svg.append(path);return svg; }
@@ -71,7 +71,7 @@ export function createSettings({screen,onClose,getTheme,setTheme,onProviderChang
       row(phone,{label:'Background work',detail:'Scheduled & autonomous tasks',glyph:'activity',action:()=>render('background')});
       heading('Make it yours');const appearance=group();
       select(appearance,'theme','Appearance',[['dark','Dark'],['light','Light']],getTheme(),value=>{setTheme(value);status.textContent='Appearance updated';});
-      body.append(el('p','settings-about','DealPilot Agent · Android companion'));
+      body.append(el('p','settings-about','DealPilot AI · Android companion'));
     } else if(route==='profile') {
       heading('A little more you.','Choose what DealPilot should call you.');field(body,'name','Your name',{placeholder:'What should we call you?'});nativeNote('This local profile is separate from provider sign-in.');
     } else if(route==='ai') {

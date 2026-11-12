@@ -47,7 +47,7 @@ public final class AgentService extends Service {
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop = PendingIntent.getService(this, 1, new Intent(this, AgentService.class).setAction(ACTION_STOP), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, "agent").setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("DealPilot Agent is available").setContentText("User-started runtime · tap to chat").setContentIntent(open)
+                .setContentTitle("DealPilot AI is available").setContentText("User-started runtime · tap to chat").setContentIntent(open)
                 .setOngoing(true).addAction(new Notification.Action.Builder(null, "Stop all", stop).build()).build();
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -55,7 +55,7 @@ public final class AgentService extends Service {
         if (ACTION_STOP.equals(intent.getAction())) {
             stopping = true;
             VoiceConversationInvitation.cancel(this, "runtime_stopped");
-            AutonomyStore.requestEnabled(this,false,error->Log.w("PocketAgent","Could not persist automation pause",error));
+            AutonomyStore.requestEnabled(this,false,error->Log.w("DealPilotAI","Could not persist automation pause",error));
             if(host!=null)host.dispatch(Json.obj("action","stop_all"));
             WakeWordService.disableImmediately(this);
             stopService(new Intent(this, WakeWordService.class));
@@ -66,7 +66,7 @@ public final class AgentService extends Service {
         if (stopping) return START_NOT_STICKY;
         if (ACTION_START.equals(intent.getAction()) && host != null && host.terminalFailure()) {
             startup=host.recover();
-            startup.exceptionally(error->{Log.w("PocketAgent","Runtime recovery failed after explicit restart request");return null;});
+            startup.exceptionally(error->{Log.w("DealPilotAI","Runtime recovery failed after explicit restart request");return null;});
             return START_NOT_STICKY;
         }
         if (ACTION_COMMAND.equals(intent.getAction())) {
@@ -106,7 +106,7 @@ public final class AgentService extends Service {
                 notifications.createNotificationChannel(new NotificationChannel("agent", "Agent runtime", NotificationManager.IMPORTANCE_LOW));
                 notifications.notify(33, new Notification.Builder(context, "agent")
                     .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                    .setContentTitle("DealPilot Agent couldn't speak")
+                    .setContentTitle("DealPilot AI couldn't speak")
                     .setContentText(reason)
                     .setContentIntent(PendingIntent.getActivity(context, 33, new Intent(context, MainActivity.class),
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
@@ -143,12 +143,12 @@ public final class AgentService extends Service {
                 } catch (Exception failure) {
                     Log.w("PocketVoice", "Agent-initiated speech could not be started", failure);
                     reportVoiceFailure(this, event.optString("id"),
-                        "Speech service could not start; check DealPilot Agent voice permissions");
+                        "Speech service could not start; check DealPilot AI voice permissions");
                 }
             }
             for (Observer observer : observers) {
                 try {observer.onAgentEvent(event);}
-                catch (Throwable failure) {Log.w("PocketAgent","Observer callback failed; continuing other observers",failure);}
+                catch (Throwable failure) {Log.w("DealPilotAI","Observer callback failed; continuing other observers",failure);}
             }
         });
     }

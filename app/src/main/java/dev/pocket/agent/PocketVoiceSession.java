@@ -16,7 +16,7 @@ public final class PocketVoiceSession extends VoiceInteractionSession {
         super.onShow(args, showFlags);
         Context context = getContext();
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(context, "DealPilot Agent: allow microphone access in Settings", Toast.LENGTH_LONG).show();
+            Toast.makeText(context, "DealPilot AI: allow microphone access in Settings", Toast.LENGTH_LONG).show();
         } else {
             try {
                 if (SubscriptionVoiceService.isActive()) {
@@ -24,12 +24,12 @@ public final class PocketVoiceSession extends VoiceInteractionSession {
                     context.startActivity(new Intent(context, MainActivity.class)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                 } else if (new VoiceCredentialStore(context).read().isEmpty()) {
-                    Toast.makeText(context, "DealPilot Agent: configure Deepgram voice key", Toast.LENGTH_LONG).show();
+                    Toast.makeText(context, "DealPilot AI: configure Deepgram voice key", Toast.LENGTH_LONG).show();
                 } else {
                     context.startForegroundService(SubscriptionVoiceSettings.wakeIntent(context));
                 }
             } catch (Exception error) {
-                Toast.makeText(context, "DealPilot Agent: could not start background voice", Toast.LENGTH_LONG).show();
+                Toast.makeText(context, "DealPilot AI: could not start background voice", Toast.LENGTH_LONG).show();
             }
         }
         finish();

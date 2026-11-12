@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      APK_KEYSTORE: /tmp/pocket-agent-signing.jks
+      APK_KEYSTORE: /tmp/dealpilot-ai-signing.jks
       APK_STORE_PASSWORD: ${{ inputs.validation_signing && 'validation-only' || secrets.APK_STORE_PASSWORD }}
       APK_KEY_PASSWORD: ${{ inputs.validation_signing && 'validation-only' || secrets.APK_KEY_PASSWORD }}
     steps:
@@ -79,7 +79,7 @@ jobs:
           PY
       - name: Create disposable validation signing key
         if: inputs.validation_signing == true
-        run: keytool -genkeypair -keystore "$APK_KEYSTORE" -storepass "$APK_STORE_PASSWORD" -keypass "$APK_KEY_PASSWORD" -alias pocket-agent -keyalg RSA -keysize 2048 -validity 2 -storetype JKS -dname 'CN=Pocket Agent CI validation'
+        run: keytool -genkeypair -keystore "$APK_KEYSTORE" -storepass "$APK_STORE_PASSWORD" -keypass "$APK_KEY_PASSWORD" -alias pocket-agent -keyalg RSA -keysize 2048 -validity 2 -storetype JKS -dname 'CN=DealPilot AI CI validation'
       - name: Verify configured signing keystore
         run: |
           if ! keytool -list -keystore "$APK_KEYSTORE" -storepass:env APK_STORE_PASSWORD -alias pocket-agent >/dev/null 2>&1; then
@@ -110,9 +110,9 @@ jobs:
           script: |
             set -e
             mkdir -p emulator-diagnostics
-            cp app/build/outputs/apk/release/app-x86_64-release.apk emulator-diagnostics/Pocket-Agent-x86_64.apk
-            cp app/build/outputs/apk/androidTest/release/*.apk emulator-diagnostics/Pocket-Agent-tests.apk
-            cp fixture/build/outputs/apk/debug/*.apk emulator-diagnostics/Pocket-Agent-fixture.apk
+            cp app/build/outputs/apk/release/app-x86_64-release.apk emulator-diagnostics/DealPilot-AI-x86_64.apk
+            cp app/build/outputs/apk/androidTest/release/*.apk emulator-diagnostics/DealPilot-AI-tests.apk
+            cp fixture/build/outputs/apk/debug/*.apk emulator-diagnostics/DealPilot-AI-fixture.apk
             python3 scripts/emulator_test.py --serial "$(adb get-serialno)" --artifacts emulator-diagnostics --fresh --diagnostics --class VoiceInvitationDeviceTest --class AutonomyDeviceTest --class VoicePipelineDeviceTest --class VoiceAssistantDeviceTest --class SubscriptionVoiceActivationDeviceTest --class SubscriptionVoiceContextDeviceTest --case 'LifecycleDeviceTest#mainThreadPromptAndDebugControlsWorkOnDevice' --case 'RuntimeDeviceTest#physicalDisplayCanLaunchObserveAndActWithoutVirtualLease'
             ./gradlew --no-daemon :app:connectedReleaseAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.pocket.agent.CodexAuthDeviceTest
             adb uninstall dev.pocket.agent || true
@@ -147,26 +147,26 @@ jobs:
         if: ${{ always() && steps.build_apks.outcome == 'success' }}
         run: |
           mkdir -p artifacts
-          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk artifacts/Pocket-Agent-arm64.apk
-          cp app/build/outputs/apk/release/app-x86_64-release.apk artifacts/Pocket-Agent-x86_64.apk
-          cp app/build/outputs/apk/release/app-universal-release.apk artifacts/Pocket-Agent-universal.apk
-          cp app/build/outputs/apk/development/app-arm64-v8a-development.apk artifacts/Pocket-Agent-development-arm64.apk
-          cp app/build/outputs/apk/development/app-x86_64-development.apk artifacts/Pocket-Agent-development-x86_64.apk
-          cp app/build/outputs/apk/development/app-universal-development.apk artifacts/Pocket-Agent-development-universal.apk
+          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk artifacts/DealPilot-AI-arm64.apk
+          cp app/build/outputs/apk/release/app-x86_64-release.apk artifacts/DealPilot-AI-x86_64.apk
+          cp app/build/outputs/apk/release/app-universal-release.apk artifacts/DealPilot-AI-universal.apk
+          cp app/build/outputs/apk/development/app-arm64-v8a-development.apk artifacts/DealPilot-AI-development-arm64.apk
+          cp app/build/outputs/apk/development/app-x86_64-development.apk artifacts/DealPilot-AI-development-x86_64.apk
+          cp app/build/outputs/apk/development/app-universal-development.apk artifacts/DealPilot-AI-development-universal.apk
           python3 - <<'PY'
           from zipfile import ZipFile
-          for path, present in [('artifacts/Pocket-Agent-arm64.apk',False),('artifacts/Pocket-Agent-development-arm64.apk',True),('artifacts/Pocket-Agent-development-universal.apk',True)]:
+          for path, present in [('artifacts/DealPilot-AI-arm64.apk',False),('artifacts/DealPilot-AI-development-arm64.apk',True),('artifacts/DealPilot-AI-development-universal.apk',True)]:
               with ZipFile(path) as archive:
                   actual='lib/arm64-v8a/libngrok_java.so' in archive.namelist()
                   assert actual is present,(path,actual)
           print('Development-only ARM64 ngrok JNI packaging verified')
           PY
-          cp app/build/outputs/apk/androidTest/release/*.apk artifacts/Pocket-Agent-tests.apk
-          cp app/build/outputs/apk/androidTest/development/*.apk artifacts/Pocket-Agent-development-tests.apk
-          cp fixture/build/outputs/apk/debug/*.apk artifacts/Pocket-Agent-fixture.apk
+          cp app/build/outputs/apk/androidTest/release/*.apk artifacts/DealPilot-AI-tests.apk
+          cp app/build/outputs/apk/androidTest/development/*.apk artifacts/DealPilot-AI-development-tests.apk
+          cp fixture/build/outputs/apk/debug/*.apk artifacts/DealPilot-AI-fixture.apk
           cp app/build/reports/lint-results-release.txt artifacts/lint.txt
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs artifacts/Pocket-Agent-arm64.apk > artifacts/signature.txt
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs artifacts/Pocket-Agent-development-arm64.apk > artifacts/development-signature.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs artifacts/DealPilot-AI-arm64.apk > artifacts/signature.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs artifacts/DealPilot-AI-development-arm64.apk > artifacts/development-signature.txt
           grep -F "$(sed -n 's/Signer #1 certificate SHA-256 digest: //p' artifacts/signature.txt | head -1)" artifacts/development-signature.txt
           git rev-parse HEAD > artifacts/source-commit.txt
           if [ '${{ inputs.validation_signing }}' = true ]; then
@@ -176,17 +176,17 @@ jobs:
           fi
           cp app/src/main/assets/runtime-manifest.json artifacts/runtime-manifest.json
           python3 scripts/native_footprint.py > artifacts/native-stripping.json
-          python3 scripts/check_apk.py artifacts/Pocket-Agent-arm64.apk artifacts/Pocket-Agent-x86_64.apk artifacts/Pocket-Agent-universal.apk > artifacts/payload-report.jsonl
+          python3 scripts/check_apk.py artifacts/DealPilot-AI-arm64.apk artifacts/DealPilot-AI-x86_64.apk artifacts/DealPilot-AI-universal.apk > artifacts/payload-report.jsonl
           sha256sum artifacts/*.apk > artifacts/SHA256SUMS.txt
-          (cd artifacts && sha256sum Pocket-Agent-x86_64.apk Pocket-Agent-tests.apk Pocket-Agent-fixture.apk > EMULATOR_SHA256SUMS.txt)
+          (cd artifacts && sha256sum DealPilot-AI-x86_64.apk DealPilot-AI-tests.apk DealPilot-AI-fixture.apk > EMULATOR_SHA256SUMS.txt)
       - uses: actions/upload-artifact@v6
         if: ${{ always() && steps.collect_apks.outcome == 'success' }}
         with:
-          name: pocket-agent-emulator-validation
+          name: dealpilot-ai-emulator-validation
           path: |
-            artifacts/Pocket-Agent-x86_64.apk
-            artifacts/Pocket-Agent-tests.apk
-            artifacts/Pocket-Agent-fixture.apk
+            artifacts/DealPilot-AI-x86_64.apk
+            artifacts/DealPilot-AI-tests.apk
+            artifacts/DealPilot-AI-fixture.apk
             artifacts/source-commit.txt
             artifacts/EMULATOR_SHA256SUMS.txt
           retention-days: 7
@@ -194,16 +194,16 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: ${{ always() && steps.collect_apks.outcome == 'success' }}
         with:
-          name: ${{ inputs.validation_signing && 'pocket-agent-test-signed-release' || 'pocket-agent-release' }}
+          name: ${{ inputs.validation_signing && 'dealpilot-ai-test-signed-release' || 'dealpilot-ai-release' }}
           path: artifacts/
           retention-days: 90
           if-no-files-found: error
       - uses: actions/upload-artifact@v6
         if: ${{ always() && steps.collect_apks.outcome == 'success' }}
         with:
-          name: ${{ inputs.validation_signing && 'pocket-agent-test-signed-development' || 'pocket-agent-development' }}
+          name: ${{ inputs.validation_signing && 'dealpilot-ai-test-signed-development' || 'dealpilot-ai-development' }}
           path: |
-            artifacts/Pocket-Agent-development-*.apk
+            artifacts/DealPilot-AI-development-*.apk
             artifacts/development-signature.txt
             artifacts/signing-mode.txt
             artifacts/SHA256SUMS.txt

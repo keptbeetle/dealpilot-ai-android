@@ -1,7 +1,7 @@
-# Pocket Agent design system
+# DealPilot AI design system
 
 ## T3 Code compact refresh
-Phone sidebar refinement: black navigation surface, Pocket Agent wordmark and
+Phone sidebar refinement: black navigation surface, DealPilot AI wordmark and
 circular Search action at top, existing Activity and Copy controls, Pinned and
 Recents sections, and a bottom blue Chat pill with circular Settings action.
 No inline search field. Search opens a separate full-phone screen showing chat
@@ -114,7 +114,7 @@ header and composer stay available through long messages.
   neutral border on focus, without an extra rectangular input outline.
 - Quiet button: neutral fill, 10px radius, 48dp native / 44px web minimum target.
 - Primary button: mint fill and dark label, same minimum target.
-- Composer provider picker: Pocket Agent when unconfigured; Nebius, OpenCode,
+- Composer provider picker: DealPilot AI when unconfigured; Nebius, OpenCode,
   or Codex after selection. Opens AI & model settings. API key, Codex relay,
   and Scripted options are removed from the preview; stale selections fall back
   to unconfigured. Persisted supported selections restore their composer label.

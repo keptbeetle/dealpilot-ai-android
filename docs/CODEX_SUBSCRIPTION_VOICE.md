@@ -4,7 +4,7 @@ Branch: `feat/codex-subscription-voice-wake`. **Start Codex voice** in the main 
 
 ## Messages, voice invitations, and input source
 
-Interactive models have two outbound communication tools: `send_message` and `request_voice_conversation`. A text message is saved in Pocket Agent's Activity inbox and Android notification delivery is attempted; this is not SMS, email, or a message to another person. Normal final chat responses remain available. Scheduled/autonomous tasks retain their existing internal notification API and grants.
+Interactive models have two outbound communication tools: `send_message` and `request_voice_conversation`. A text message is saved in DealPilot AI's Activity inbox and Android notification delivery is attempted; this is not SMS, email, or a message to another person. Normal final chat responses remain available. Scheduled/autonomous tasks retain their existing internal notification API and grants.
 
 A voice invitation is one silent, private notification with **Accept** and **Decline** actions. It has no ringtone, vibration, full-screen intent, Telecom call, automatic audio, or microphone capture. Accept opens the current chat Activity, checks that the invitation still matches the same thread, requests microphone permission if needed, and connects the existing Codex voice service. The normal connected cue reports actual recording readiness. Connection setup starts after acceptance, not while the invitation is waiting. The existing agent and tasks keep running throughout.
 
@@ -14,7 +14,7 @@ User turns carry a separate `inputSource` of `typed` or `voice`. Ordinary chat d
 
 ## Architecture
 
-- Pocket Agent's **Pi runtime is the only agent/tool execution harness**. The realtime voice service has no Android/tool privileges beyond the microphone, audio playback, and handing recognized input to Pi.
+- DealPilot AI's **Pi runtime is the only agent/tool execution harness**. The realtime voice service has no Android/tool privileges beyond the microphone, audio playback, and handing recognized input to Pi.
 - The Android foreground `SubscriptionVoiceService` owns `SubscriptionVoiceLifecycle` (connection timeout, Pi turn IDs, and result delivery). `SubscriptionVoiceTransport` wraps `SubscriptionWebRtcTransport`, which owns one conversational WebRTC peer, native microphone/audio output and authenticated control WebSocket per epoch. The main and interactive worker models expose two communication tools: `send_message` saves text in the Activity inbox and attempts a notification, while `request_voice_conversation` posts a silent invitation. Ordinary final answers remain in chat. The former `speak_to_user` tool is no longer advertised; legacy in-flight speech events cannot start audio without acceptance. A delayed announcement cannot reopen a disconnected Codex call.
 - ChatGPT account tokens are read from encrypted `CredentialStore`. `SubscriptionVoiceCredentials` can perform one OAuth refresh off the main thread and atomically persist it. No OpenAI API key and no separate Codex executable are required.
 - The same UUID is used in `session-id`, `thread-id`, and `x-session-id`; model `gpt-live-1-codex`; voice `cove`; `delegation.type=client`; `openai-alpha=quicksilver=v2`; a consistent `originator` / `User-Agent` identity. These exact protocol fields were material to a successful direct session.
@@ -92,7 +92,7 @@ The constrained `scripts/codex_voice_subscription_smoke.py` uses an existing Cod
 
 - Call endpoint returned valid SDP, and WebRTC ICE/data channel connected.
 - Authenticated `wss://api.openai.com/v1/live/{call_id}` control socket opened.
-- One `delegation.created` event was observed on the data channel; the sideband accepted a simulated Pocket Agent `delegation.context.append`.
+- One `delegation.created` event was observed on the data channel; the sideband accepted a simulated DealPilot AI `delegation.context.append`.
 - Audio arrived from the realtime model (e.g. **552 inbound RTP audio packets**, **613 outbound**), with no reported authorization error.
 - Delegation payload shape: `item.id`, `item.target=client`, and `item.content[0]={type:input_text,text:...}`; a second event stream may omit the event, so Android handles both data channel and sideband with a deduplication set.
 

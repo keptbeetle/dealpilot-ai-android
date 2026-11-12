@@ -120,7 +120,7 @@ final class VoiceConversationInvitation {
         PendingIntent dismissAction = PendingIntent.getBroadcast(context, 38, dismiss, flags);
         PendingIntent open = PendingIntent.getActivity(context, 39, new Intent(context, MainActivity.class), flags);
         return new Notification.Builder(context, CHANNEL).setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("DealPilot Agent would like to talk").setContentText(request.optString("message"))
+            .setContentTitle("DealPilot AI would like to talk").setContentText(request.optString("message"))
             .setStyle(new Notification.BigTextStyle().bigText(request.optString("message")))
             .setVisibility(Notification.VISIBILITY_PRIVATE).setSound(null).setVibrate(new long[0]).setDefaults(0)
             // Suppress alerts even if the user has changed the channel's sound settings.

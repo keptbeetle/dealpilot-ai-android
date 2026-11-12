@@ -16,7 +16,7 @@ The single bound object exposes annotated functions only:
 
 No raw Java/JVM reflection converter, remote server, exported tool broadcast, or credential-setting JS bridge is installed. Calls run synchronously on the Node thread. Native handlers must remain bounded: a long handler delays all logical sessions until it returns.
 
-Native UI dispatch uses `PocketAgent.dispatch(JSON.stringify({action,...}))`. Events are delivered through in-process observers on Android's main thread. SQLite stores the opaque runtime checkpoint separately from the rendered UI snapshot, plus up to 100 diagnostic readiness/error/gate records; it never stores secret provider configuration. Native startup marks only UI task status interrupted, and the runtime restores its checkpoint with unresolved generations explicitly interrupted. Operation records remain separate and side effects are never automatically replayed. The runtime preserves pending completion/collection records in its checkpoint.
+Native UI dispatch uses `DealPilotAI.dispatch(JSON.stringify({action,...}))`. Events are delivered through in-process observers on Android's main thread. SQLite stores the opaque runtime checkpoint separately from the rendered UI snapshot, plus up to 100 diagnostic readiness/error/gate records; it never stores secret provider configuration. Native startup marks only UI task status interrupted, and the runtime restores its checkpoint with unresolved generations explicitly interrupted. Operation records remain separate and side effects are never automatically replayed. The runtime preserves pending completion/collection records in its checkpoint.
 
 ## Configuration and credentials
 

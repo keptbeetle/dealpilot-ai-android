@@ -121,7 +121,7 @@ final class ShizukuDisplayClient implements AutoCloseable {
                 ? "Shizuku is running, but its privileged UserService failed to start within 35 seconds. Check device and MediaTek compatibility."
                 : "binding".equals(state)
                     ? "Shizuku display UserService startup is still pending; retry after startup completes."
-                    : "Virtual display backend "+state+"; start Shizuku and authorize DealPilot Agent in its UI");
+                    : "Virtual display backend "+state+"; start Shizuku and authorize DealPilot AI in its UI");
         return remote;
     }
     int createDisplay() throws ControlException {

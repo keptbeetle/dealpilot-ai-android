@@ -245,7 +245,7 @@ public class PhoneTargetDeviceTest {
             assertFalse(opened.toString(),opened.optBoolean("isError"));
             int privateDisplay=opened.getInt("display_id");
             assertTrue("Private display must hold its own power lock",shell("dumpsys power").lines()
-                .anyMatch(line->line.contains("PocketAgent-PrivateDisplay")&&line.contains("displayId="+privateDisplay)));
+                .anyMatch(line->line.contains("DealPilotAI-PrivateDisplay")&&line.contains("displayId="+privateDisplay)));
             AccessibilityProxyBackend screen=new AccessibilityProxyBackend(context,opened.getInt("display_id"));
             Observation o=observed(screen,"POCKET_AGENT_FIXTURE");
             Selector input=new Selector(null,null,"AGENT_INPUT");

@@ -133,7 +133,7 @@ export class AutonomyEngine {
         const decision=this.insert(s,'decisions',{id:randomUUID(),key:callId,taskId:args.taskId,question:text(args.question,'question',2000),kind:tools.length?'approval':'input',tools,status:'pending',createdAt:this.now()},64);
         this.find(s,'tasks',args.taskId).status='waiting';return decision;
       });
-      try{this.host.call('autonomy.notify',{id:decision.id,title:'Pocket Agent needs your input',message:decision.question});}catch{}
+      try{this.host.call('autonomy.notify',{id:decision.id,title:'DealPilot AI needs your input',message:decision.question});}catch{}
       return decision;
     }
     const collection=({schedule:'schedules',wakeup:'wakeups',task:'tasks',watch:'watches',skill:'skills'} as Record<string,string>)[name];

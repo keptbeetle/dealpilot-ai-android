@@ -40,7 +40,7 @@ public final class DevBridgeService extends Service {
         PendingIntent stop=PendingIntent.getService(this,52,new Intent(this,DevBridgeService.class).setAction(STOP),
             PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         return new Notification.Builder(this,"dev-bridge").setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setContentTitle("Pocket Agent development bridge").setContentText(description).setContentIntent(open)
+            .setContentTitle("DealPilot AI development bridge").setContentText(description).setContentIntent(open)
             .setOngoing(true).addAction(new Notification.Action.Builder(null,"Stop bridge",stop).build()).build();
     }
     private void notifyState(String message) {

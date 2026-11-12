@@ -44,7 +44,7 @@ const server=http.createServer(async(req,res)=>{
     const token=url.searchParams.get('token');
     if(!outcome||!token||!/^[A-Z0-9]{6,40}$/.test(token)){json(res,400,{error:'Invalid PayPal Sandbox return reference.'});return;}
     const link='dealpilotagent://paypal/'+outcome+'?token='+encodeURIComponent(token);
-    const html='<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DealPilot Agent - PayPal Sandbox</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui;background:#091a2e;color:#e8f5ff}main{width:min(90vw,440px);border:1px solid #395c85;border-radius:20px;background:#122e4a;padding:30px;text-align:center}h1{font-size:25px}p{line-height:1.5;color:#adc9e2}a{display:block;background:#0875cb;padding:16px;border-radius:14px;text-decoration:none;color:white;font-weight:750;margin-top:24px}</style><main><h1>PayPal Sandbox</h1><p>Return to DealPilot Agent to verify the buyer-approved test transaction. Payment is not complete until the app confirms its capture.</p><a href="'+link+'">Return to DealPilot Agent</a></main></html>';
+    const html='<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DealPilot AI - PayPal Sandbox</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui;background:#091a2e;color:#e8f5ff}main{width:min(90vw,440px);border:1px solid #395c85;border-radius:20px;background:#122e4a;padding:30px;text-align:center}h1{font-size:25px}p{line-height:1.5;color:#adc9e2}a{display:block;background:#0875cb;padding:16px;border-radius:14px;text-decoration:none;color:white;font-weight:750;margin-top:24px}</style><main><h1>PayPal Sandbox</h1><p>Return to DealPilot AI to verify the buyer-approved test transaction. Payment is not complete until the app confirms its capture.</p><a href="'+link+'">Return to DealPilot AI</a></main></html>';
     res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",'cache-control':'no-store','x-content-type-options':'nosniff'});
     res.end(html);return;
   }  if(req.method!=='POST'||!/^\/api\/shop\/(?:connect|state|action)$/.test(req.url||'')){json(res,404,{error:'Unknown checkout route.'});return;}
@@ -68,7 +68,7 @@ const server=http.createServer(async(req,res)=>{
  }catch(error){json(res,error.status&&error.status>=400&&error.status<=503?error.status:503,{error:error.message||'Checkout service unavailable.'});}
 });
 server.listen(port,'127.0.0.1',()=>{
- console.log('DealPilot Agent PayPal Sandbox host ready on localhost:'+port);
+ console.log('DealPilot AI PayPal Sandbox host ready on localhost:'+port);
  console.log('Phone pairing code (10 minutes): '+pairing);
  console.log('Android USB: adb reverse tcp:'+port+' tcp:'+port);
 });

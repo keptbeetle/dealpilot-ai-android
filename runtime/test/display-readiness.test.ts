@@ -280,7 +280,7 @@ test('a real-duration timeout gives the replacement display a fresh readiness bu
 });
 
 for(const failure of [
-  {isError:true,code:'PERMISSION_REQUIRED',message:'Enable Pocket Agent accessibility'},
+  {isError:true,code:'PERMISSION_REQUIRED',message:'Enable DealPilot AI accessibility'},
   {isError:true,code:'RESULT_UNKNOWN',message:'Timed out; inspect before repeating the action'},
 ])test(`failed replacement observation preserves display loss evidence: ${failure.code}`,async()=>{
   let reads=0,acquires=0,releases=0;

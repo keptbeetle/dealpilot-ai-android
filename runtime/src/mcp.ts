@@ -127,7 +127,7 @@ export class McpToolRegistry {
           if(this.connector){const connected=await this.connector(server);client=connected.client;tools=connected.tools;if(this.closed){await client.close().catch(()=>{});return;}}
           else {
             const headers=mcpAuthHeaders(server);
-            const liveClient=new McpClient({name:'Pocket Agent',version:'0.1.0',requestTimeoutMs:15000});
+            const liveClient=new McpClient({name:'DealPilot AI',version:'0.1.0',requestTimeoutMs:15000});
             client=liveClient;this.connecting.add(liveClient);
             await liveClient.connect(new StreamableHttpTransport({url:server.url,headers,openGetStream:false,maxMessageBytes:1_000_000,fetch:remoteFetch}));
             if(this.closed){this.connecting.delete(liveClient);await liveClient.close().catch(()=>{});return;}

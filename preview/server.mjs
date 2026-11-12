@@ -85,6 +85,6 @@ setInterval(async () => {
     sourceTime = mtimeMs;
   } catch { /* The standalone preview still works without the Android source. */ }
 }, 1500).unref();
-server.listen(previewPort, '127.0.0.1', () => console.log(`DealPilot Agent preview: http://localhost:${server.address().port}`));
+server.listen(previewPort, '127.0.0.1', () => console.log(`DealPilot AI preview: http://localhost:${server.address().port}`));
 server.on('close',()=>providers.close());
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{providers.close();server.closeAllConnections();server.close(()=>process.exit(0));});

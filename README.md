@@ -1,8 +1,10 @@
-# DealPilot Agent
+# DealPilot AI
+
+Maintained by [keptbeetle](https://github.com/keptbeetle). Upstream source credits and dependency notices are recorded in [source provenance](THIRD_PARTY_NOTICES.md).
 
 **An AI-powered Android agent for getting things done on your phone.** Discover and compare products through a conversational interface, work with native Android tools, prepare a cart from the product selected in chat, and proceed to an explicitly authorized **PayPal Sandbox** test checkout.
 
-DealPilot Agent combines on-device agent orchestration, live phone browsing, and a focused chat interface. Searching and comparing products are separate from checkout: **nothing starts a payment until you request it.**
+DealPilot AI combines on-device agent orchestration, live phone browsing, and a focused chat interface. Searching and comparing products are separate from checkout: **nothing starts a payment until you request it.**
 
 ## Android app
 
@@ -12,7 +14,7 @@ DealPilot Agent combines on-device agent orchestration, live phone browsing, and
 
 Choose **ARM64** for most recent Android phones, or **Universal** if you are unsure of your device architecture. The current downloadable build is intended for testing and is debug-signed, not a production Play Store release.
 
-After installing, open **DealPilot Agent**, connect your preferred AI provider in Settings, and grant the Android permissions needed for the requested phone actions. Live screen interaction uses Android Accessibility and can use **Shizuku** for additional on-device capabilities.
+After installing, open **DealPilot AI**, connect your preferred AI provider in Settings, and grant the Android permissions needed for the requested phone actions. Live screen interaction uses Android Accessibility and can use **Shizuku** for additional on-device capabilities.
 
 ## Features
 
@@ -33,7 +35,7 @@ If chat results only contain estimated prices, price ranges, or non-USD amounts,
 3. **Select:** “I choose the Sony WH-CH720N.”
 4. **Cart:** “Prepare my cart.” Review the product, direct listing, and test amount.
 5. **Checkout:** “Proceed to pay.” Review and approve the PayPal Sandbox test amount.
-6. **Confirm:** Return to DealPilot Agent to verify the Sandbox capture and view the test receipt.
+6. **Confirm:** Return to DealPilot AI to verify the Sandbox capture and view the test receipt.
 
 Search, comparison, selection, and cart preparation never create a retailer purchase.
 
@@ -48,7 +50,7 @@ node scripts/start-paypal-sandbox.mjs
 adb reverse tcp:3490 tcp:3490
 ```
 
-The host prints a **12-character time-limited pairing code**. In DealPilot Agent, request cart preparation and enter the code and host port when prompted. A separate payment request and exact-amount approval are required to open PayPal Sandbox.
+The host prints a **12-character time-limited pairing code**. In DealPilot AI, request cart preparation and enter the code and host port when prompted. A separate payment request and exact-amount approval are required to open PayPal Sandbox.
 
 The local host and USB reverse tunnel must remain connected for this setup; the APK alone does not provide an internet-hosted checkout backend. See [Sandbox setup, build, and payment verification](docs/DEALPILOT-NATIVE-PAYPAL.md).
 

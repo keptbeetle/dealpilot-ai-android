@@ -18,7 +18,7 @@ if adb('shell', 'getprop', 'ro.kernel.qemu') != '1':
     raise SystemExit('Physical phones are excluded')
 pid = adb('shell', 'pidof', 'dev.pocket.agent')
 if not pid.isdecimal():
-    raise SystemExit('Start Pocket Agent normally before sampling; expected one app process')
+    raise SystemExit('Start DealPilot AI normally before sampling; expected one app process')
 hz = int(adb('shell', 'getconf', 'CLK_TCK'))
 
 def sample():

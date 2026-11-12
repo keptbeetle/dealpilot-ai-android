@@ -174,7 +174,7 @@ export async function createProviderService({directory,fetcher=fetch,wait=delay,
       const instructions=typeof input.instructions==='string'?input.instructions.slice(0,4000):'';
       activeRequests++;
       try{
-        const context={systemPrompt:'You are DealPilot Agent. This browser session supports text conversations only. You have no access to phone tools, files, background tasks, or device permissions. Never claim to have used them.\n'+instructions,messages};
+        const context={systemPrompt:'You are DealPilot AI. This browser session supports text conversations only. You have no access to phone tools, files, background tasks, or device permissions. Never claim to have used them.\n'+instructions,messages};
         const stream=await makeStream(selected,credential,'main')(modelFor(selected,credential),context,{signal,fetch:fetcher});
         const response=await stream.result();
         if(response.stopReason==='error'||response.stopReason==='aborted')fail(signal?.aborted?'Response cancelled.':'The provider could not complete this response. Check your connection, model access, or sign in again.',502);

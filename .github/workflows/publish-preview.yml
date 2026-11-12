@@ -35,7 +35,7 @@ jobs:
           test "$(gh release view "$RELEASE_TAG" --json isPrerelease --jq .isPrerelease)" = true
       - uses: actions/download-artifact@v7
         with:
-          name: pocket-agent-release
+          name: dealpilot-ai-release
           path: artifacts
           run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
@@ -48,7 +48,7 @@ jobs:
           sha256sum -c artifacts/SHA256SUMS.txt
       - name: Upload distribution APKs and publish existing evidence
         run: |
-          gh release upload "$RELEASE_TAG" artifacts/Pocket-Agent-arm64.apk artifacts/Pocket-Agent-x86_64.apk --clobber
+          gh release upload "$RELEASE_TAG" artifacts/DealPilot-AI-arm64.apk artifacts/DealPilot-AI-x86_64.apk --clobber
           # Recheck staged local-emulator evidence against the immutable CI payload.
           gh release download "$RELEASE_TAG" --dir evidence
           python3 - <<'PY'
@@ -56,7 +56,7 @@ jobs:
           from pathlib import Path
           built=Path('artifacts');published=Path('evidence')
           names={f.name for f in published.iterdir()}
-          expected={'Pocket-Agent-arm64.apk','Pocket-Agent-x86_64.apk','Pocket-Agent-tests.apk','Pocket-Agent-fixture.apk','SHA256SUMS.txt','VALIDATION.md','validation.json','source-commit.txt','signature.txt','runtime-manifest.json','payload-report.jsonl','native-stripping.json','build.txt'}
+          expected={'DealPilot-AI-arm64.apk','DealPilot-AI-x86_64.apk','DealPilot-AI-tests.apk','DealPilot-AI-fixture.apk','SHA256SUMS.txt','VALIDATION.md','validation.json','source-commit.txt','signature.txt','runtime-manifest.json','payload-report.jsonl','native-stripping.json','build.txt'}
           assert expected <= names, 'Release is missing validation/provenance assets'
           apks={name for name in expected if name.endswith('.apk')}
           hashes={Path(name).name:sha for sha,name in (line.split() for line in (built/'SHA256SUMS.txt').read_text().splitlines())}
@@ -68,7 +68,7 @@ jobs:
               assert (published/name).read_bytes()==(built/name).read_bytes(), name+' provenance mismatch'
           validation=json.loads((published/'validation.json').read_text())
           assert validation['source']==(built/'source-commit.txt').read_text().strip()
-          assert validation['instrumentation']['apkSha256']==hashes['Pocket-Agent-x86_64.apk']
+          assert validation['instrumentation']['apkSha256']==hashes['DealPilot-AI-x86_64.apk']
           cases=validation['instrumentation']['cases']
           required={('RuntimeDeviceTest','nodeEmbeddingStreamingAndCancellation'),('RuntimeDeviceTest','directNativeFixtureAndMutationLedger'),('AsyncAgentDeviceTest','delegatedFixtureKeepsMainResponsiveAndCompletesOnce'),('LifecycleDeviceTest','activityRecreationKeepsWorker'),('LifecycleDeviceTest','reportFootprint'),('LifecycleDeviceTest','prepareProcessDeath'),('LifecycleDeviceTest','verifyProcessDeath'),('LiveProviderDeviceTest','liveCodexDelegationAndFixture')}
           if validation.get('suite')=='codex-account-focused':
