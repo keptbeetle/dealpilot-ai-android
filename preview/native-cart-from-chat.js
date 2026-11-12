@@ -78,6 +78,7 @@ function extractSelection(text){
  }
  return '';
 }
+export function hasExplicitProductSelection(text){return !!extractSelection(text);}
 function chooseOffer(offers,selection){
  if(!offers.length||!selection)return null;
  const words=tokens(selection).filter(word=>!ignoreWords.has(word));

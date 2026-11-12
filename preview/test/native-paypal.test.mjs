@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {checkoutIntent} from '../native-paypal.js';
-import {offersFromChat,resolveCartFromChat,sameCartProduct} from '../native-cart-from-chat.js';
+import {offersFromChat,resolveCartFromChat,sameCartProduct,hasExplicitProductSelection} from '../native-cart-from-chat.js';
 
 const list=[
  {role:'user',text:'Find Sony and JBL headphones under $100, compare them.'},
@@ -72,6 +72,12 @@ test('a markdown table may supply product, price and direct retailer link',()=>{
 test('multiple dollar figures or ranged amounts are not assigned as an exact price',()=>{
  const offers=offersFromChat([{role:'assistant',text:'- **Sony WH-CH720N** — $79 to $105 depending on store. https://store.example/sony'}]);
  assert.equal(offers[0].price,'');
+});
+test('a generic pay instruction honors the already prepared cart rather than an older chat selection',()=>{
+ assert.equal(hasExplicitProductSelection('Proceed to pay'),false);
+ assert.equal(hasExplicitProductSelection('Pay now'),false);
+ assert.equal(hasExplicitProductSelection('Pay for the Sony one'),true);
+ assert.equal(hasExplicitProductSelection('I chose the Sony WH-CH720N'),true);
 });
 test('old JBL quote cannot be treated as matching the selected Sony model',()=>{
  assert.equal(sameCartProduct({title:'Sony WH-CH720N'},{title:'JBL wireless headphones'}),false);

@@ -6,7 +6,7 @@ export function checkoutIntent(text){
  if(/\b(?:prepare|add|put)\b[\s\S]{0,160}\b(?:cart|basket)\b/i.test(v))return 'cart';
  return null;
 }
-import {resolveCartFromChat,sameCartProduct} from './native-cart-from-chat.js';
+import {resolveCartFromChat,sameCartProduct,hasExplicitProductSelection} from './native-cart-from-chat.js';
 const fmt=(c,cur='USD')=>new Intl.NumberFormat('en-US',{style:'currency',currency:cur}).format(Number(c||0)/100);
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=String(text);return n;};
 const btn=(text,fn,style='')=>{const n=el('button','checkout-button '+style,text);n.type='button';n.onclick=fn;return n;};
@@ -101,7 +101,7 @@ export function mountNativePayPal({api,getMessages,onNotice}){
   const intent=checkoutIntent(text);if(!intent)return false;
   const selected=resolveCartFromChat(getMessages(),text);
   await restore();
-  if(intent==='pay'&&state?.quote&&(!selected.title||sameCartProduct(selected,state.quote))){
+  if(intent==='pay'&&state?.quote&&(!hasExplicitProductSelection(text)||!selected.title||sameCartProduct(selected,state.quote))){
    pendingCart=null;sessionStorage.removeItem('dealpilot-paypal-draft');mode='payment';
   }else{
    pendingCart=selected;
