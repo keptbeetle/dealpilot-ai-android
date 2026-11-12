@@ -6,10 +6,7 @@ export function checkoutIntent(text){
  if(/\b(?:prepare|add|put)\b[\s\S]{0,160}\b(?:cart|basket)\b/i.test(v))return 'cart';
  return null;
 }
-export function cartSuggestion(text){
- const v=String(text||'').toLowerCase(),sony=/sony/.test(v)&&!/jbl/.test(v);
- return {title:sony?'Sony wireless headphones':'JBL wireless headphones',price:sony?'79.00':'69.00',url:sony?'https://electronics.sony.com/':'https://www.jbl.com/'};
-}
+import {resolveCartFromChat,sameCartProduct} from './native-cart-from-chat.js';
 const fmt=(c,cur='USD')=>new Intl.NumberFormat('en-US',{style:'currency',currency:cur}).format(Number(c||0)/100);
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=String(text);return n;};
 const btn=(text,fn,style='')=>{const n=el('button','checkout-button '+style,text);n.type='button';n.onclick=fn;return n;};
@@ -70,9 +67,12 @@ export function mountNativePayPal({api,getMessages,onNotice}){
     if(pendingCart)mode='cart-form';
   }),'primary'));return card;
  }
- function prepare(){const draft=pendingCart||cartSuggestion(getMessages().map(m=>m.text||m.content||'').join(' '));
-  const card=el('div','checkout-state');card.append(el('h3','','Prepare your cart'),el('p','checkout-detail','Confirm the item and test amount before saving a cart.'));
-  const title=field(card,'Selected product',draft.title),price=field(card,'Subtotal (USD)',draft.price,'number'),url=field(card,'Product reference (HTTPS)',draft.url,'url');
+ function prepare(){const draft=pendingCart||resolveCartFromChat(getMessages());
+  const card=el('div','checkout-state');card.append(el('h3','','Prepare your cart'),el('p','checkout-detail','Review the selected product from this conversation before saving a test cart.'));
+  if(draft.notice)card.append(el('p','checkout-detail',draft.notice));
+  if(draft.sourcePrice)card.append(el('p','checkout-detail','Price mentioned in chat: '+draft.sourcePrice));
+  const title=field(card,'Selected product',draft.title||''),price=field(card,'Exact test subtotal (USD)',draft.price||'','number'),url=field(card,'Direct product listing (HTTPS)',draft.url||'','url');
+  title.placeholder='Choose the exact product from your chat';price.placeholder='Confirm the exact USD amount';url.placeholder='https://retailer.example/product';
   price.step='0.01';price.min='0.01';
   card.append(btn('Prepare cart',()=>void task(async()=>{
     const cents=Math.round(Number(price.value)*100);
@@ -91,7 +91,7 @@ export function mountNativePayPal({api,getMessages,onNotice}){
   header.append(btn('×',()=>{mode='';draw();},'close'));root.append(header);
   if(notice)root.append(el('p','checkout-error',notice));
   if(!connected)root.append(setup());
-  else if(mode==='cart-form'&&!state.quote)root.append(prepare());
+  else if(mode==='cart-form'&&!state?.payment)root.append(prepare());
   else if(state?.quote)root.append(status());
   else root.append(prepare());
   if(busy)root.append(el('p','checkout-detail','Processing your request…'));
@@ -99,15 +99,15 @@ export function mountNativePayPal({api,getMessages,onNotice}){
  }
  async function onIntent(text){
   const intent=checkoutIntent(text);if(!intent)return false;
-  if(intent==='cart'){
-   const messages=getMessages();pendingCart=cartSuggestion([messages.slice(-12).map(m=>m.text||m.content||'').join(' '),text].join(' '));
+  const selected=resolveCartFromChat(getMessages(),text);
+  await restore();
+  if(intent==='pay'&&state?.quote&&(!selected.title||sameCartProduct(selected,state.quote))){
+   pendingCart=null;sessionStorage.removeItem('dealpilot-paypal-draft');mode='payment';
+  }else{
+   pendingCart=selected;
    sessionStorage.setItem('dealpilot-paypal-draft',JSON.stringify(pendingCart));
    mode='cart-form';
-  }else{
-   mode=state?.quote?'payment':'cart-form';
-   if(!state?.quote&&!pendingCart)pendingCart=cartSuggestion(text);
   }
-  await restore();if(intent==='pay'&&state?.quote)mode='payment';else if(intent==='cart')mode='cart-form';
   draw();return true;
  }
  function onReturn(event){returnToken=String(event?.token||'');mode='payment';void restore();}
